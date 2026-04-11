@@ -27,7 +27,7 @@ import { useAuth } from "@/contexts/AuthContext";
 
 const Login = () => {
   const navigate = useNavigate();
-  const { login } = useAuth(); // get login function from AuthContext
+  const { login, userProfile } = useAuth(); // get login function from AuthContext
 
   // ── Form state ────────────────────────────────────────────────────────────
   const [email, setEmail]               = useState("");
