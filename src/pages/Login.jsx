@@ -41,6 +41,9 @@ const Login = () => {
   // without a network request
   const validate = () => {
     const errs = {};
+    let skipFirebaseAuth = false;
+    // setting err flags and returning false will allow setting of errors on feilds
+    // setting skipFirebaseAuth to true, and returning true will allow generalized failed auth message
     if (!email)
       errs.email = "Email is required";
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
@@ -48,19 +51,33 @@ const Login = () => {
     if (!password)
       errs.password = "Password is required";
     else if (password.length < 8)
-      errs.password = "Must be at least 8 characters";
+      skipFirebaseAuth = true;
+    
+    // loads errs into error.* which is then indexed in the html (JSX) below
     setErrors(errs);
-    return Object.keys(errs).length === 0; // true means no errors
+    return {
+      isValid: Object.keys(errs).length === 0, // true means no errors
+      skipFirebaseAuth
+    }
   };
 
   // ── Form submission ───────────────────────────────────────────────────────
   const handleSubmit = async (e) => {
     e.preventDefault(); // prevent browser page reload
-    if (!validate()) return; // stop if client validation fails
-
     setLoading(true);
     setErrors({});
 
+    const {isValid, skipFirebaseAuth } = validate();
+
+    if (!isValid) {
+      setLoading(false);
+    }
+
+    if (skipFirebaseAuth) {
+      setErrors({general: "Incorrect email or password. Please try again."});
+      setLoading(false);
+      return;
+    }
     try {
       // Call Firebase via AuthContext
       await login(email, password);
@@ -152,7 +169,7 @@ const Login = () => {
                   <Input
                     id="password"
                     type={showPassword ? "text" : "password"} // toggle visibility
-                    placeholder="At least 8 characters..."
+                    placeholder=""
                     value={password}
                     onChange={(e) => {
                       setPassword(e.target.value);
