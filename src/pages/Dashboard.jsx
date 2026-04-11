@@ -191,7 +191,10 @@ const AddGuestModal = ({ onAdd, onClose, saving }) => {
 // ── Main Dashboard Component ──────────────────────────────────────────────────
 
 const Dashboard = () => {
-  const { user } = useAuth(); // get logged-in user from AuthContext
+  const { user, userProfile } = useAuth(); // get logged-in user from AuthContext
+  
+  console.log("Firebase Auth user:", user);
+  console.log("Firebase profile:", userProfile);
 
   // ── State ──────────────────────────────────────────────────────────────────
   const [invitation, setInvitation]   = useState(null);  // wedding details
