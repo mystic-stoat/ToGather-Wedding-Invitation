@@ -29,6 +29,7 @@ import Dashboard        from "./pages/Dashboard.jsx";
 import WeddingDetails   from "./pages/WeddingDetails.jsx";
 import CreateInvitation from "./pages/CreateInvitation.jsx";
 import RSVP             from "./pages/RSVP.jsx";
+import GuestList        from "./pages/GuestList.jsx";
 import NotFound         from "./pages/NotFound.jsx";
 
 // React Query client — manages caching for API/Firestore calls
@@ -84,7 +85,7 @@ const App = () => (
             <Route path="/login"       element={<Login />} />
             <Route path="/signup"      element={<Signup />} />
             {/* :token is a URL parameter — e.g. /rsvp/abc-123 */}
-            <Route path="/rsvp/:token" element={<RSVP />} />
+            <Route path="/rsvp/:inviteeId/:token" element={<RSVP />} />
 
             {/* ── Protected routes — must be logged in ── */}
             <Route path="/dashboard"
@@ -93,6 +94,8 @@ const App = () => (
               element={<ProtectedRoute><WeddingDetails /></ProtectedRoute>} />
             <Route path="/create-invitation"
               element={<ProtectedRoute><CreateInvitation /></ProtectedRoute>} />
+            <Route path="/guest-list"
+              element={<ProtectedRoute><GuestList /></ProtectedRoute>} />
 
             {/* Catch-all — shows 404 page for any unknown URL */}
             <Route path="*" element={<NotFound />} />

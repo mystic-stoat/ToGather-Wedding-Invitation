@@ -1,186 +1,216 @@
 // src/pages/Dashboard.jsx
 // ─────────────────────────────────────────────────────────────────────────────
 // WHAT THIS PAGE DOES:
-//   The main hub after login. Shows the host:
-//     - A welcome message with their name and days until the wedding
-//     - Summary cards: total guests, confirmed, pending, declined
-//     - RSVP status pie chart (live from Firestore)
-//     - Meal preference pie chart (live from Firestore)
-//     - Full guest list with search, add, and delete
+//   Main hub after login. Rebuilt to match the Figma prototype with:
+//     - Sidebar navigation (Overview, Planning, Invitations sections)
+//     - Invitation preview card with Preview + Edit buttons
+//     - RSVP Progress donut chart showing real percentage
+//     - Recent RSVPs list with avatar initials and time ago
+//     - Full guest list table with add, delete, copy RSVP link
+//     - Logout button in the sidebar
 //
 // DATA FLOW:
-//   1. On load → fetch invitation from `invitations` collection (to get weddingId)
-//   2. Use weddingId → fetch all guests from `invitee` collection
-//   3. Calculate stats from guest data (no hardcoded numbers)
-//   4. Add Guest → calls addInvitee() in firestore.js → re-fetches list
-//   5. Delete Guest → calls deleteInvitee() in firestore.js → re-fetches list
+//   1. Load invitation from `invitations` collection (weddingId, couple names)
+//   2. Load all guests from `invitee` collection using weddingId
+//   3. Compute stats (accepted/declined/pending) from real guest data
+//   4. Show 3 most recent RSVPs sorted by respondedAt timestamp
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts";
+import {
+  LayoutDashboard, Heart, Users, Gift, MapPin,
+  CalendarCheck, Mail, Smartphone, ChevronRight,
+  Share2, Pencil, Eye, Bell, UserPlus, Loader2,
+  Trash2, Search, LogOut, UserRound,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import Footer from "@/components/Footer";
-import AppHeader from "@/components/AppHeader";
-import ScrollReveal from "@/components/ScrollReveal";
-import { Link } from "react-router-dom";
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
-import {
-  Users, CheckCircle2, Clock, XCircle,
-  Search, UserPlus, Trash2, Loader2, AlertCircle
-} from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import {
-  getInvitationByUser, // fetches the invitation to get weddingId
-  getInvitees,         // fetches all guests for a weddingId
-  addInvitee,          // adds a new guest
-  deleteInvitee,       // removes a guest
+  getInvitationByUser,
+  getInvitees,
+  addInvitee,
+  deleteInvitee,
 } from "@/lib/firestore";
 
-// ── Color helpers ─────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
-// Returns the right Tailwind classes for each RSVP status badge
-const statusBadge = (status) => {
-  const map = {
-    Accepted: "bg-primary/15 text-primary border-primary/20",
-    Pending:  "bg-accent/20 text-accent border-accent/20",
-    Declined: "bg-destructive/15 text-destructive border-destructive/20",
-  };
-  return map[status] || "bg-muted text-muted-foreground border-border";
+// Returns initials from a name e.g. "Emma Thompson" → "ET"
+const getInitials = (name = "") =>
+  name.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
+
+// Returns a color class for avatars based on the first letter of the name
+const avatarColor = (name = "") => {
+  const colors = [
+    "bg-primary/20 text-primary",
+    "bg-accent/20 text-accent",
+    "bg-secondary/20 text-secondary",
+    "bg-blue-100 text-blue-600",
+    "bg-orange-100 text-orange-600",
+  ];
+  return colors[name.charCodeAt(0) % colors.length];
 };
 
-// ── Reusable chart card ───────────────────────────────────────────────────────
-// Renders a donut chart with a legend for RSVP or meal data
-const ChartCard = ({ title, data }) => (
-  <div className="bg-card rounded-2xl border border-border/50 p-6 shadow-md shadow-foreground/[0.03]">
-    <h3 className="font-heading text-base font-semibold text-foreground mb-4">{title}</h3>
-    {/* Show empty state if no data yet */}
-    {data.every(d => d.value === 0) ? (
-      <div className="flex items-center justify-center h-28 text-sm text-muted-foreground">
-        No data yet
+// Converts a Firestore timestamp to a human-readable "X ago" string
+const timeAgo = (timestamp) => {
+  if (!timestamp) return "";
+  const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+  const diff = Math.floor((Date.now() - date) / 1000);
+  if (diff < 60)    return "just now";
+  if (diff < 3600)  return `${Math.floor(diff / 60)} min ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)} hours ago`;
+  return `${Math.floor(diff / 86400)} days ago`;
+};
+
+// Returns the right color classes for each RSVP status badge — exact Figma hex
+const statusBadge = (status) => {
+  const map = {
+    Accepted: "bg-[#E6EFEA] text-[#3C6B54]",
+    Declined: "bg-[#F7E6E6] text-[#C9666E]",
+    Pending:  "bg-[#FDF3E1] text-[#D09B45]",
+  };
+  return map[status] || "bg-muted text-muted-foreground";
+};
+
+// ── Sidebar component ─────────────────────────────────────────────────────────
+// Shows navigation links, couple name, and logout button
+const Sidebar = ({ invitation, onLogout }) => {
+  // Build display names from invitation data
+  const groomFirst  = invitation?.groomName?.first || "";
+  const brideFirst  = invitation?.brideName?.first || "";
+  const coupleNames = groomFirst && brideFirst ? `${groomFirst} & ${brideFirst}` : null;
+  const weddingDate = invitation?.weddingDate
+    ? new Date(invitation.weddingDate + "T00:00:00").toLocaleDateString("en-US", {
+        month: "long", day: "numeric", year: "numeric",
+      })
+    : null;
+
+  // Reusable nav link component
+  const NavItem = ({ to, icon: Icon, label, active = false }) => (
+    <Link to={to}
+      className={`flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition-colors ${
+        active
+          ? "bg-primary text-primary-foreground font-medium"
+          : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+      }`}>
+      <Icon size={16} />
+      {label}
+      {active && <ChevronRight size={14} className="ml-auto" />}
+    </Link>
+  );
+
+  return (
+    // Hidden on mobile (lg:flex shows it on desktop)
+    <aside className="hidden lg:flex flex-col w-56 min-h-screen bg-background border-r border-border/50 px-4 py-6 flex-shrink-0">
+
+      {/* Brand */}
+      <div className="flex items-center gap-2 mb-1 px-1">
+        <Heart size={16} className="text-primary" />
+        <span className="font-heading text-lg font-semibold text-foreground">ToGather</span>
       </div>
-    ) : (
-      <div className="flex items-center gap-6">
-        {/* Donut chart */}
-        <div className="w-28 h-28 flex-shrink-0">
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie
-                data={data}
-                cx="50%" cy="50%"
-                innerRadius={28} outerRadius={48}
-                dataKey="value"
-                strokeWidth={2}
-                stroke="hsl(24, 26%, 92%)"
-              >
-                {data.map((d, i) => <Cell key={i} fill={d.color} />)}
-              </Pie>
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: "hsl(0 20% 95%)",
-                  border: "1px solid hsl(24 16% 84%)",
-                  borderRadius: "0.75rem",
-                  fontSize: "0.8125rem",
-                }}
-              />
-            </PieChart>
-          </ResponsiveContainer>
+      <p className="text-xs text-muted-foreground px-1 mb-8">Plan the day. Share the joy.</p>
+
+      {/* Nav sections */}
+      <nav className="flex-1 space-y-6">
+        <div>
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-3 mb-2">
+            Overview
+          </p>
+          <NavItem to="/dashboard" icon={LayoutDashboard} label="Dashboard" active />
         </div>
-        {/* Legend */}
-        <div className="space-y-2">
-          {data.map((d) => (
-            <div key={d.name} className="flex items-center gap-2.5 text-sm">
-              <span className="w-3 h-3 rounded-full flex-shrink-0"
-                style={{ backgroundColor: d.color }} />
-              <span className="text-muted-foreground">{d.value}</span>
-              <span className="text-foreground font-medium">·</span>
-              <span className="text-foreground">{d.name}</span>
-            </div>
-          ))}
+
+        <div>
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-3 mb-2">
+            Planning
+          </p>
+          <div className="space-y-0.5">
+            <NavItem to="/wedding-details" icon={Heart}  label="Wedding Details" />
+            <NavItem to="/guest-list"      icon={Users}  label="Guest List" />
+            <NavItem to="/dashboard"       icon={Gift}   label="Registry" />
+            <NavItem to="/dashboard"       icon={MapPin} label="Travel & Stay" />
+          </div>
         </div>
+
+        <div>
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-3 mb-2">
+            Invitations
+          </p>
+          <div className="space-y-0.5">
+            <NavItem to="/dashboard"          icon={CalendarCheck} label="Save the Date" />
+            <NavItem to="/dashboard"          icon={Mail}          label="Paper Invitations" />
+            <NavItem to="/create-invitation"  icon={Smartphone}    label="Mobile Invitation" />
+          </div>
+        </div>
+      </nav>
+
+      {/* Bottom: couple info + logout */}
+      <div className="space-y-3 mt-6">
+        {coupleNames && (
+          <div className="bg-primary/8 rounded-xl px-3 py-3 border border-primary/15">
+            <p className="text-sm font-semibold text-foreground">{coupleNames}</p>
+            {weddingDate && (
+              <p className="text-xs text-muted-foreground mt-0.5">{weddingDate}</p>
+            )}
+          </div>
+        )}
+        <button onClick={onLogout}
+          className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-sm text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors">
+          <LogOut size={15} /> Log out
+        </button>
       </div>
-    )}
-  </div>
-);
+    </aside>
+  );
+};
 
 // ── Add Guest Modal ───────────────────────────────────────────────────────────
-// Simple inline form for adding a new guest
 const AddGuestModal = ({ onAdd, onClose, saving }) => {
-  const [name, setName]               = useState("");
+  const [name, setName]                 = useState("");
   const [plusOneLimit, setPlusOneLimit] = useState(0);
-  const [error, setError]             = useState("");
+  const [error, setError]               = useState("");
 
   const handleSubmit = () => {
-    if (!name.trim()) {
-      setError("Guest name is required.");
-      return;
-    }
+    if (!name.trim()) { setError("Guest name is required."); return; }
     onAdd(name.trim(), Number(plusOneLimit));
   };
 
   return (
-    // Backdrop
     <div className="fixed inset-0 bg-foreground/20 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-card rounded-2xl border border-border/50 shadow-xl p-6 w-full max-w-sm space-y-5">
-        <h3 className="font-heading text-lg font-semibold text-foreground italic">
-          Add a Guest
-        </h3>
+        <h3 className="font-heading text-lg font-semibold text-foreground italic">Add a Guest</h3>
 
-        {/* Guest name */}
         <div className="space-y-1.5">
-          <label className="text-sm font-medium text-muted-foreground">
-            Guest Name *
-          </label>
-          <Input
-            placeholder="Full name"
-            value={name}
-            onChange={(e) => { setName(e.target.value); setError(""); }}
-            className="h-11 bg-background border-border/60 rounded-xl"
-            autoFocus
-          />
+          <label className="text-sm font-medium text-muted-foreground">Guest Name *</label>
+          <Input placeholder="Full name" value={name} autoFocus
+            onChange={e => { setName(e.target.value); setError(""); }}
+            className="h-11 bg-background border-border/60 rounded-xl" />
           {error && <p className="text-xs text-destructive">{error}</p>}
         </div>
 
-        {/* Plus one limit */}
         <div className="space-y-1.5">
-          <label className="text-sm font-medium text-muted-foreground">
-            Plus One Limit
-          </label>
+          <label className="text-sm font-medium text-muted-foreground">Plus One Limit</label>
           <div className="flex gap-2">
-            {[0, 1, 2, 3].map((n) => (
-              <button
-                key={n}
-                onClick={() => setPlusOneLimit(n)}
+            {[0,1,2,3].map(n => (
+              <button key={n} onClick={() => setPlusOneLimit(n)}
                 className={`flex-1 h-10 rounded-xl border-2 text-sm font-semibold transition-all ${
                   plusOneLimit === n
                     ? "border-primary bg-primary text-primary-foreground"
                     : "border-border/60 bg-card text-foreground hover:border-primary/40"
-                }`}
-              >
+                }`}>
                 {n === 0 ? "None" : `+${n}`}
               </button>
             ))}
           </div>
-          <p className="text-xs text-muted-foreground">
-            Max extra guests this person can bring.
-          </p>
+          <p className="text-xs text-muted-foreground">Max extra guests this person can bring.</p>
         </div>
 
-        {/* Buttons */}
-        <div className="flex gap-3 pt-1">
-          <Button variant="outline" className="flex-1 rounded-xl" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button
-            variant="default"
-            className="flex-1 rounded-xl"
-            onClick={handleSubmit}
-            disabled={saving}
-          >
-            {saving ? (
-              <span className="flex items-center gap-2">
-                <Loader2 size={14} className="animate-spin" /> Adding...
-              </span>
-            ) : "Add Guest"}
+        <div className="flex gap-3">
+          <Button variant="outline" className="flex-1 rounded-xl" onClick={onClose}>Cancel</Button>
+          <Button variant="default" className="flex-1 rounded-xl" onClick={handleSubmit} disabled={saving}>
+            {saving
+              ? <span className="flex items-center gap-2"><Loader2 size={14} className="animate-spin" />Adding...</span>
+              : "Add Guest"}
           </Button>
         </div>
       </div>
@@ -188,45 +218,37 @@ const AddGuestModal = ({ onAdd, onClose, saving }) => {
   );
 };
 
-// ── Main Dashboard Component ──────────────────────────────────────────────────
-
+// ── Main Dashboard ────────────────────────────────────────────────────────────
 const Dashboard = () => {
-  const { user, userProfile } = useAuth(); // get logged-in user from AuthContext
-  
-  // ── State ──────────────────────────────────────────────────────────────────
-  const [invitation, setInvitation]   = useState(null);  // wedding details
-  const [guests, setGuests]           = useState([]);     // guest list from Firestore
-  const [loading, setLoading]         = useState(true);   // initial data load
-  const [loadError, setLoadError]     = useState("");     // load failure message
-  const [search, setSearch]           = useState("");     // search box value
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [addingSaving, setAddingSaving] = useState(false);
-  const [deletingId, setDeletingId]   = useState(null);  // ID of guest being deleted
+  const { user, logout } = useAuth();
+  const navigate         = useNavigate();
 
-  // ── Load data on mount ─────────────────────────────────────────────────────
-  // useEffect runs once after the component renders.
-  // Fetches invitation first (to get weddingId), then fetches guests.
+  // ── State ──────────────────────────────────────────────────────────────────
+  const [invitation, setInvitation]       = useState(null);
+  const [guests, setGuests]               = useState([]);
+  const [loading, setLoading]             = useState(true);
+  const [search, setSearch]               = useState("");
+  const [showAddModal, setShowAddModal]   = useState(false);
+  const [addingSaving, setAddingSaving]   = useState(false);
+  const [deletingId, setDeletingId]       = useState(null);
+
+  // ── Load invitation + guests on mount ──────────────────────────────────────
   useEffect(() => {
     if (!user) return;
-    loadDashboardData();
+    loadData();
   }, [user]);
 
-  const loadDashboardData = async () => {
+  const loadData = async () => {
     setLoading(true);
-    setLoadError("");
     try {
-      // Step 1: Get this user's invitation (gives us the weddingId)
       const inv = await getInvitationByUser(user.uid);
       setInvitation(inv);
-
-      // Step 2: If they have an invitation, load the guest list
       if (inv?.weddingId) {
-        const guestList = await getInvitees(inv.weddingId);
-        setGuests(guestList);
+        const list = await getInvitees(inv.weddingId);
+        setGuests(list);
       }
     } catch (err) {
       console.error("Dashboard load error:", err);
-      setLoadError("Failed to load your data. Please refresh.");
     } finally {
       setLoading(false);
     }
@@ -237,14 +259,13 @@ const Dashboard = () => {
     if (!invitation?.weddingId) return;
     setAddingSaving(true);
     try {
-      // addInvitee creates the Firestore doc and generates a unique RSVP token
       await addInvitee(invitation.weddingId, name, plusOneLimit);
-      // Re-fetch the guest list so the new guest appears
       const updated = await getInvitees(invitation.weddingId);
       setGuests(updated);
       setShowAddModal(false);
     } catch (err) {
       console.error("Add guest error:", err);
+      alert("Add guest failed: " + err.message);
     } finally {
       setAddingSaving(false);
     }
@@ -252,86 +273,74 @@ const Dashboard = () => {
 
   // ── Delete a guest ─────────────────────────────────────────────────────────
   const handleDeleteGuest = async (inviteeId) => {
-    if (!window.confirm("Remove this guest from the list?")) return;
-    setDeletingId(inviteeId); // show spinner on that specific row
+    if (!window.confirm("Remove this guest?")) return;
+    setDeletingId(inviteeId);
     try {
       await deleteInvitee(inviteeId);
-      // Remove from local state immediately (no need to re-fetch)
-      setGuests((prev) => prev.filter((g) => g.inviteeId !== inviteeId));
+      // Remove from local state immediately — no need to re-fetch
+      setGuests(prev => prev.filter(g => g.inviteeId !== inviteeId));
     } catch (err) {
-      console.error("Delete guest error:", err);
+      console.error("Delete error:", err);
     } finally {
       setDeletingId(null);
     }
   };
 
-  // ── Calculate stats from real guest data ───────────────────────────────────
-  // These are computed on every render from the actual `guests` array
+  // ── Logout ─────────────────────────────────────────────────────────────────
+  const handleLogout = async () => {
+    await logout();
+    navigate("/login");
+  };
+
+  // ── Computed values ────────────────────────────────────────────────────────
+
+  // RSVP counts from real data
   const total    = guests.length;
-  const accepted = guests.filter((g) => g.rsvpStatus === "Accepted").length;
-  const declined = guests.filter((g) => g.rsvpStatus === "Declined").length;
-  const pending  = guests.filter((g) => g.rsvpStatus === "Pending").length;
+  const accepted = guests.filter(g => g.rsvpStatus === "Accepted").length;
+  const declined = guests.filter(g => g.rsvpStatus === "Declined").length;
+  const pending  = guests.filter(g => g.rsvpStatus === "Pending").length;
+  // Percentage of guests who have responded (accepted or declined)
+  const progress = total > 0 ? Math.round(((accepted + declined) / total) * 100) : 0;
 
-  // ── RSVP chart data ────────────────────────────────────────────────────────
+  // Donut chart data — exact Figma colors
   const rsvpChartData = [
-    { name: "Accepted", value: accepted, color: "hsl(100, 14%, 49%)" },
-    { name: "Pending",  value: pending,  color: "hsl(110, 16%, 61%)" },
-    { name: "Declined", value: declined, color: "hsl(350, 80%, 72%)" },
+    { name: "Accepted", value: accepted || 0, color: "#3C6B54" },
+    { name: "Declined", value: declined || 0, color: "#C9666E" },
+    { name: "Pending",  value: pending  || 0, color: "#D09B45" },
   ];
 
-  // ── Meal preference chart data ─────────────────────────────────────────────
-  // Count how many accepted guests chose each meal
-  const mealCounts = guests
-    .filter((g) => g.rsvpStatus === "Accepted" && g.dietaryRestrictions)
-    .reduce((acc, g) => {
-      const meal = g.dietaryRestrictions || "No Preference";
-      acc[meal] = (acc[meal] || 0) + 1;
-      return acc;
-    }, {});
+  // 3 most recent guests who have responded — sorted by respondedAt timestamp
+  const recentRSVPs = [...guests]
+    .filter(g => g.rsvpStatus !== "Pending" && g.respondedAt)
+    .sort((a, b) => {
+      const aTime = a.respondedAt?.toDate?.() || new Date(0);
+      const bTime = b.respondedAt?.toDate?.() || new Date(0);
+      return bTime - aTime;
+    })
+    .slice(0, 3);
 
-  const mealColors = [
-    "hsl(100, 14%, 49%)",
-    "hsl(110, 16%, 61%)",
-    "hsl(350, 56%, 84%)",
-    "hsl(30, 60%, 65%)",
-    "hsl(200, 40%, 60%)",
-  ];
-
-  const mealChartData = Object.entries(mealCounts).map(([name, value], i) => ({
-    name,
-    value,
-    color: mealColors[i % mealColors.length],
-  }));
-
-  // ── Summary cards config ───────────────────────────────────────────────────
-  const summaryCards = [
-    { label: "Total Guests", value: total,    icon: Users,        color: "bg-primary/10 text-primary" },
-    { label: "Confirmed",    value: accepted, icon: CheckCircle2, color: "bg-primary/10 text-primary" },
-    { label: "Pending",      value: pending,  icon: Clock,        color: "bg-accent/15 text-accent" },
-    { label: "Declined",     value: declined, icon: XCircle,      color: "bg-destructive/10 text-destructive" },
-  ];
-
-  // ── Days until wedding ─────────────────────────────────────────────────────
+  // Days until wedding (null if no date set)
   const daysUntil = invitation?.weddingDate
-    ? Math.ceil((new Date(invitation.weddingDate) - new Date()) / (1000 * 60 * 60 * 24))
+    ? Math.ceil((new Date(invitation.weddingDate + "T00:00:00") - new Date()) / (1000 * 60 * 60 * 24))
     : null;
 
-  // ── Filtered guest list (search) ───────────────────────────────────────────
-  const filtered = guests.filter((g) =>
+  const groomFirst  = invitation?.groomName?.first || "";
+  const brideFirst  = invitation?.brideName?.first || "";
+  const coupleNames = groomFirst && brideFirst ? `${groomFirst} & ${brideFirst}` : null;
+
+  // Filtered guest list for the table
+  const filtered = guests.filter(g =>
     g.guestName?.toLowerCase().includes(search.toLowerCase()) ||
     g.rsvpStatus?.toLowerCase().includes(search.toLowerCase())
   );
 
-  // ── Loading state ──────────────────────────────────────────────────────────
+  // ── Loading spinner ────────────────────────────────────────────────────────
   if (loading) {
     return (
-      <div className="min-h-screen bg-background flex flex-col">
-        <AppHeader />
-        <div className="flex-1 flex items-center justify-center">
-          <div className="flex flex-col items-center gap-3">
-            <Loader2 size={28} className="animate-spin text-primary" />
-            <p className="text-sm text-muted-foreground">Loading your dashboard...</p>
-          </div>
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 size={28} className="animate-spin text-primary" />
+          <p className="text-sm text-muted-foreground">Loading your dashboard...</p>
         </div>
       </div>
     );
@@ -339,10 +348,12 @@ const Dashboard = () => {
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      <AppHeader />
+    <div className="min-h-screen bg-background flex">
 
-      {/* Add Guest Modal — shown when showAddModal is true */}
+      {/* Sidebar — visible on desktop only */}
+      <Sidebar invitation={invitation} onLogout={handleLogout} />
+
+      {/* Add Guest Modal */}
       {showAddModal && (
         <AddGuestModal
           onAdd={handleAddGuest}
@@ -351,223 +362,323 @@ const Dashboard = () => {
         />
       )}
 
-      {/* Quick action bar */}
-      <div className="bg-card/60 border-b border-border/50">
-        <div className="container mx-auto px-6 py-4 flex items-center gap-3 overflow-x-auto">
-          <Link to="/wedding-details">
-            <Button variant="default" size="sm" className="rounded-xl whitespace-nowrap">
-              Wedding Details
-            </Button>
-          </Link>
-          <Link to="/create-invitation">
-            <Button variant="default" size="sm" className="rounded-xl whitespace-nowrap">
-              Create Invitation
-            </Button>
-          </Link>
-          <Link to="/" className="ml-auto">
-            <div className="bg-foreground rounded-xl px-4 py-1.5">
-              <span className="font-heading text-base font-bold text-primary-foreground">ToGather</span>
-            </div>
-          </Link>
-        </div>
-      </div>
+      {/* Main content area */}
+      <main className="flex-1 min-h-screen overflow-y-auto">
 
-      <main className="flex-1 container mx-auto px-6 py-10">
-
-        {/* Error banner */}
-        {loadError && (
-          <div className="mb-6 bg-destructive/10 border border-destructive/20 rounded-2xl px-5 py-4 flex items-center gap-3">
-            <AlertCircle size={18} className="text-destructive flex-shrink-0" />
-            <p className="text-sm text-destructive">{loadError}</p>
-            <button onClick={loadDashboardData}
-              className="ml-auto text-xs text-destructive underline hover:no-underline">
-              Retry
-            </button>
+        {/* Mobile top bar — only shows when sidebar is hidden */}
+        <div className="lg:hidden bg-card border-b border-border/50 px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Heart size={16} className="text-primary" />
+            <span className="font-heading text-lg font-semibold">ToGather</span>
           </div>
-        )}
+          <button onClick={handleLogout}
+            className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
+            <LogOut size={15} /> Log out
+          </button>
+        </div>
 
-        {/* Welcome heading */}
-        <ScrollReveal>
+        <div className="px-6 lg:px-10 py-8 max-w-5xl mx-auto">
+
+          {/* Welcome heading */}
           <div className="mb-8">
             <h1 className="font-heading text-3xl md:text-4xl font-semibold text-foreground">
               Welcome back{", " + userProfile.name || ""}!
             </h1>
-            {/* Show days until wedding if date is saved */}
-            {daysUntil !== null && daysUntil > 0 && (
+            {daysUntil !== null && daysUntil > 0 ? (
               <p className="text-muted-foreground mt-1">
                 Your wedding is in{" "}
                 <span className="font-semibold text-primary">{daysUntil} days</span>.
                 {" "}Here's your overview.
               </p>
-            )}
-            {/* Prompt to fill in details if no invitation yet */}
-            {!invitation && (
+            ) : (
               <p className="text-muted-foreground mt-1">
-                Get started by filling in your{" "}
-                <Link to="/wedding-details" className="text-primary underline hover:no-underline">
-                  wedding details
-                </Link>.
+                {!invitation
+                  ? <>Get started by filling in your <Link to="/wedding-details" className="text-primary underline">wedding details</Link>.</>
+                  : "Here's your overview."}
               </p>
             )}
           </div>
-        </ScrollReveal>
 
-        {/* Summary stat cards */}
-        <ScrollReveal delay={60}>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
-            {summaryCards.map((c) => (
-              <div key={c.label}
-                className="bg-card rounded-2xl border border-border/50 p-5 shadow-md shadow-foreground/[0.03] hover:shadow-lg transition-shadow duration-200">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${c.color}`}>
-                    <c.icon size={20} />
+          {/* ── Two column: Invitation preview + RSVP progress ── */}
+          <div className="grid lg:grid-cols-2 gap-6 mb-8">
+
+            {/* Your Invitation */}
+            <div className="bg-card rounded-2xl border border-border/50 shadow-sm p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-base font-semibold text-foreground">Your Invitation</h2>
+                <button
+                  onClick={() => {
+                    if (coupleNames) {
+                      navigator.clipboard.writeText(window.location.origin);
+                      alert("Link copied!");
+                    }
+                  }}
+                  className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
+                  <Share2 size={13} /> Share
+                </button>
+              </div>
+
+              {/* Mini invitation preview */}
+              <div className="bg-[#f9f6f2] rounded-xl border border-border/30 p-6 text-center mb-4 min-h-[160px] flex flex-col items-center justify-center">
+                {coupleNames ? (
+                  <>
+                    <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-2">
+                      Together with their families
+                    </p>
+                    <h3 className="font-heading text-2xl font-semibold text-foreground italic mb-2">
+                      {groomFirst} &<br />{brideFirst}
+                    </h3>
+                    <p className="text-xs text-muted-foreground">
+                      Request the pleasure of your company
+                    </p>
+                    {invitation?.weddingDate && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {new Date(invitation.weddingDate + "T00:00:00").toLocaleDateString("en-US", {
+                          month: "long", day: "numeric", year: "numeric",
+                        })}
+                        {invitation?.ceremonyTime && ` · ${invitation.ceremonyTime}`}
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <div className="text-center">
+                    <p className="text-sm text-muted-foreground mb-2">No invitation set up yet</p>
+                    <Link to="/wedding-details" className="text-xs text-primary underline hover:no-underline">
+                      Add wedding details →
+                    </Link>
+                  </div>
+                )}
+              </div>
+
+              {/* Action buttons */}
+              <div className="flex gap-3">
+                <Link to="/create-invitation" className="flex-1">
+                  <Button variant="default" className="w-full rounded-xl gap-2" size="sm">
+                    <Eye size={14} /> Preview
+                  </Button>
+                </Link>
+                <Link to="/create-invitation" className="flex-1">
+                  <Button variant="outline" className="w-full rounded-xl gap-2 border-border/60" size="sm">
+                    <Pencil size={14} /> Edit Invitation
+                  </Button>
+                </Link>
+              </div>
+            </div>
+
+            {/* RSVP Progress */}
+            <div className="bg-card rounded-2xl border border-border/50 shadow-sm p-5">
+              <h2 className="text-base font-semibold text-foreground mb-4">RSVP Progress</h2>
+
+              {/* Donut chart */}
+              <div className="flex items-center gap-6 mb-5">
+                <div className="relative w-32 h-32 flex-shrink-0">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={
+                          total > 0
+                            ? rsvpChartData
+                            : [{ name: "empty", value: 1, color: "hsl(24, 16%, 88%)" }]
+                        }
+                        cx="50%" cy="50%"
+                        innerRadius={42} outerRadius={58}
+                        dataKey="value"
+                        strokeWidth={0}
+                      >
+                        {(total > 0 ? rsvpChartData : [{ color: "hsl(24, 16%, 88%)" }]).map((d, i) => (
+                          <Cell key={i} fill={d.color} />
+                        ))}
+                      </Pie>
+                    </PieChart>
+                  </ResponsiveContainer>
+                  {/* Percentage in center */}
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div className="text-center">
+                      <p className="font-heading text-xl font-bold text-foreground leading-tight">{progress}%</p>
+                      <p className="text-xs text-muted-foreground">Progress</p>
+                    </div>
                   </div>
                 </div>
-                {/* Real number from Firestore, not hardcoded */}
-                <p className="font-heading text-2xl font-bold text-foreground tabular-nums">
-                  {c.value}
-                </p>
-                <p className="text-sm text-muted-foreground mt-0.5">{c.label}</p>
-              </div>
-            ))}
-          </div>
-        </ScrollReveal>
 
-        {/* RSVP + Meal charts */}
-        <ScrollReveal delay={120}>
-          <div className="grid sm:grid-cols-2 gap-6 mb-12">
-            <ChartCard title="RSVP Status"     data={rsvpChartData} />
-            <ChartCard title="Meal Preference" data={mealChartData.length > 0 ? mealChartData : [{ name: "No responses yet", value: 0, color: "#ccc" }]} />
-          </div>
-        </ScrollReveal>
-
-        {/* Guest List */}
-        <ScrollReveal delay={180}>
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
-            <h2 className="font-heading text-xl font-semibold text-foreground uppercase tracking-wider">
-              Guest List
-            </h2>
-            <div className="flex items-center gap-3 w-full sm:w-auto">
-              {/* Search box */}
-              <div className="relative flex-1 sm:flex-initial">
-                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  placeholder="Search guests..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="pl-9 h-10 bg-card border-border/60 rounded-xl w-full sm:w-64"
-                />
+                {/* Legend */}
+                <div className="space-y-2 text-sm">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#3C6B54]" />
+                    <span className="font-medium text-foreground">{accepted}</span>
+                    <span className="text-muted-foreground">Accepted</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#C9666E]" />
+                    <span className="font-medium text-foreground">{declined}</span>
+                    <span className="text-muted-foreground">Declined</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#D09B45]" />
+                    <span className="font-medium text-foreground">{pending}</span>
+                    <span className="text-muted-foreground">Pending</span>
+                  </div>
+                  <div className="flex items-center gap-2 pt-1.5 border-t border-border/40">
+                    <span className="font-medium text-foreground">{total}</span>
+                    <span className="text-muted-foreground">Total Guests</span>
+                  </div>
+                </div>
               </div>
-              {/* Add Guest button — opens modal */}
-              <Button
-                variant="outline"
-                size="sm"
-                className="rounded-xl gap-2 border-border/60"
-                onClick={() => {
-                  // Can't add guests without an invitation set up
-                  if (!invitation?.weddingId) {
-                    alert("Please fill in your wedding details first.");
-                    return;
-                  }
-                  setShowAddModal(true);
-                }}
-              >
-                <UserPlus size={16} /> Add Guest
-              </Button>
+
+              {/* Quick links */}
+              <div className="space-y-0.5 border-t border-border/40 pt-3">
+                <button className="w-full flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-muted/40 transition-colors text-sm text-foreground text-left">
+                  <Bell size={14} className="text-muted-foreground" /> Set Reminders
+                </button>
+                <Link to="/wedding-details"
+                  className="flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-muted/40 transition-colors text-sm text-foreground">
+                  <Pencil size={14} className="text-muted-foreground" /> Edit Wedding Details
+                </Link>
+                <button
+                  onClick={() => document.getElementById("guest-list-section")?.scrollIntoView({ behavior: "smooth" })}
+                  className="w-full flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-muted/40 transition-colors text-sm text-foreground text-left">
+                  <UserRound size={14} className="text-muted-foreground" /> Edit Guest List
+                </button>
+              </div>
             </div>
           </div>
 
-          {/* Empty state */}
-          {filtered.length === 0 ? (
-            <div className="bg-card rounded-2xl border border-border/50 p-12 text-center">
-              <Users size={40} className="mx-auto text-muted-foreground/40 mb-4" />
-              <p className="font-heading text-lg text-foreground mb-1">
-                {search ? "No guests match your search" : "No guests yet"}
-              </p>
-              <p className="text-sm text-muted-foreground">
-                {search
-                  ? "Try a different search term"
-                  : "Click \"Add Guest\" to start building your list"}
-              </p>
-            </div>
-          ) : (
-            /* Guest table */
-            <div className="overflow-x-auto rounded-2xl border border-border/50 bg-card shadow-md shadow-foreground/[0.03]">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border/60">
-                    {["Name", "RSVP Status", "Meal", "Plus One Limit", "RSVP Link", ""].map((h) => (
-                      <th key={h}
-                        className="text-left px-5 py-3.5 text-muted-foreground font-medium text-xs uppercase tracking-wider">
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((g) => (
-                    <tr key={g.inviteeId}
-                      className="border-b border-border/30 last:border-0 hover:bg-muted/20 transition-colors duration-150">
-
-                      {/* Guest name */}
-                      <td className="px-5 py-4 font-medium text-foreground">{g.guestName}</td>
-
-                      {/* RSVP status badge */}
-                      <td className="px-5 py-4">
-                        <span className={`inline-flex px-2.5 py-1 rounded-lg text-xs font-semibold border ${statusBadge(g.rsvpStatus)}`}>
-                          {g.rsvpStatus}
-                        </span>
-                      </td>
-
-                      {/* Meal preference — only set after they RSVP */}
-                      <td className="px-5 py-4 text-muted-foreground">
-                        {g.dietaryRestrictions || "—"}
-                      </td>
-
-                      {/* Plus one limit set when adding the guest */}
-                      <td className="px-5 py-4 text-muted-foreground">
-                        {g.plusOneLimit > 0 ? `+${g.plusOneLimit}` : "None"}
-                      </td>
-
-                      {/* Copyable RSVP link — guests use this to RSVP */}
-                      <td className="px-5 py-4">
-                        <button
-                          onClick={() => {
-                            const link = `${window.location.origin}/rsvp/${g.token}`;
-                            navigator.clipboard.writeText(link);
-                            alert(`RSVP link copied!\n${link}`);
-                          }}
-                          className="text-xs text-primary hover:underline"
-                          title="Click to copy RSVP link"
-                        >
-                          Copy link
-                        </button>
-                      </td>
-
-                      {/* Delete button */}
-                      <td className="px-5 py-4">
-                        {deletingId === g.inviteeId ? (
-                          <Loader2 size={14} className="animate-spin text-muted-foreground" />
-                        ) : (
-                          <button
-                            onClick={() => handleDeleteGuest(g.inviteeId)}
-                            className="text-muted-foreground hover:text-destructive transition-colors"
-                            title="Remove guest"
-                          >
-                            <Trash2 size={15} />
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          {/* ── Recent RSVPs — only shows if anyone has responded ── */}
+          {recentRSVPs.length > 0 && (
+            <div className="bg-card rounded-2xl border border-border/50 shadow-sm p-5 mb-8">
+              <h2 className="text-base font-semibold text-foreground mb-4">Recent RSVPs</h2>
+              <div className="space-y-3">
+                {recentRSVPs.map(g => (
+                  <div key={g.inviteeId} className="flex items-center gap-3">
+                    {/* Avatar with initials */}
+                    <div className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${avatarColor(g.guestName)}`}>
+                      {getInitials(g.guestName)}
+                    </div>
+                    <span className="text-sm font-medium text-foreground flex-1">{g.guestName}</span>
+                    <span className={`text-xs font-semibold px-2.5 py-1 rounded-lg ${statusBadge(g.rsvpStatus)}`}>
+                      {g.rsvpStatus}
+                    </span>
+                    <span className="text-xs text-muted-foreground w-20 text-right">
+                      {timeAgo(g.respondedAt)}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
-        </ScrollReveal>
-      </main>
 
-      <Footer />
+          {/* ── Guest List table ── */}
+          <div id="guest-list-section">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-5">
+              <h2 className="font-heading text-xl font-semibold text-foreground uppercase tracking-wider">
+                Guest List
+              </h2>
+              <div className="flex items-center gap-3 w-full sm:w-auto">
+                <div className="relative flex-1 sm:flex-initial">
+                  <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                  <Input placeholder="Search guests..." value={search}
+                    onChange={e => setSearch(e.target.value)}
+                    className="pl-9 h-10 bg-card border-border/60 rounded-xl w-full sm:w-60" />
+                </div>
+                <Button variant="outline" size="sm"
+                  className="rounded-xl gap-2 border-border/60 whitespace-nowrap"
+                  onClick={() => {
+                    if (!invitation?.weddingId) {
+                      alert("Please fill in your wedding details first.");
+                      return;
+                    }
+                    setShowAddModal(true);
+                  }}>
+                  <UserPlus size={15} /> Add Guest
+                </Button>
+              </div>
+            </div>
+
+            {/* Empty state */}
+            {filtered.length === 0 ? (
+              <div className="bg-card rounded-2xl border border-border/50 p-12 text-center">
+                <Users size={36} className="mx-auto text-muted-foreground/40 mb-3" />
+                <p className="font-heading text-lg text-foreground mb-1">
+                  {search ? "No guests match your search" : "No guests yet"}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  {search ? "Try a different search term" : `Click "Add Guest" to start building your list`}
+                </p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto rounded-2xl border border-border/50 bg-card shadow-sm">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border/60">
+                      {["Name", "RSVP Status", "Meal / Dietary", "Plus One", "RSVP Link", ""].map(h => (
+                        <th key={h}
+                          className="text-left px-5 py-3.5 text-muted-foreground font-medium text-xs uppercase tracking-wider">
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map(g => (
+                      <tr key={g.inviteeId}
+                        className="border-b border-border/30 last:border-0 hover:bg-muted/20 transition-colors">
+                        {/* Name + avatar */}
+                        <td className="px-5 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${avatarColor(g.guestName)}`}>
+                              {getInitials(g.guestName)}
+                            </div>
+                            <span className="font-medium text-foreground">{g.guestName}</span>
+                          </div>
+                        </td>
+                        {/* Status */}
+                        <td className="px-5 py-4">
+                          <span className={`inline-flex px-2.5 py-1 rounded-lg text-xs font-semibold ${statusBadge(g.rsvpStatus)}`}>
+                            {g.rsvpStatus}
+                          </span>
+                        </td>
+                        {/* Dietary */}
+                        <td className="px-5 py-4 text-muted-foreground">{g.dietaryRestrictions || "—"}</td>
+                        {/* Plus one — show Yes/No like the Figma wireframe */}
+                        <td className="px-5 py-4 text-muted-foreground">
+                          {g.plusOneLimit > 0 ? (
+                            <span className="text-primary font-medium">Yes</span>
+                          ) : "No"}
+                        </td>
+                        {/* Copy RSVP link — each guest has a unique token */}
+                        <td className="px-5 py-4">
+                          <button
+                            onClick={() => {
+                              // URL includes both inviteeId and token so RSVP page can do a direct doc lookup
+                            const link = `${window.location.origin}/rsvp/${g.inviteeId}/${g.token}`;
+                              navigator.clipboard.writeText(link);
+                              alert(`Copied!\n${link}`);
+                            }}
+                            className="text-xs text-primary hover:underline">
+                            Copy link
+                          </button>
+                        </td>
+                        {/* Delete */}
+                        <td className="px-5 py-4">
+                          {deletingId === g.inviteeId ? (
+                            <Loader2 size={14} className="animate-spin text-muted-foreground" />
+                          ) : (
+                            <button onClick={() => handleDeleteGuest(g.inviteeId)}
+                              className="text-muted-foreground hover:text-destructive transition-colors"
+                              title="Remove guest">
+                              <Trash2 size={14} />
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+        </div>
+      </main>
     </div>
   );
 };
