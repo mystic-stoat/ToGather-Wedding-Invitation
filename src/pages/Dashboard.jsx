@@ -191,8 +191,8 @@ const AddGuestModal = ({ onAdd, onClose, saving }) => {
 // ── Main Dashboard Component ──────────────────────────────────────────────────
 
 const Dashboard = () => {
-  const { user } = useAuth(); // get logged-in user from AuthContext
-
+  const { user, userProfile } = useAuth(); // get logged-in user from AuthContext
+  
   // ── State ──────────────────────────────────────────────────────────────────
   const [invitation, setInvitation]   = useState(null);  // wedding details
   const [guests, setGuests]           = useState([]);     // guest list from Firestore
@@ -390,7 +390,7 @@ const Dashboard = () => {
         <ScrollReveal>
           <div className="mb-8">
             <h1 className="font-heading text-3xl md:text-4xl font-semibold text-foreground">
-              Welcome back, {user?.displayName?.split(" ")[0] || "there"}!
+              Welcome back{", " + userProfile.name || ""}!
             </h1>
             {/* Show days until wedding if date is saved */}
             {daysUntil !== null && daysUntil > 0 && (
