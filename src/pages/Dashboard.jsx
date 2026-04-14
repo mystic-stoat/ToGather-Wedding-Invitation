@@ -220,7 +220,7 @@ const AddGuestModal = ({ onAdd, onClose, saving }) => {
 
 // ── Main Dashboard ────────────────────────────────────────────────────────────
 const Dashboard = () => {
-  const { user, logout } = useAuth();
+  const { user, userProfile, logout } = useAuth();
   const navigate         = useNavigate();
 
   // ── State ──────────────────────────────────────────────────────────────────
