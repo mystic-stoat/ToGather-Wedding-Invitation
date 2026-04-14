@@ -39,8 +39,9 @@ export default {
       // Used as: className="font-heading" or className="font-body"
       // Loaded from Google Fonts in index.css
       fontFamily: {
-        heading: ["Playfair Display", "Georgia", "serif"],
-        body: ["DM Sans", "system-ui", "sans-serif"],
+        // Clean sans-serif to match Figma — no serif/Playfair Display
+        heading: ["DM Sans", "system-ui", "-apple-system", "sans-serif"],
+        body:    ["DM Sans", "system-ui", "-apple-system", "sans-serif"],
       },
 
       // ── Custom colors ──────────────────────────────────────────────────────

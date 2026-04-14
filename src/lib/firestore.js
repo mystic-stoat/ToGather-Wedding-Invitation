@@ -180,24 +180,30 @@ export const getInvitees = async weddingId => {
  * Automatically generates a unique token for their personal RSVP link.
  * Their RSVP link will be: yourdomain.com/rsvp/<token>
  */
-export const addInvitee = async (weddingId, guestName, plusOneLimit = 0 // default: no plus ones allowed
+export const addInvitee = async (
+  weddingId,
+  guestName,
+  plusOneLimit = 0, // default: no plus ones allowed
+  email = "",       // optional — shown in the guest list table
+  group = ""        // optional — Family, Friends, Coworkers, etc.
 ) => {
   // crypto.randomUUID() generates a unique token like "a3f2c1d4-..."
+  // This token is embedded in the guest's personal RSVP link
   const token = crypto.randomUUID();
   const ref = collection(db, "invitee");
   const newDoc = await addDoc(ref, {
     weddingId,
     guestName,
+    email,             // stored for display in the guest list
+    group,             // stored for filtering guests by group
     plusOneLimit,
     token,
-    tokenUsed: false,
-    // becomes true after they RSVP
-    rsvpStatus: "Pending",
-    // starts as Pending until they respond
-    attending: null,
-    // null until they RSVP
+    tokenUsed: false,  // becomes true after they submit their RSVP
+    rsvpStatus: "Pending", // starts Pending until they respond
+    attending: null,   // null until they RSVP (true = accepted, false = declined)
     dietaryRestrictions: "",
-    addedAt: serverTimestamp()
+    plusOnes: [],      // filled in when guest submits RSVP with plus one details
+    addedAt: serverTimestamp(),
   });
   return newDoc.id; // return the new inviteeId
 };
@@ -276,26 +282,34 @@ export const submitRSVP = async (token, response) => {
       };
     }
 
-    // Step 3: Write their response to the `rsvp` collection
+    // Step 3: Write their response to the `rsvp` collection.
+    // IMPORTANT: `token` must be included here because the Firestore security
+    // rule verifies it matches the token stored on the invitee document.
+    // Without it, the rule rejects the write with "Missing or insufficient permissions".
+    // `plusOnes` stores the names and meal preferences of any extra guests.
     const rsvpRef = collection(db, "rsvp");
     const rsvpDoc = await addDoc(rsvpRef, {
-      inviteeId: invitee.inviteeId,
-      attending: response.attending,
+      inviteeId:           invitee.inviteeId,
+      token:               token,               // required by Firestore security rule
+      attending:           response.attending,
       dietaryRestrictions: response.dietaryRestrictions,
-      guestCount: response.guestCount,
-      message: response.message,
-      submittedAt: serverTimestamp()
+      guestCount:          response.guestCount, // total party size including plus ones
+      plusOnes:            response.plusOnes || [], // array of { name, meal } for each plus one
+      message:             response.message,
+      submittedAt:         serverTimestamp(),
     });
 
-    // Step 4: Update the invitee doc so the dashboard shows their status
+    // Step 4: Update the invitee doc so the dashboard and guest list reflect the response.
+    // Also sets tokenUsed = true so the link cannot be used again (prevents duplicates).
+    // plusOnes is stored on the invitee doc too so the guest list page can show them.
     await updateInvitee(invitee.inviteeId, {
-      rsvpId: rsvpDoc.id,
-      // link to their rsvp doc
-      attending: response.attending,
+      rsvpId:              rsvpDoc.id,                              // link to their rsvp doc
+      attending:           response.attending,
       dietaryRestrictions: response.dietaryRestrictions,
-      rsvpStatus: response.attending ? "Accepted" : "Declined",
-      // shown in guest list
-      tokenUsed: true // lock the link
+      plusOnes:            response.plusOnes || [],                 // plus one names + meals
+      rsvpStatus:          response.attending ? "Accepted" : "Declined", // shown in guest list
+      tokenUsed:           true,                                    // prevents duplicate RSVPs
+      respondedAt:         serverTimestamp(),                       // used for "X hours ago" in dashboard
     });
     return {
       success: true

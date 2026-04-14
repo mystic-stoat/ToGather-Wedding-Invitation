@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap');
+/* src/index.css — ToGather — all colors confirmed from Figma */
 
 @tailwind base;
 @tailwind components;
@@ -6,99 +6,95 @@
 
 @layer base {
   :root {
-    --background: 24 26% 92%;
-    --foreground: 100 10% 20%;
+    /* ── Page & sidebar background ───────────────────────────────────────────
+     * #F3EDEB — warm pinkish cream (confirmed image 2)                       */
+    --background:         14 25% 94%;
+    --foreground:         0 0% 16%;       /* #2A2A2A near-black text          */
 
-    --card: 0 20% 95%;
-    --card-foreground: 100 10% 20%;
+    /* ── Cards — pure white panels ──────────────────────────────────────────  */
+    --card:               0 0% 100%;
+    --card-foreground:    0 0% 16%;
+    --popover:            0 0% 100%;
+    --popover-foreground: 0 0% 16%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 100 10% 20%;
-
-    --primary: 100 14% 49%;
+    /* ── Primary — #839878 lighter sage green (confirmed by user) ────────── */
+    --primary:            99 13% 53%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 110 16% 61%;
-    --secondary-foreground: 0 0% 100%;
+    /* ── Secondary — soft sage ───────────────────────────────────────────── */
+    --secondary:          99 12% 75%;
+    --secondary-foreground: 99 13% 25%;
 
-    --muted: 24 20% 88%;
-    --muted-foreground: 100 8% 40%;
+    /* ── Muted — #A89A93 warm tan (section labels: OVERVIEW, PLANNING) ───── */
+    --muted:              20 11% 88%;
+    --muted-foreground:   20 11% 62%;     /* #A89A93 confirmed image 1        */
 
-    --accent: 350 80% 72%;
-    --accent-foreground: 0 0% 100%;
+    /* ── Accent — golden amber (pending) ─────────────────────────────────── */
+    --accent:             38 58% 54%;     /* #D09B45                          */
+    --accent-foreground:  0 0% 16%;
 
-    --accent-light: 350 56% 84%;
-    --accent-light-foreground: 100 10% 20%;
+    /* ── Destructive — dusty rose (declined) ─────────────────────────────── */
+    --destructive:        356 44% 59%;    /* #C9666E                          */
+    --destructive-foreground: 0 0% 100%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 24 16% 84%;
-    --input: 24 16% 84%;
-    --ring: 100 14% 49%;
+    /* ── Borders — warm to match background hue ──────────────────────────── */
+    --border:             14 15% 86%;
+    --input:              14 15% 86%;
+    --ring:               99 13% 53%;
 
     --radius: 0.75rem;
 
-    --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 240 5.3% 26.1%;
-    --sidebar-primary: 100 14% 49%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 4.8% 95.9%;
-    --sidebar-accent-foreground: 240 5.9% 10%;
-    --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 100 14% 49%;
+    /* ── Sidebar — same background as page ───────────────────────────────── */
+    --sidebar-background:          14 25% 94%;
+    --sidebar-foreground:          0 0% 16%;
+    --sidebar-primary:             99 13% 53%;
+    --sidebar-primary-foreground:  0 0% 100%;
+    --sidebar-accent:              99 12% 75%;
+    --sidebar-accent-foreground:   99 13% 25%;
+    --sidebar-border:              14 15% 86%;
+    --sidebar-ring:                99 13% 53%;
+  }
 
-    --font-heading: 'Playfair Display', Georgia, serif;
-    --font-body: 'DM Sans', system-ui, sans-serif;
+  .dark {
+    --background:         0 0% 10%;
+    --foreground:         0 0% 90%;
+    --card:               0 0% 14%;
+    --card-foreground:    0 0% 90%;
+    --popover:            0 0% 14%;
+    --popover-foreground: 0 0% 90%;
+    --primary:            99 13% 65%;
+    --primary-foreground: 0 0% 100%;
+    --secondary:          0 0% 22%;
+    --secondary-foreground: 0 0% 80%;
+    --muted:              0 0% 18%;
+    --muted-foreground:   0 0% 56%;
+    --accent:             38 50% 44%;
+    --accent-foreground:  0 0% 90%;
+    --destructive:        356 44% 50%;
+    --destructive-foreground: 0 0% 100%;
+    --border:             0 0% 20%;
+    --input:              0 0% 20%;
+    --ring:               99 13% 65%;
+    --sidebar-background: 0 0% 10%;
+    --sidebar-foreground: 0 0% 90%;
+    --sidebar-primary:    99 13% 65%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent:     0 0% 18%;
+    --sidebar-accent-foreground: 0 0% 80%;
+    --sidebar-border:     0 0% 20%;
+    --sidebar-ring:       99 13% 65%;
   }
 }
 
 @layer base {
-  * {
-    @apply border-border;
-  }
-
+  * { @apply border-border; }
   body {
-    @apply bg-background text-foreground antialiased;
-    font-family: var(--font-body);
-  }
-
-  h1, h2, h3, h4, h5, h6 {
-    font-family: var(--font-heading);
+    @apply bg-background text-foreground;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
   }
 }
 
-@layer utilities {
-  .text-balance {
-    text-wrap: balance;
-  }
-  .text-pretty {
-    text-wrap: pretty;
-  }
-}
-
-@keyframes fade-up {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-    filter: blur(4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-    filter: blur(0);
-  }
-}
-
-@keyframes fade-in {
-  from { opacity: 0; filter: blur(4px); }
-  to { opacity: 1; filter: blur(0); }
-}
-
-.animate-fade-up {
-  animation: fade-up 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-.animate-fade-in {
-  animation: fade-in 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+/* Headings — clean sans to match Figma (no Playfair Display) */
+.font-heading {
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
 }
