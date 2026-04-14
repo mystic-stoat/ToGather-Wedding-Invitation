@@ -19,6 +19,10 @@
 //   };
 // ─────────────────────────────────────────────────────────────────────────────
 
+// adding libraries here to connect fire auth to firestore db
+import { doc, getDoc } from "firebase/firestore";
+import { firebaseAuth, db } from "@/lib/firebase";
+
 import { createContext, useContext, useEffect, useState } from "react";
 import {
   onAuthStateChanged,           // listens for login/logout changes
@@ -28,7 +32,6 @@ import {
   sendPasswordResetEmail,       // send password reset email
   updateProfile,                // update display name / photo
 } from "firebase/auth";
-import { firebaseAuth } from "@/lib/firebase";
 
 // ── Step 1: Create the context ────────────────────────────────────────────────
 // createContext makes a "container" that holds shared data.
@@ -48,23 +51,40 @@ export const AuthProvider = ({ children }) => {
   // Firebase has had a chance to check if someone is already logged in.
   const [loading, setLoading] = useState(true);
 
+  // userProfile, firestore db info about user
+  const [userProfile, setUserProfile] = useState(null);
+
   // ── Listen for auth state changes ────────────────────────────────────────
   // This runs once when the app loads and stays active the whole time.
-  // Firebase calls the callback whenever:
+  // Firebase calls the callback whenever: <= meaning firebase is queried on authentication functions
   //   - User logs in    → firebaseUser = User object
   //   - User logs out   → firebaseUser = null
   //   - Page refreshes  → Firebase checks session and fires this again
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(firebaseAuth, (firebaseUser) => {
-      setUser(firebaseUser);  // update our local state
+    const unsubscribe = onAuthStateChanged(firebaseAuth, async (firebaseUser) => {
+      if (firebaseUser) {
+        setUser(firebaseUser);
+
+        // pull data from firebase db, idexing from user id (using api call => async)
+        const docRef = doc(db, "bethrothed", firebaseUser.uid); // TODO bethrothed
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          setUserProfile(docSnap.data());
+        }
+      }
+      else {
+        setUser(null);
+        setUserProfile(null);
+      }
       setLoading(false);      // done loading — safe to show the page
     });
-
     // Cleanup function: stops listening when the app unmounts
     // (prevents memory leaks)
     return unsubscribe;
   }, []); // empty array = only run once on mount
 
+
+  // now we can load these values into our "AuthContext.Provider"
   // ── login ─────────────────────────────────────────────────────────────────
   // Signs in with email + password.
   // If successful, onAuthStateChanged above fires and sets `user` automatically.
@@ -107,10 +127,19 @@ export const AuthProvider = ({ children }) => {
   // Any component wrapped in <AuthProvider> can now call useAuth()
   // to access user, loading, and all the auth functions above.
   return (
-    <AuthContext.Provider value={{ user, loading, login, signup, logout, resetPassword }}>
+    <AuthContext.Provider value ={{
+      user,
+      userProfile,
+      loading,
+      login,
+      signup,
+      logout,
+      resetPassword
+    }}>
       {children}
     </AuthContext.Provider>
-  );
+  )
+
 };
 
 // ── Step 3: useAuth hook — how pages access the context ───────────────────────
