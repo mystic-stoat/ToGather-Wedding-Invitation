@@ -357,7 +357,8 @@ const GuestRow = ({ guest, onDelete, deleting, onCopyLink }) => {
 
 // ── Main GuestList Page ───────────────────────────────────────────────────────
 const GuestList = () => {
-  const { user, logout } = useAuth();
+  // const { user, logout } = useAuth();
+  const { user, userProfile, logout } = useAuth();
   const navigate         = useNavigate();
 
   // ── State ──────────────────────────────────────────────────────────────────

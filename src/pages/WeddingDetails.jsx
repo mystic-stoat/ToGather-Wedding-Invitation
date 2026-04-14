@@ -84,9 +84,7 @@ const EMPTY = {
 // ── Main Component ────────────────────────────────────────────────────────────
 
 const WeddingDetails = () => {
-  const {
-    user
-  } = useAuth(); // get the logged-in user from AuthContext
+  const { user, userProfile } = useAuth(); // get the logged-in user from AuthContext
 
   // form state — holds all the field values the user is editing
   const [form, setForm] = useState(EMPTY);
