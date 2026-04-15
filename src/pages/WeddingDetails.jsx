@@ -190,6 +190,20 @@ const WeddingDetails = () => {
     if (!form.ceremonyTime) {
       errors.ceremonyTime = "Ceremony time is required.";
     }
+    // Require RSVP deadline
+    if (!form.inviteDeadline) {
+      errors.inviteDeadline = "RSVP deadline is required.";
+    }
+
+    // RSVP deadline must be on or before the wedding date
+    if (
+      form.weddingDate &&
+      form.inviteDeadline &&
+      form.inviteDeadline > form.weddingDate
+    ) {
+      errors.inviteDeadline = "RSVP deadline must be on or before the wedding date.";
+    }
+    
 
     // Require venue name
     if (!form.venueName.trim()) {
