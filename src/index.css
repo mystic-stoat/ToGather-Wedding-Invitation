@@ -1,0 +1,100 @@
+/* src/index.css — ToGather -still need to match color from figma's prototype and match wireframe*/
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* ── Page & sidebar background ───────────────────────────────────────────
+     * #F3EDEB — warm pinkish cream (confirmed image 2)                       */
+    --background:         14 25% 94%;
+    --foreground:         0 0% 16%;       /* #2A2A2A near-black text          */
+
+    /* ── Cards — pure white panels ──────────────────────────────────────────  */
+    --card:               0 0% 100%;
+    --card-foreground:    0 0% 16%;
+    --popover:            0 0% 100%;
+    --popover-foreground: 0 0% 16%;
+
+    /* ── Primary — #839878 lighter sage green (confirmed by user) ────────── */
+    --primary:            99 13% 53%;
+    --primary-foreground: 0 0% 100%;
+
+    /* ── Secondary — soft sage ───────────────────────────────────────────── */
+    --secondary:          99 12% 75%;
+    --secondary-foreground: 99 13% 25%;
+
+    /* ── Muted — #A89A93 warm tan (section labels: OVERVIEW, PLANNING) ───── */
+    --muted:              20 11% 88%;
+    --muted-foreground:   20 11% 62%;     /* #A89A93 confirmed image 1        */
+
+    /* ── Accent — golden amber (pending) ─────────────────────────────────── */
+    --accent:             38 58% 54%;     /* #D09B45                          */
+    --accent-foreground:  0 0% 16%;
+
+    /* ── Destructive — dusty rose (declined) ─────────────────────────────── */
+    --destructive:        356 44% 59%;    /* #C9666E                          */
+    --destructive-foreground: 0 0% 100%;
+
+    /* ── Borders — warm to match background hue ──────────────────────────── */
+    --border:             14 15% 86%;
+    --input:              14 15% 86%;
+    --ring:               99 13% 53%;
+
+    --radius: 0.75rem;
+
+    /* ── Sidebar — same background as page ───────────────────────────────── */
+    --sidebar-background:          14 25% 94%;
+    --sidebar-foreground:          0 0% 16%;
+    --sidebar-primary:             99 13% 53%;
+    --sidebar-primary-foreground:  0 0% 100%;
+    --sidebar-accent:              99 12% 75%;
+    --sidebar-accent-foreground:   99 13% 25%;
+    --sidebar-border:              14 15% 86%;
+    --sidebar-ring:                99 13% 53%;
+  }
+
+  .dark {
+    --background:         0 0% 10%;
+    --foreground:         0 0% 90%;
+    --card:               0 0% 14%;
+    --card-foreground:    0 0% 90%;
+    --popover:            0 0% 14%;
+    --popover-foreground: 0 0% 90%;
+    --primary:            99 13% 65%;
+    --primary-foreground: 0 0% 100%;
+    --secondary:          0 0% 22%;
+    --secondary-foreground: 0 0% 80%;
+    --muted:              0 0% 18%;
+    --muted-foreground:   0 0% 56%;
+    --accent:             38 50% 44%;
+    --accent-foreground:  0 0% 90%;
+    --destructive:        356 44% 50%;
+    --destructive-foreground: 0 0% 100%;
+    --border:             0 0% 20%;
+    --input:              0 0% 20%;
+    --ring:               99 13% 65%;
+    --sidebar-background: 0 0% 10%;
+    --sidebar-foreground: 0 0% 90%;
+    --sidebar-primary:    99 13% 65%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent:     0 0% 18%;
+    --sidebar-accent-foreground: 0 0% 80%;
+    --sidebar-border:     0 0% 20%;
+    --sidebar-ring:       99 13% 65%;
+  }
+}
+
+@layer base {
+  * { @apply border-border; }
+  body {
+    @apply bg-background text-foreground;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+}
+
+/* Headings — clean sans to match Figma (no Playfair Display) */
+.font-heading {
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
