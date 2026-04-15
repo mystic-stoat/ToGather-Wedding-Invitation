@@ -44,10 +44,18 @@ const SectionCard = ({
 // ── Reusable labeled form field wrapper ───────────────────────────────────────
 const FormField = ({
   label,
-  children
+  children,
+  error,
+  helper
 }) => <div className="space-y-1.5">
     <Label className="text-sm font-medium text-muted-foreground">{label}</Label>
     {children}
+    {helper && !error && (
+      <p className="text-xs text-muted-foreground">{helper}</p>
+    )}
+    {error && (
+      <p className="text-xs text-destructive">{error}</p>
+    )}
   </div>;
 const inputCls = "h-12 bg-background border-border/60 rounded-xl transition-all focus:ring-2 focus:ring-primary/20 focus:border-primary";
 
@@ -98,6 +106,7 @@ const WeddingDetails = () => {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
 
   // ── Load existing invitation when the page mounts ──────────────────────────
   // useEffect runs once after the component renders.
@@ -155,27 +164,78 @@ const WeddingDetails = () => {
     }
   }));
 
+  // ── Validation handler ─────────────────────────────────────────────────────
+  // Checks the required fields before allowing the form to save.
+  // If a field is missing, we store an error message in fieldErrors
+  // so it can be shown directly under that input.
+  const validateForm = () => {
+    const errors = {};
+
+    // Require groom first name
+    if (!form.groomName.first.trim()) {
+      errors["groomName.first"] = "First name is required.";
+    }
+
+    // Require bride first name
+    if (!form.brideName.first.trim()) {
+      errors["brideName.first"] = "First name is required.";
+    }
+
+    // Require wedding date
+    if (!form.weddingDate) {
+      errors.weddingDate = "Wedding date is required.";
+    }
+
+    // Require ceremony time
+    if (!form.ceremonyTime) {
+      errors.ceremonyTime = "Ceremony time is required.";
+    }
+
+    // Require venue name
+    if (!form.venueName.trim()) {
+      errors.venueName = "Venue name is required.";
+    }
+
+    // Require venue address
+    if (!form.venueAddress.trim()) {
+      errors.venueAddress = "Venue address is required.";
+    }
+
+    // Save all field-specific errors into state
+    setFieldErrors(errors);
+
+    // If there are no keys in the errors object, the form is valid
+    return Object.keys(errors).length === 0;
+  };
+
   // ── Save handler ────────────────────────────────────────────────────────────
+  
   const handleSave = async () => {
     if (!user) return;
-    setSaving(true);
+
     setSaveError("");
+    setSaved(false);
+
+    // Stop save if required fields are missing
+    if (!validateForm()) {
+      setSaveError("Please complete the required fields before saving.");
+      return;
+    }
+
+    setSaving(true);
+
     try {
-      // saveInvitation in firestore.ts handles create vs update:
-      // - If weddingId is undefined → creates new doc and returns the new ID
-      // - If weddingId is defined   → updates existing doc and returns same ID
-      const id = await saveInvitation(user.uid, {
-        ...form,
-        isPublished: false
-      },
-      // pass full form data
-      weddingId // undefined on first save, set on updates
+      const id = await saveInvitation(
+        user.uid,
+        {
+          ...form,
+          isPublished: false
+        },
+        weddingId
       );
 
-      // On first save, store the returned ID so future saves update instead of creating new
       if (!weddingId) setWeddingId(id);
 
-      // Show "Saved!" confirmation for 2.5 seconds then reset
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
     } catch (err) {
@@ -185,16 +245,6 @@ const WeddingDetails = () => {
       setSaving(false);
     }
   };
-
-  // ── Loading spinner while fetching Firestore data ──────────────────────────
-  if (loadingData) {
-    return <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="flex flex-col items-center gap-3">
-          <Loader2 size={28} className="animate-spin text-primary" />
-          <p className="text-sm text-muted-foreground">Loading your details...</p>
-        </div>
-      </div>;
-  }
 
   // ── Main render ────────────────────────────────────────────────────────────
   return <div className="min-h-screen bg-background flex flex-col">
@@ -225,7 +275,7 @@ const WeddingDetails = () => {
         <SectionCard icon={Heart} title="Partner Names">
           <div className="space-y-6">
 
-            <FormField label="Groom's name">
+            <FormField label="Groom's name" error={fieldErrors["groomName.first"]}>
               <div className="grid grid-cols-3 gap-3">
                 <Input placeholder="First" value={form.groomName.first} onChange={e => setName("groomName", "first", e.target.value)} className={inputCls} />
                 <Input placeholder="Middle" value={form.groomName.middle} onChange={e => setName("groomName", "middle", e.target.value)} className={inputCls} />
@@ -233,7 +283,7 @@ const WeddingDetails = () => {
               </div>
             </FormField>
 
-            <FormField label="Bride's name">
+            <FormField label="Bride's name" error={fieldErrors["brideName.first"]}>
               <div className="grid grid-cols-3 gap-3">
                 <Input placeholder="First" value={form.brideName.first} onChange={e => setName("brideName", "first", e.target.value)} className={inputCls} />
                 <Input placeholder="Middle" value={form.brideName.middle} onChange={e => setName("brideName", "middle", e.target.value)} className={inputCls} />
@@ -249,10 +299,10 @@ const WeddingDetails = () => {
           <div className="space-y-6">
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <FormField label="Wedding Date">
+              <FormField label="Wedding Date" error={fieldErrors.weddingDate}>
                 <Input type="date" value={form.weddingDate} onChange={e => set("weddingDate", e.target.value)} className={inputCls} />
               </FormField>
-              <FormField label="Ceremony Time">
+              <FormField label="Ceremony Time" error={fieldErrors.ceremonyTime}>
                 <Input type="time" value={form.ceremonyTime} onChange={e => set("ceremonyTime", e.target.value)} className={inputCls} />
               </FormField>
             </div>
@@ -271,11 +321,11 @@ const WeddingDetails = () => {
         <SectionCard icon={MapPin} title="Venue & Location" delay={160}>
           <div className="space-y-6">
 
-            <FormField label="Venue Name">
+            <FormField label="Venue Name" error={fieldErrors.venueName}>
               <Input placeholder="The Grand Pavilion" value={form.venueName} onChange={e => set("venueName", e.target.value)} className={inputCls} />
             </FormField>
 
-            <FormField label="Venue Address">
+            <FormField label="Venue Address" error={fieldErrors.venueAddress}>
               <Input placeholder="123 Garden Lane, Austin, TX 78701" value={form.venueAddress} onChange={e => set("venueAddress", e.target.value)} className={inputCls} />
             </FormField>
 
