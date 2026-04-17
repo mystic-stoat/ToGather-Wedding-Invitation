@@ -35,7 +35,7 @@ const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors]             = useState({}); // field-level errors
   const [loading, setLoading]           = useState(false);
-
+  
   // ── Client-side validation ────────────────────────────────────────────────
   // Runs before hitting Firebase — catches obvious mistakes instantly
   // without a network request
