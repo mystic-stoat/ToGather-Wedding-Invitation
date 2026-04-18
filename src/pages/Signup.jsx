@@ -25,6 +25,7 @@ import Footer from "@/components/Footer";
 import { Eye, EyeOff, Mail, Lock, UserRound } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { createUserProfile } from "@/lib/firestore"; // creates the bethrothed doc
+import Logo from "@/assets/logo.svg";
 
 const Signup = () => {
   const navigate = useNavigate();
@@ -127,8 +128,9 @@ const Signup = () => {
 
             {/* Brand header */}
             <div className="text-center space-y-4">
-              <div className="inline-block bg-foreground rounded-xl px-6 py-3">
-                <span className="font-heading text-2xl font-bold text-primary-foreground tracking-tight">
+              <div className="inline-block bg-secondary rounded-xl px-6 py-3">
+                <img src={Logo} className="h-20 mx-auto w-auto"/>
+                <span className="font-heading text-2xl font-bold tracking-tight">
                   ToGather
                 </span>
               </div>

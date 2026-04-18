@@ -24,6 +24,7 @@ import { Label } from "@/components/ui/label";
 import Footer from "@/components/Footer";
 import { Eye, EyeOff, Mail, Lock } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import Logo from "@/assets/logo.svg";
 
 const Login = () => {
   const navigate = useNavigate();
@@ -109,8 +110,9 @@ const Login = () => {
 
             {/* Brand header */}
             <div className="text-center space-y-4">
-              <div className="inline-block bg-foreground rounded-xl px-6 py-3">
-                <span className="font-heading text-2xl font-bold text-primary-foreground tracking-tight">
+              <div className="inline-block bg-secondary rounded-xl px-6 py-3">
+              <img src={Logo} className="h-20 mx-auto w-auto"/>
+                <span className="font-heading text-2xl font-bold tracking-tight">
                   ToGather
                 </span>
               </div>

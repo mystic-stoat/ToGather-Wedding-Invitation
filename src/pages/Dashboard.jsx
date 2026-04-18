@@ -34,6 +34,7 @@ import {
   addInvitee,
   deleteInvitee,
 } from "@/lib/firestore";
+import Logo from "@/assets/logo.svg";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -107,7 +108,7 @@ const Sidebar = ({ invitation, onLogout }) => {
 
       {/* Brand */}
       <div className="flex items-center gap-2 mb-1 px-1">
-        <Heart size={16} className="text-primary" />
+        <img src={Logo} className="h-8 w-auto"/>
         <span className="font-heading text-lg font-semibold text-foreground">ToGather</span>
       </div>
       <p className="text-xs text-muted-foreground px-1 mb-8">Plan the day. Share the joy.</p>
