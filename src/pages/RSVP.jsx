@@ -151,7 +151,7 @@ const StepAttendance = ({ value, onChange }) => (
       <button
         type="button"
         onClick={() => onChange("attending")}
-        className={`group relative rounded-2xl border-2 p-6 text-left transition-all duration-200 ${
+        className={`group relative rounded-2xl border-2 p-6 text-center flex flex-col items-center transition-all duration-200${
           value === "attending"
             ? "border-primary bg-primary/8 shadow-md shadow-primary/10"
             : "border-border/60 bg-card hover:border-primary/40 hover:shadow-md"
@@ -184,7 +184,7 @@ const StepAttendance = ({ value, onChange }) => (
       <button
         type="button"
         onClick={() => onChange("declined")}
-        className={`group relative rounded-2xl border-2 p-6 text-left transition-all duration-200 ${
+        className={`group relative rounded-2xl border-2 p-6 text-center flex flex-col items-center transition-all duration-200 ${
           value === "declined"
             ? "border-destructive/60 bg-destructive/5 shadow-md shadow-destructive/5"
             : "border-border/60 bg-card hover:border-destructive/30 hover:shadow-md"
