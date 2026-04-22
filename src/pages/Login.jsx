@@ -27,7 +27,7 @@ import { useAuth } from "@/contexts/AuthContext";
 
 const Login = () => {
   const navigate = useNavigate();
-  const { login } = useAuth(); // get login function from AuthContext
+  const { login, userProfile } = useAuth(); // get login function from AuthContext
 
   // ── Form state ────────────────────────────────────────────────────────────
   const [email, setEmail]               = useState("");
@@ -41,6 +41,9 @@ const Login = () => {
   // without a network request
   const validate = () => {
     const errs = {};
+    let skipFirebaseAuth = false;
+    // setting err flags and returning false will allow setting of errors on feilds
+    // setting skipFirebaseAuth to true, and returning true will allow generalized failed auth message
     if (!email)
       errs.email = "Email is required";
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
@@ -48,19 +51,33 @@ const Login = () => {
     if (!password)
       errs.password = "Password is required";
     else if (password.length < 8)
-      errs.password = "Must be at least 8 characters";
+      skipFirebaseAuth = true;
+    
+    // loads errs into error.* which is then indexed in the html (JSX) below
     setErrors(errs);
-    return Object.keys(errs).length === 0; // true means no errors
+    return {
+      isValid: Object.keys(errs).length === 0, // true means no errors
+      skipFirebaseAuth
+    }
   };
 
   // ── Form submission ───────────────────────────────────────────────────────
   const handleSubmit = async (e) => {
     e.preventDefault(); // prevent browser page reload
-    if (!validate()) return; // stop if client validation fails
-
     setLoading(true);
     setErrors({});
 
+    const {isValid, skipFirebaseAuth } = validate();
+
+    if (!isValid) {
+      setLoading(false);
+    }
+
+    if (skipFirebaseAuth) {
+      setErrors({general: "Incorrect email or password. Please try again."});
+      setLoading(false);
+      return;
+    }
     try {
       // Call Firebase via AuthContext
       await login(email, password);
@@ -98,7 +115,6 @@ const Login = () => {
                 </span>
               </div>
               <h1 className="font-heading text-2xl font-semibold text-foreground">Welcome back</h1>
-              <p className="text-sm text-muted-foreground">Sign in to manage your wedding</p>
             </div>
 
             {/* General error banner — shown for wrong password, etc. */}
@@ -116,8 +132,6 @@ const Login = () => {
                   Email Address
                 </Label>
                 <div className="relative">
-                  {/* Icon inside the input */}
-                  <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     id="email"
                     type="email"
@@ -128,7 +142,7 @@ const Login = () => {
                       // Clear the error for this field as soon as user starts typing
                       setErrors((prev) => ({ ...prev, email: undefined }));
                     }}
-                    className={`h-12 pl-10 bg-background border rounded-xl transition-all focus:ring-2 focus:ring-primary/20 ${
+                    className={`text-center h-12 pl-10 pr-11 bg-background border rounded-xl transition-all focus:ring-2 focus:ring-primary/20 ${
                       errors.email ? "border-destructive" : "border-border"
                     }`}
                   />
@@ -142,23 +156,18 @@ const Login = () => {
                   <Label htmlFor="password" className="text-sm font-semibold text-foreground">
                     Password
                   </Label>
-                  {/* Forgot password link */}
-                  <Link to="/forgot-password" className="text-xs text-primary hover:underline">
-                    Forgot password?
-                  </Link>
                 </div>
                 <div className="relative">
-                  <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     id="password"
                     type={showPassword ? "text" : "password"} // toggle visibility
-                    placeholder="At least 8 characters..."
+                    placeholder=""
                     value={password}
                     onChange={(e) => {
                       setPassword(e.target.value);
                       setErrors((prev) => ({ ...prev, password: undefined }));
                     }}
-                    className={`h-12 pl-10 pr-11 bg-background border rounded-xl transition-all focus:ring-2 focus:ring-primary/20 ${
+                    className={`text-center h-12 pl-10 pr-11 bg-background border rounded-xl transition-all focus:ring-2 focus:ring-primary/20 ${
                       errors.password ? "border-destructive" : "border-border"
                     }`}
                   />
@@ -193,9 +202,12 @@ const Login = () => {
                 ) : "Log in"}
               </Button>
             </form>
-
+            {/* Forgot password link */}
+            <p className="text-center text-sm text-muted-forground">
+              <Link to="/forgot-password" className="font-semibold text-primary hover:underline transition-colors">
+                Forgot password?<br></br><br></br>
+              </Link>
             {/* Link to signup for new users */}
-            <p className="text-center text-sm text-muted-foreground">
               Don't have an account?{" "}
               <Link to="/signup" className="font-semibold text-primary hover:underline transition-colors">
                 Sign up

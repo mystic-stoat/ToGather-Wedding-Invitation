@@ -382,7 +382,7 @@ const Dashboard = () => {
           {/* Welcome heading */}
           <div className="mb-8">
             <h1 className="font-heading text-3xl md:text-4xl font-semibold text-foreground">
-              Welcome back, {user?.displayName?.split(" ")[0] || "there"}!
+              Welcome back{", " + userProfile.name || ""}!
             </h1>
             {daysUntil !== null && daysUntil > 0 ? (
               <p className="text-muted-foreground mt-1">
