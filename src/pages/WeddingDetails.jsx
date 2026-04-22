@@ -12,6 +12,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -87,6 +88,7 @@ const WeddingDetails = () => {
   const {
     user
   } = useAuth(); // get the logged-in user from AuthContext
+  const navigate = useNavigate();
 
   // form state — holds all the field values the user is editing
   const [form, setForm] = useState(EMPTY);
@@ -179,7 +181,10 @@ const WeddingDetails = () => {
 
       // Show "Saved!" confirmation for 2.5 seconds then reset
       setSaved(true);
-      setTimeout(() => setSaved(false), 2500);
+      setTimeout(() => {
+        setSaved(false);
+        navigate("/dashboard");
+      }, 2500);
     } catch (err) {
       console.error("Save failed:", err);
       setSaveError("Failed to save. Please check your connection and try again.");

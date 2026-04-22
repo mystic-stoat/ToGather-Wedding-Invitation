@@ -7,7 +7,7 @@ const AppHeader = ({
   return <header className="border-b border-border/60 bg-card/80 backdrop-blur-md sticky top-0 z-50">
       <div className="container mx-auto px-6 h-16 flex items-center justify-between">
         <div className="flex items-center gap-8">
-          <Link to="/" className="font-heading text-2xl font-bold text-foreground tracking-tight">
+          <Link to="/dashboard" className="font-heading text-2xl font-bold text-foreground tracking-tight">
             ToGather
           </Link>
           {showNav && <nav className="hidden md:flex items-center gap-6">
