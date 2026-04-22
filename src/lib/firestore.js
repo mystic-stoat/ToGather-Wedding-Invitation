@@ -295,7 +295,8 @@ export const submitRSVP = async (token, response) => {
       dietaryRestrictions: response.dietaryRestrictions,
       guestCount:          response.guestCount, // total party size including plus ones
       plusOnes:            response.plusOnes || [], // array of { name, meal } for each plus one
-      message:             response.message,
+      message: response.message,
+
       submittedAt:         serverTimestamp(),
     });
 

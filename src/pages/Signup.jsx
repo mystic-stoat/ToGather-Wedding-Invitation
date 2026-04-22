@@ -25,6 +25,7 @@ import Footer from "@/components/Footer";
 import { Eye, EyeOff, Mail, Lock, UserRound } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { createUserProfile } from "@/lib/firestore"; // creates the bethrothed doc
+import Logo from "@/assets/logo.svg";
 
 const Signup = () => {
   const navigate = useNavigate();
@@ -53,6 +54,13 @@ const Signup = () => {
       errs.password = "Password is required";
     else if (password.length < 8)
       errs.password = "Must be at least 8 characters";
+    else if (FORBIDDEN.test(password))
+      errs.password = "Password contains an invalid character";
+    else if ((password.match(/[a-zA-Z]/g) || []).length < 7)
+      errs.password = "Must contain at least 7 letters";
+    else if (!/\d/.test(password))
+      errs.password = "Must contain at least 1 number";
+
     if (!confirm)
       errs.confirm = "Please confirm your password";
     else if (confirm !== password)
@@ -100,6 +108,11 @@ const Signup = () => {
   const clearError = (key) =>
     setErrors((prev) => { const next = { ...prev }; delete next[key]; return next; });
 
+  const FORBIDDEN = /[\s/\\:'"`,;<>|?*]/;
+
+  const blockForbiddenChars = (e) => {
+    if (FORBIDDEN.test(e.key)) e.preventDefault();
+  };
   // Helper: adds red border to input if that field has an error
   const inputCls = (key) =>
     `h-12 pl-10 bg-background border rounded-xl transition-all focus:ring-2 focus:ring-primary/20 ${
@@ -115,8 +128,9 @@ const Signup = () => {
 
             {/* Brand header */}
             <div className="text-center space-y-4">
-              <div className="inline-block bg-foreground rounded-xl px-6 py-3">
-                <span className="font-heading text-2xl font-bold text-primary-foreground tracking-tight">
+              <div className="inline-block bg-secondary rounded-xl px-6 py-3">
+                <img src={Logo} className="h-20 mx-auto w-auto"/>
+                <span className="font-heading text-2xl font-bold tracking-tight">
                   ToGather
                 </span>
               </div>
@@ -141,7 +155,18 @@ const Signup = () => {
                 <div className="relative">
                   <UserRound size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
                   <Input id="name" placeholder="Jane Smith" value={name}
-                    onChange={(e) => { setName(e.target.value); clearError("name"); }}
+                    onChange={(e) => { 
+                      const formatted = e.target.value
+                      .split(" ")
+                      .map(word => word
+                           .split("-")
+                           .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+                           .join("-")
+                          )
+                      .join(" ");
+                      setName(formatted);
+                      clearError("name");}
+                    } 
                     className={inputCls("name")} />
                 </div>
                 {errors.name && <p className="text-xs text-destructive mt-1">{errors.name}</p>}
@@ -167,6 +192,7 @@ const Signup = () => {
                   <Input id="password" type={showPassword ? "text" : "password"}
                     placeholder="At least 8 characters..." value={password}
                     onChange={(e) => { setPassword(e.target.value); clearError("password"); }}
+                    onKeyDown = {blockForbiddenChars}
                     className={`${inputCls("password")} pr-11`} />
                   <button type="button" onClick={() => setShowPassword(!showPassword)}
                     className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
