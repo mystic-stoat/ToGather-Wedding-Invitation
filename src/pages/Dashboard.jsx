@@ -109,7 +109,6 @@ const Sidebar = ({ invitation, onLogout }) => {
       {/* Brand */}
       <div className="flex items-center gap-2 mb-1 px-1">
 
-        <Heart size={16} className="text-primary" />
         <img src={Logo} className="h-8 w-auto"/>
 
         <span className="font-heading text-lg font-semibold text-foreground">ToGather</span>
