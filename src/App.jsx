@@ -127,7 +127,7 @@ const App = () => (
             {/* RSVP is fully public — guests don't have accounts */}
             {/* :token is a URL parameter — e.g. /rsvp/abc-123 */}
             <Route path="/rsvp/:inviteeId/:token" element={<RSVP />} />
- 
+
             {/* ── Protected routes — must be logged in ── */}
             <Route path="/dashboard"
               element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />

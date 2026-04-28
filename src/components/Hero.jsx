@@ -19,7 +19,7 @@ const Hero = () => {
         <h1 className="font-heading text-4xl sm:text-5xl md:text-6xl font-bold text-white leading-[1.1] text-balance mb-6" style={{
         textShadow: '0 2px 20px rgba(0,0,0,0.3)'
       }}>
-          Invite to your life
+          An invitation to the rest of your life, <b><i>ToGather</i></b>.
         </h1>
         <p className="text-white/90 text-lg md:text-xl font-body max-w-lg mx-auto mb-10 text-pretty" style={{
         textShadow: '0 1px 8px rgba(0,0,0,0.3)'

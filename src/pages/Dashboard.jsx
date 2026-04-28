@@ -108,7 +108,9 @@ const Sidebar = ({ invitation, onLogout }) => {
 
       {/* Brand */}
       <div className="flex items-center gap-2 mb-1 px-1">
+
         <img src={Logo} className="h-8 w-auto"/>
+
         <span className="font-heading text-lg font-semibold text-foreground">ToGather</span>
       </div>
       <p className="text-xs text-muted-foreground px-1 mb-8">Plan the day. Share the joy.</p>
@@ -221,7 +223,9 @@ const AddGuestModal = ({ onAdd, onClose, saving }) => {
 
 // ── Main Dashboard ────────────────────────────────────────────────────────────
 const Dashboard = () => {
+
   const { user, userProfile, logout } = useAuth();
+
   const navigate         = useNavigate();
 
   // ── State ──────────────────────────────────────────────────────────────────
