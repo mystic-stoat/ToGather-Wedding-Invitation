@@ -26,6 +26,13 @@ import { Eye, EyeOff, Mail, Lock } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import Logo from "@/assets/logo.svg";
 
+const FieldError = ({message}) =>
+  message ? (
+    <div className="bg-destructive/10 border border-destructive/20 rounded-xl px-3 py-2 mb-1.5">
+      <p className="text-sm text-destructive">{message}</p>
+    </div>
+  ) : null;
+
 const Login = () => {
   const navigate = useNavigate();
   const { login, userProfile } = useAuth(); // get login function from AuthContext
@@ -72,6 +79,7 @@ const Login = () => {
 
     if (!isValid) {
       setLoading(false);
+      return;
     }
 
     if (skipFirebaseAuth) {
@@ -119,20 +127,17 @@ const Login = () => {
               <h1 className="font-heading text-2xl font-semibold text-foreground">Welcome back</h1>
             </div>
 
-            {/* General error banner — shown for wrong password, etc. */}
-            {errors.general && (
-              <div className="bg-destructive/10 border border-destructive/20 rounded-xl px-4 py-3">
-                <p className="text-sm text-destructive">{errors.general}</p>
-              </div>
-            )}
-
-            <form className="space-y-5" onSubmit={handleSubmit}>
+            <form className="space-y-5" onSubmit={handleSubmit} noValidate>
+              
+              {/* General error — now rendered with the same component, above the email field */}
+              <FieldError message={errors.general} />
 
               {/* Email field */}
               <div className="space-y-1.5">
                 <Label htmlFor="email" className="text-sm font-semibold text-foreground">
                   Email Address
                 </Label>
+                <FieldError message={errors.email} />
                 <div className="relative">
                   <Input
                     id="email"
@@ -149,7 +154,6 @@ const Login = () => {
                     }`}
                   />
                 </div>
-                {errors.email && <p className="text-xs text-destructive mt-1">{errors.email}</p>}
               </div>
 
               {/* Password field with show/hide toggle */}
@@ -159,6 +163,7 @@ const Login = () => {
                     Password
                   </Label>
                 </div>
+                <FieldError message={errors.password} />
                 <div className="relative">
                   <Input
                     id="password"
@@ -183,9 +188,6 @@ const Login = () => {
                     {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
                 </div>
-                {errors.password && (
-                  <p className="text-xs text-destructive mt-1">{errors.password}</p>
-                )}
               </div>
 
               {/* Submit button — disabled + spinner while loading */}
