@@ -27,6 +27,13 @@ import { useAuth } from "@/contexts/AuthContext";
 import { createUserProfile } from "@/lib/firestore"; // creates the bethrothed doc
 import Logo from "@/assets/logo.svg";
 
+const FieldError = ({message}) =>
+  message ? (
+    <div className="bg-destructive/10 border border-destructive/20 rounded-xl px-3 py-2 mb-1.5">
+      <p className="text-sm text-destructive">{message}</p>
+    </div>
+  ) : null;
+
 const Signup = () => {
   const navigate = useNavigate();
   const { signup } = useAuth(); // get signup function from AuthContext
@@ -141,13 +148,9 @@ const Signup = () => {
             </div>
 
             {/* General error banner */}
-            {errors.general && (
-              <div className="bg-destructive/10 border border-destructive/20 rounded-xl px-4 py-3">
-                <p className="text-sm text-destructive">{errors.general}</p>
-              </div>
-            )}
+            <FieldError message={errors.general} />
 
-            <form className="space-y-5" onSubmit={handleSubmit}>
+            <form className="space-y-5" onSubmit={handleSubmit} noValidate>
 
               {/* Full Name */}
               <div className="space-y-1.5">
@@ -169,7 +172,7 @@ const Signup = () => {
                     } 
                     className={inputCls("name")} />
                 </div>
-                {errors.name && <p className="text-xs text-destructive mt-1">{errors.name}</p>}
+                <FieldError message={errors.name} />
               </div>
 
               {/* Email */}
@@ -181,7 +184,7 @@ const Signup = () => {
                     onChange={(e) => { setEmail(e.target.value); clearError("email"); }}
                     className={inputCls("email")} />
                 </div>
-                {errors.email && <p className="text-xs text-destructive mt-1">{errors.email}</p>}
+                <FieldError message={errors.email}/>
               </div>
 
               {/* Password */}
@@ -200,7 +203,7 @@ const Signup = () => {
                     {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
                 </div>
-                {errors.password && <p className="text-xs text-destructive mt-1">{errors.password}</p>}
+                <FieldError message={errors.password}/>
               </div>
 
               {/* Confirm Password */}
@@ -218,7 +221,7 @@ const Signup = () => {
                     {showConfirm ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
                 </div>
-                {errors.confirm && <p className="text-xs text-destructive mt-1">{errors.confirm}</p>}
+                <FieldError message={errors.confirm}/>
               </div>
 
               {/* Submit */}
