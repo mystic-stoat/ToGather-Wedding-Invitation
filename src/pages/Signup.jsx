@@ -150,7 +150,7 @@ const Signup = () => {
             {/* General error banner */}
             <FieldError message={errors.general} />
 
-            <form className="space-y-5" onSubmit={handleSubmit}>
+            <form className="space-y-5" onSubmit={handleSubmit} noValidate>
 
               {/* Full Name */}
               <div className="space-y-1.5">
