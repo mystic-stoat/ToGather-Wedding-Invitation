@@ -2,7 +2,8 @@
 
 
 Colten Mikulastik:
-
+- Created test cases for Login, and Signup
+- Configured Hosting
 
 Keiran Indraanei:
 
