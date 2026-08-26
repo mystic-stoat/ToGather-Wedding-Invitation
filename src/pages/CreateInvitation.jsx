@@ -37,8 +37,12 @@ import { useAuth } from "@/contexts/AuthContext";
 import { getInvitationByUser, saveInvitation } from "@/lib/firestore";
 
 // ── Stitch-inspired color palette for the invitation canvas ───────────────────
-// These are kept separate from the ToGather design system tokens
-// so the builder feels like a distinct creative tool
+// This describes the actual wedding invitation artifact rendered in
+// <PhonePreview> (hero, greetings, RSVP button, etc.) — kept separate from the
+// ToGather design system tokens so the builder feels like a distinct creative
+// tool AND so recoloring the app's UI never touches the invitation itself.
+// Do NOT use CANVAS for the surrounding builder chrome (header/sidebar/panels)
+// — use BUILDER_UI below for that.
 const CANVAS = {
   primary:        "#56642b",   // olive green — main accent
   primaryLight:   "#8a9a5b",   // sage — secondary
@@ -51,6 +55,23 @@ const CANVAS = {
   outline:        "#76786b",   // borders
   secondary:      "#735c00",   // warm gold
   secondaryFixed: "#ffe088",   // light gold
+};
+
+// ── ToGather palette for the builder's own interface ───────────────────────────
+// Used for everything that is NOT the invitation artifact itself: the top bar,
+// left section nav, center settings panels, and Save/Publish actions. Selection
+// indicators (font pairing, layout, sidebar section, etc.) use a blush-tinted
+// background with a dark-green border/text instead of CANVAS's olive/lime.
+const BUILDER_UI = {
+  primary:          "#3F5F47", // dark green — active states, buttons, selected borders/text
+  primaryLight:     "#5F8D6B", // softer green — hover/secondary emphasis
+  selected:         "#FCECEF", // subtle blush tint — selected card/section background
+  surface:          "#F7F3EE", // warm ivory — page/header/sidebar/workspace background
+  surfaceContainer: "#FFFFFF", // white — panel cards & input backgrounds
+  surfaceHigh:      "#F3EAE3", // warm beige — icon wells, dropzones, toggle-off track
+  onSurface:        "#2C2C2C", // charcoal — primary text
+  onSurfaceVar:     "#746B63", // softer warm gray — labels/secondary text
+  outline:          "#E7DED4", // borders/dividers
 };
 
 // ── Section definitions — left sidebar nav ────────────────────────────────────
@@ -94,10 +115,10 @@ const PrivacyPanel = ({ settings, onChange }) => (
   <div className="space-y-8">
     <div>
       <h3 className="text-xs font-bold tracking-widest uppercase mb-1"
-        style={{ color: CANVAS.onSurfaceVar }}>
+        style={{ color: BUILDER_UI.onSurfaceVar }}>
         Visibility
       </h3>
-      <p className="text-sm mb-6" style={{ color: CANVAS.onSurfaceVar }}>
+      <p className="text-sm mb-6" style={{ color: BUILDER_UI.onSurfaceVar }}>
         Control who can access your invitation link.
       </p>
       <div className="grid grid-cols-2 gap-4">
@@ -107,18 +128,18 @@ const PrivacyPanel = ({ settings, onChange }) => (
             className="p-6 rounded-lg border-2 text-left transition-all"
             style={{
               backgroundColor: settings.privacy === opt.toLowerCase()
-                ? CANVAS.primaryFixed : CANVAS.surfaceContainer,
+                ? BUILDER_UI.selected : BUILDER_UI.surfaceContainer,
               borderColor: settings.privacy === opt.toLowerCase()
-                ? CANVAS.primary : "transparent",
-              color: CANVAS.onSurface,
+                ? BUILDER_UI.primary : "transparent",
+              color: BUILDER_UI.onSurface,
             }}>
             <div className="flex items-center gap-3 mb-3">
               {opt === "Public"
-                ? <Globe size={20} style={{ color: CANVAS.primary }} />
-                : <Lock size={20} style={{ color: CANVAS.primary }} />}
+                ? <Globe size={20} style={{ color: BUILDER_UI.primary }} />
+                : <Lock size={20} style={{ color: BUILDER_UI.primary }} />}
             </div>
             <p className="font-bold text-sm">{opt}</p>
-            <p className="text-xs mt-1" style={{ color: CANVAS.onSurfaceVar }}>
+            <p className="text-xs mt-1" style={{ color: BUILDER_UI.onSurfaceVar }}>
               {opt === "Public"
                 ? "Anyone with the link can view"
                 : "Only invited guests can view"}
@@ -130,7 +151,7 @@ const PrivacyPanel = ({ settings, onChange }) => (
 
     <div>
       <h3 className="text-xs font-bold tracking-widest uppercase mb-4"
-        style={{ color: CANVAS.onSurfaceVar }}>
+        style={{ color: BUILDER_UI.onSurfaceVar }}>
         RSVP Deadline
       </h3>
       <Input
@@ -138,9 +159,9 @@ const PrivacyPanel = ({ settings, onChange }) => (
         value={settings.inviteDeadline || ""}
         onChange={e => onChange("inviteDeadline", e.target.value)}
         className="h-12 rounded-lg border-0 border-b-2"
-        style={{ borderColor: CANVAS.outline, backgroundColor: CANVAS.surfaceContainer }}
+        style={{ borderColor: BUILDER_UI.outline, backgroundColor: BUILDER_UI.surfaceContainer }}
       />
-      <p className="text-xs mt-2" style={{ color: CANVAS.onSurfaceVar }}>
+      <p className="text-xs mt-2" style={{ color: BUILDER_UI.onSurfaceVar }}>
         Guests cannot RSVP after this date.
       </p>
     </div>
@@ -152,7 +173,7 @@ const ColorPanel = ({ settings, onChange }) => (
   <div className="space-y-8">
     <div>
       <h3 className="text-xs font-bold tracking-widest uppercase mb-4"
-        style={{ color: CANVAS.onSurfaceVar }}>
+        style={{ color: BUILDER_UI.onSurfaceVar }}>
         Theme Presets
       </h3>
       <div className="grid grid-cols-3 gap-3">
@@ -164,9 +185,11 @@ const ColorPanel = ({ settings, onChange }) => (
             }}
             className="p-4 rounded-lg border-2 transition-all text-center"
             style={{
+              // theme.bg / theme.primary / theme.secondary are the actual
+              // invitation preset colors (COLOR_THEMES) — never recolored.
               backgroundColor: theme.bg,
               borderColor: settings.colorPalette1 === theme.primary
-                ? CANVAS.primary : CANVAS.surfaceHigh,
+                ? BUILDER_UI.primary : BUILDER_UI.outline,
             }}>
             <div className="flex justify-center gap-1.5 mb-2">
               <div className="w-5 h-5 rounded-full"
@@ -174,7 +197,7 @@ const ColorPanel = ({ settings, onChange }) => (
               <div className="w-5 h-5 rounded-full"
                 style={{ backgroundColor: theme.secondary }} />
             </div>
-            <p className="text-xs font-bold" style={{ color: CANVAS.onSurface }}>
+            <p className="text-xs font-bold" style={{ color: BUILDER_UI.onSurface }}>
               {theme.name}
             </p>
           </button>
@@ -184,40 +207,42 @@ const ColorPanel = ({ settings, onChange }) => (
 
     <div>
       <h3 className="text-xs font-bold tracking-widest uppercase mb-4"
-        style={{ color: CANVAS.onSurfaceVar }}>
+        style={{ color: BUILDER_UI.onSurfaceVar }}>
         Custom Colors
       </h3>
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="text-xs font-bold tracking-widest uppercase mb-2 block"
-            style={{ color: CANVAS.onSurfaceVar }}>
+            style={{ color: BUILDER_UI.onSurfaceVar }}>
             Primary
           </label>
           <div className="flex items-center gap-3">
+            {/* Swatch + text input reflect the user's chosen invitation color —
+                only the surrounding wrapper/border uses the builder palette */}
             <input type="color" value={settings.colorPalette1 || "#56642b"}
               onChange={e => onChange("colorPalette1", e.target.value)}
               className="w-12 h-12 rounded-lg cursor-pointer border-0 p-1"
-              style={{ backgroundColor: CANVAS.surfaceContainer }} />
+              style={{ backgroundColor: BUILDER_UI.surfaceContainer }} />
             <Input value={settings.colorPalette1 || "#56642b"}
               onChange={e => onChange("colorPalette1", e.target.value)}
               className="h-11 rounded-lg border-0 border-b-2 font-mono text-sm"
-              style={{ borderColor: CANVAS.outline, backgroundColor: CANVAS.surfaceContainer }} />
+              style={{ borderColor: BUILDER_UI.outline, backgroundColor: BUILDER_UI.surfaceContainer }} />
           </div>
         </div>
         <div>
           <label className="text-xs font-bold tracking-widest uppercase mb-2 block"
-            style={{ color: CANVAS.onSurfaceVar }}>
+            style={{ color: BUILDER_UI.onSurfaceVar }}>
             Secondary
           </label>
           <div className="flex items-center gap-3">
             <input type="color" value={settings.colorPalette2 || "#8a9a5b"}
               onChange={e => onChange("colorPalette2", e.target.value)}
               className="w-12 h-12 rounded-lg cursor-pointer border-0 p-1"
-              style={{ backgroundColor: CANVAS.surfaceContainer }} />
+              style={{ backgroundColor: BUILDER_UI.surfaceContainer }} />
             <Input value={settings.colorPalette2 || "#8a9a5b"}
               onChange={e => onChange("colorPalette2", e.target.value)}
               className="h-11 rounded-lg border-0 border-b-2 font-mono text-sm"
-              style={{ borderColor: CANVAS.outline, backgroundColor: CANVAS.surfaceContainer }} />
+              style={{ borderColor: BUILDER_UI.outline, backgroundColor: BUILDER_UI.surfaceContainer }} />
           </div>
         </div>
       </div>
@@ -230,7 +255,7 @@ const FontPanel = ({ settings, onChange }) => (
   <div className="space-y-8">
     <div>
       <h3 className="text-xs font-bold tracking-widest uppercase mb-4"
-        style={{ color: CANVAS.onSurfaceVar }}>
+        style={{ color: BUILDER_UI.onSurfaceVar }}>
         Font Pairings
       </h3>
       <div className="space-y-3">
@@ -243,26 +268,26 @@ const FontPanel = ({ settings, onChange }) => (
             className="w-full p-5 rounded-lg border-2 text-left transition-all"
             style={{
               backgroundColor: settings.font1 === pair.heading
-                ? CANVAS.primaryFixed : CANVAS.surfaceContainer,
+                ? BUILDER_UI.selected : BUILDER_UI.surfaceContainer,
               borderColor: settings.font1 === pair.heading
-                ? CANVAS.primary : "transparent",
+                ? BUILDER_UI.primary : "transparent",
             }}>
             <div className="flex justify-between items-center mb-2">
               <p className="text-xs font-bold tracking-widest uppercase"
-                style={{ color: CANVAS.onSurfaceVar }}>
+                style={{ color: BUILDER_UI.onSurfaceVar }}>
                 {pair.name}
               </p>
               {settings.font1 === pair.heading && (
                 <div className="w-5 h-5 rounded-full flex items-center justify-center"
-                  style={{ backgroundColor: CANVAS.primary }}>
+                  style={{ backgroundColor: BUILDER_UI.primary }}>
                   <div className="w-2 h-2 rounded-full bg-white" />
                 </div>
               )}
             </div>
-            <p className="text-xl mb-1" style={{ fontFamily: pair.heading, color: CANVAS.onSurface }}>
+            <p className="text-xl mb-1" style={{ fontFamily: pair.heading, color: BUILDER_UI.onSurface }}>
               Sarah & Michael
             </p>
-            <p className="text-xs" style={{ fontFamily: pair.body, color: CANVAS.onSurfaceVar }}>
+            <p className="text-xs" style={{ fontFamily: pair.body, color: BUILDER_UI.onSurfaceVar }}>
               {pair.heading} / {pair.body}
             </p>
           </button>
@@ -277,7 +302,7 @@ const LayoutPanel = ({ settings, onChange }) => (
   <div className="space-y-8">
     <div>
       <h3 className="text-xs font-bold tracking-widest uppercase mb-4"
-        style={{ color: CANVAS.onSurfaceVar }}>
+        style={{ color: BUILDER_UI.onSurfaceVar }}>
         Layout Style
       </h3>
       <div className="grid grid-cols-2 gap-4">
@@ -290,15 +315,15 @@ const LayoutPanel = ({ settings, onChange }) => (
             className="p-6 rounded-lg border-2 text-left transition-all"
             style={{
               backgroundColor: settings.layoutStyle === opt.id
-                ? CANVAS.primaryFixed : CANVAS.surfaceContainer,
+                ? BUILDER_UI.selected : BUILDER_UI.surfaceContainer,
               borderColor: settings.layoutStyle === opt.id
-                ? CANVAS.primary : "transparent",
-              color: CANVAS.onSurface,
+                ? BUILDER_UI.primary : "transparent",
+              color: BUILDER_UI.onSurface,
             }}>
             <LayoutDashboard size={24} className="mb-3"
-              style={{ color: CANVAS.primary }} />
+              style={{ color: BUILDER_UI.primary }} />
             <p className="font-bold text-sm mb-1">{opt.label}</p>
-            <p className="text-xs" style={{ color: CANVAS.onSurfaceVar }}>{opt.desc}</p>
+            <p className="text-xs" style={{ color: BUILDER_UI.onSurfaceVar }}>{opt.desc}</p>
           </button>
         ))}
       </div>
@@ -306,21 +331,21 @@ const LayoutPanel = ({ settings, onChange }) => (
 
     <div>
       <h3 className="text-xs font-bold tracking-widest uppercase mb-4"
-        style={{ color: CANVAS.onSurfaceVar }}>
+        style={{ color: BUILDER_UI.onSurfaceVar }}>
         Hero Image
       </h3>
       <div className="border-2 border-dashed rounded-lg p-10 flex flex-col items-center text-center"
-        style={{ borderColor: CANVAS.outline, backgroundColor: CANVAS.surfaceContainer }}>
+        style={{ borderColor: BUILDER_UI.outline, backgroundColor: BUILDER_UI.surfaceContainer }}>
         <div className="w-14 h-14 rounded-full flex items-center justify-center mb-4"
-          style={{ backgroundColor: CANVAS.surfaceHigh }}>
-          <Upload size={22} style={{ color: CANVAS.primary }} />
+          style={{ backgroundColor: BUILDER_UI.surfaceHigh }}>
+          <Upload size={22} style={{ color: BUILDER_UI.primary }} />
         </div>
-        <p className="font-bold mb-1" style={{ color: CANVAS.onSurface }}>Upload Hero Image</p>
-        <p className="text-xs mb-5" style={{ color: CANVAS.onSurfaceVar }}>
+        <p className="font-bold mb-1" style={{ color: BUILDER_UI.onSurface }}>Upload Hero Image</p>
+        <p className="text-xs mb-5" style={{ color: BUILDER_UI.onSurfaceVar }}>
           High-resolution JPEG recommended
         </p>
         <button className="px-8 py-2 text-sm font-bold uppercase tracking-widest"
-          style={{ backgroundColor: CANVAS.onSurface, color: CANVAS.surface }}>
+          style={{ backgroundColor: BUILDER_UI.primary, color: "#FFFFFF" }}>
           Select File
         </button>
       </div>
@@ -333,7 +358,7 @@ const GreetingsPanel = ({ settings, onChange }) => (
   <div className="space-y-6">
     <div>
       <h3 className="text-xs font-bold tracking-widest uppercase mb-4"
-        style={{ color: CANVAS.onSurfaceVar }}>
+        style={{ color: BUILDER_UI.onSurfaceVar }}>
         Invitation Title
       </h3>
       <Input
@@ -342,8 +367,8 @@ const GreetingsPanel = ({ settings, onChange }) => (
         placeholder="Together with their families..."
         className="h-12 rounded-lg border-0 border-b-2 italic"
         style={{
-          borderColor: CANVAS.outline,
-          backgroundColor: CANVAS.surfaceContainer,
+          borderColor: BUILDER_UI.outline,
+          backgroundColor: BUILDER_UI.surfaceContainer,
           fontFamily: settings.font1 || "Playfair Display",
           fontSize: "1.1rem",
         }}
@@ -351,7 +376,7 @@ const GreetingsPanel = ({ settings, onChange }) => (
     </div>
     <div>
       <h3 className="text-xs font-bold tracking-widest uppercase mb-4"
-        style={{ color: CANVAS.onSurfaceVar }}>
+        style={{ color: BUILDER_UI.onSurfaceVar }}>
         Welcome Message
       </h3>
       <Textarea
@@ -360,12 +385,12 @@ const GreetingsPanel = ({ settings, onChange }) => (
         placeholder="The stars aligned when we met, and now we're getting married! Your presence at our wedding would make our special day even more memorable."
         className="min-h-[140px] rounded-lg border-0 border-b-2 resize-none"
         style={{
-          borderColor: CANVAS.outline,
-          backgroundColor: CANVAS.surfaceContainer,
-          color: CANVAS.onSurface,
+          borderColor: BUILDER_UI.outline,
+          backgroundColor: BUILDER_UI.surfaceContainer,
+          color: BUILDER_UI.onSurface,
         }}
       />
-      <p className="text-xs mt-2 text-right" style={{ color: CANVAS.onSurfaceVar }}>
+      <p className="text-xs mt-2 text-right" style={{ color: BUILDER_UI.onSurfaceVar }}>
         {(settings.greetingMessage || "").length}/300
       </p>
     </div>
@@ -379,16 +404,16 @@ const MusicPanel = ({ settings, onChange }) => {
     <div className="space-y-6">
       <div>
         <h3 className="text-xs font-bold tracking-widest uppercase mb-4"
-          style={{ color: CANVAS.onSurfaceVar }}>
+          style={{ color: BUILDER_UI.onSurfaceVar }}>
           Background Music
         </h3>
         <div className="border-2 border-dashed rounded-lg p-8 flex flex-col items-center text-center"
-          style={{ borderColor: CANVAS.outline, backgroundColor: CANVAS.surfaceContainer }}>
-          <Music size={28} className="mb-3" style={{ color: CANVAS.primary }} />
-          <p className="font-bold mb-1" style={{ color: CANVAS.onSurface }}>Upload Music</p>
-          <p className="text-xs mb-4" style={{ color: CANVAS.onSurfaceVar }}>MP3 or WAV, max 10MB</p>
+          style={{ borderColor: BUILDER_UI.outline, backgroundColor: BUILDER_UI.surfaceContainer }}>
+          <Music size={28} className="mb-3" style={{ color: BUILDER_UI.primary }} />
+          <p className="font-bold mb-1" style={{ color: BUILDER_UI.onSurface }}>Upload Music</p>
+          <p className="text-xs mb-4" style={{ color: BUILDER_UI.onSurfaceVar }}>MP3 or WAV, max 10MB</p>
           <button className="px-6 py-2 text-sm font-bold uppercase tracking-widest"
-            style={{ backgroundColor: CANVAS.onSurface, color: CANVAS.surface }}>
+            style={{ backgroundColor: BUILDER_UI.primary, color: "#FFFFFF" }}>
             Select File
           </button>
         </div>
@@ -396,26 +421,26 @@ const MusicPanel = ({ settings, onChange }) => {
 
       <div>
         <h3 className="text-xs font-bold tracking-widest uppercase mb-4"
-          style={{ color: CANVAS.onSurfaceVar }}>
+          style={{ color: BUILDER_UI.onSurfaceVar }}>
           Playback Settings
         </h3>
         <div className="p-4 rounded-lg flex items-center gap-4"
-          style={{ backgroundColor: CANVAS.surfaceContainer }}>
+          style={{ backgroundColor: BUILDER_UI.surfaceContainer }}>
           <div className="w-12 h-12 rounded-lg flex items-center justify-center"
-            style={{ backgroundColor: CANVAS.surfaceHigh }}>
-            <Music size={20} style={{ color: CANVAS.primary }} />
+            style={{ backgroundColor: BUILDER_UI.surfaceHigh }}>
+            <Music size={20} style={{ color: BUILDER_UI.primary }} />
           </div>
           <div className="flex-1">
-            <p className="text-sm font-bold" style={{ color: CANVAS.onSurface }}>
+            <p className="text-sm font-bold" style={{ color: BUILDER_UI.onSurface }}>
               {settings.musicTitle || "No song selected"}
             </p>
-            <p className="text-xs" style={{ color: CANVAS.onSurfaceVar }}>
+            <p className="text-xs" style={{ color: BUILDER_UI.onSurfaceVar }}>
               {settings.musicArtist || "Upload a song above"}
             </p>
           </div>
           <button onClick={() => setPlaying(!playing)}
             className="w-10 h-10 rounded-full flex items-center justify-center"
-            style={{ backgroundColor: CANVAS.primary }}>
+            style={{ backgroundColor: BUILDER_UI.primary }}>
             {playing
               ? <Pause size={18} className="text-white" />
               : <Play size={18} className="text-white" />}
@@ -424,13 +449,13 @@ const MusicPanel = ({ settings, onChange }) => {
 
         <div className="mt-4 flex items-center justify-between">
           <span className="text-xs font-bold tracking-widest uppercase"
-            style={{ color: CANVAS.onSurfaceVar }}>
+            style={{ color: BUILDER_UI.onSurfaceVar }}>
             Auto-play
           </span>
           <button
             onClick={() => onChange("musicAutoplay", !settings.musicAutoplay)}
             className="w-12 h-6 rounded-full transition-colors relative"
-            style={{ backgroundColor: settings.musicAutoplay ? CANVAS.primary : CANVAS.surfaceHigh }}>
+            style={{ backgroundColor: settings.musicAutoplay ? BUILDER_UI.primary : BUILDER_UI.surfaceHigh }}>
             <div className="w-5 h-5 bg-white rounded-full absolute top-0.5 transition-transform"
               style={{ transform: settings.musicAutoplay ? "translateX(26px)" : "translateX(2px)" }} />
           </button>
@@ -443,19 +468,19 @@ const MusicPanel = ({ settings, onChange }) => {
 // ── Center Panel: Date ────────────────────────────────────────────────────────
 const DatePanel = ({ invitation }) => (
   <div className="space-y-6">
-    <div className="p-5 rounded-lg" style={{ backgroundColor: CANVAS.surfaceContainer }}>
+    <div className="p-5 rounded-lg" style={{ backgroundColor: BUILDER_UI.surfaceContainer }}>
       <div className="flex items-center gap-2 mb-2">
-        <Info size={16} style={{ color: CANVAS.primary }} />
+        <Info size={16} style={{ color: BUILDER_UI.primary }} />
         <p className="text-xs font-bold tracking-widest uppercase"
-          style={{ color: CANVAS.onSurfaceVar }}>
+          style={{ color: BUILDER_UI.onSurfaceVar }}>
           From Wedding Details
         </p>
       </div>
-      <p className="text-sm" style={{ color: CANVAS.onSurface }}>
+      <p className="text-sm" style={{ color: BUILDER_UI.onSurface }}>
         The date on your invitation is pulled from your Wedding Details page.
         To change it, go to{" "}
         <Link to="/wedding-details" className="underline font-semibold"
-          style={{ color: CANVAS.primary }}>
+          style={{ color: BUILDER_UI.primary }}>
           Wedding Details
         </Link>.
       </p>
@@ -463,7 +488,7 @@ const DatePanel = ({ invitation }) => (
 
     <div>
       <h3 className="text-xs font-bold tracking-widest uppercase mb-4"
-        style={{ color: CANVAS.onSurfaceVar }}>
+        style={{ color: BUILDER_UI.onSurfaceVar }}>
         Display Options
       </h3>
       {[
@@ -472,13 +497,13 @@ const DatePanel = ({ invitation }) => (
         { id: "countdown",label: "Countdown",     desc: "Show a countdown timer to the wedding" },
       ].map(opt => (
         <div key={opt.id} className="flex items-center justify-between p-4 rounded-lg mb-2"
-          style={{ backgroundColor: CANVAS.surfaceContainer }}>
+          style={{ backgroundColor: BUILDER_UI.surfaceContainer }}>
           <div>
-            <p className="text-sm font-bold" style={{ color: CANVAS.onSurface }}>{opt.label}</p>
-            <p className="text-xs" style={{ color: CANVAS.onSurfaceVar }}>{opt.desc}</p>
+            <p className="text-sm font-bold" style={{ color: BUILDER_UI.onSurface }}>{opt.label}</p>
+            <p className="text-xs" style={{ color: BUILDER_UI.onSurfaceVar }}>{opt.desc}</p>
           </div>
           <div className="w-5 h-5 rounded border-2"
-            style={{ borderColor: CANVAS.primary, backgroundColor: CANVAS.primaryFixed }} />
+            style={{ borderColor: BUILDER_UI.primary, backgroundColor: BUILDER_UI.selected }} />
         </div>
       ))}
     </div>
@@ -792,11 +817,11 @@ const CreateInvitation = () => {
       default:
         return (
           <div className="flex flex-col items-center justify-center h-64 text-center">
-            <Sparkles size={32} className="mb-3" style={{ color: CANVAS.outline }} />
-            <p className="font-bold" style={{ color: CANVAS.onSurface }}>
+            <Sparkles size={32} className="mb-3" style={{ color: BUILDER_UI.outline }} />
+            <p className="font-bold" style={{ color: BUILDER_UI.onSurface }}>
               {SECTIONS.find(s => s.id === activeSection)?.label} settings
             </p>
-            <p className="text-sm mt-1" style={{ color: CANVAS.onSurfaceVar }}>
+            <p className="text-sm mt-1" style={{ color: BUILDER_UI.onSurfaceVar }}>
               Coming soon
             </p>
           </div>
@@ -808,10 +833,10 @@ const CreateInvitation = () => {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center"
-        style={{ backgroundColor: CANVAS.surface }}>
+        style={{ backgroundColor: BUILDER_UI.surface }}>
         <div className="flex flex-col items-center gap-3">
-          <Loader2 size={28} className="animate-spin" style={{ color: CANVAS.primary }} />
-          <p className="text-sm" style={{ color: CANVAS.onSurfaceVar }}>Loading your invitation...</p>
+          <Loader2 size={28} className="animate-spin" style={{ color: BUILDER_UI.primary }} />
+          <p className="text-sm" style={{ color: BUILDER_UI.onSurfaceVar }}>Loading your invitation...</p>
         </div>
       </div>
     );
@@ -820,24 +845,24 @@ const CreateInvitation = () => {
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen flex flex-col overflow-hidden"
-      style={{ backgroundColor: CANVAS.surface, fontFamily: settings.font2 || "DM Sans" }}>
+      style={{ backgroundColor: BUILDER_UI.surface, fontFamily: settings.font2 || "DM Sans" }}>
 
       {/* ── Top App Bar — ToGather style ── */}
       <header className="w-full sticky top-0 z-50 flex justify-between items-center px-8 h-16 border-b"
-        style={{ backgroundColor: CANVAS.surface, borderColor: `${CANVAS.outline}20` }}>
+        style={{ backgroundColor: BUILDER_UI.surface, borderColor: BUILDER_UI.outline }}>
         <div className="flex items-center gap-6">
           {/* Back to dashboard */}
           <Link to="/dashboard"
             className="flex items-center gap-2 text-sm font-medium transition-colors hover:opacity-70"
-            style={{ color: CANVAS.onSurfaceVar }}>
+            style={{ color: BUILDER_UI.onSurfaceVar }}>
             <ArrowLeft size={16} />
             Dashboard
           </Link>
 
-          <div className="h-5 w-px" style={{ backgroundColor: CANVAS.surfaceHigh }} />
+          <div className="h-5 w-px" style={{ backgroundColor: BUILDER_UI.outline }} />
 
           {/* Branding */}
-          <span className="font-heading text-xl font-semibold" style={{ color: CANVAS.primary }}>
+          <span className="font-heading text-xl font-semibold" style={{ color: BUILDER_UI.primary }}>
             ToGather
           </span>
 
@@ -846,7 +871,7 @@ const CreateInvitation = () => {
             {["Preview", "Share", "Settings"].map(tab => (
               <a key={tab} href="#"
                 className="font-heading italic text-lg tracking-tight transition-colors"
-                style={{ color: tab === "Settings" ? CANVAS.primary : `${CANVAS.primary}60` }}>
+                style={{ color: tab === "Settings" ? BUILDER_UI.primary : `${BUILDER_UI.primary}60` }}>
                 {tab}
               </a>
             ))}
@@ -856,7 +881,7 @@ const CreateInvitation = () => {
         <div className="flex items-center gap-3">
           {/* Draft saved indicator */}
           {saved && (
-            <span className="text-xs font-semibold" style={{ color: CANVAS.primary }}>
+            <span className="text-xs font-semibold" style={{ color: BUILDER_UI.primary }}>
               Saved ✓
             </span>
           )}
@@ -865,7 +890,7 @@ const CreateInvitation = () => {
           <button onClick={() => handleSave(false)}
             disabled={saving}
             className="px-5 py-2 text-sm font-semibold transition-colors hover:opacity-80 flex items-center gap-2"
-            style={{ color: CANVAS.primary }}>
+            style={{ color: BUILDER_UI.primary }}>
             {saving
               ? <><Loader2 size={14} className="animate-spin" /> Saving...</>
               : <><Save size={14} /> Save</>}
@@ -876,7 +901,7 @@ const CreateInvitation = () => {
             disabled={saving}
             className="px-6 py-2 text-sm font-semibold rounded-lg text-white shadow-sm transition-all active:scale-95"
             style={{
-              background: `linear-gradient(135deg, ${CANVAS.primary} 0%, ${CANVAS.primaryLight} 100%)`,
+              background: `linear-gradient(135deg, ${BUILDER_UI.primary} 0%, ${BUILDER_UI.primaryLight} 100%)`,
             }}>
             {settings.isPublished ? "Published ✓" : "Publish"}
           </button>
@@ -889,8 +914,8 @@ const CreateInvitation = () => {
         {/* Left sidebar — section navigation */}
         <aside className="w-64 flex-shrink-0 flex flex-col py-6 overflow-y-auto border-r"
           style={{
-            backgroundColor: "#f2f2eb",
-            borderColor: `${CANVAS.outline}15`,
+            backgroundColor: BUILDER_UI.surface,
+            borderColor: BUILDER_UI.outline,
             height: "calc(100vh - 4rem)",
             position: "sticky",
             top: "4rem",
@@ -900,16 +925,16 @@ const CreateInvitation = () => {
           <div className="px-6 mb-6">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-full flex items-center justify-center"
-                style={{ backgroundColor: `${CANVAS.primary}20` }}>
-                <Sparkles size={16} style={{ color: CANVAS.primary }} />
+                style={{ backgroundColor: `${BUILDER_UI.primary}20` }}>
+                <Sparkles size={16} style={{ color: BUILDER_UI.primary }} />
               </div>
               <div>
                 <p className="text-[10px] font-bold tracking-widest uppercase"
-                  style={{ color: CANVAS.onSurface }}>
+                  style={{ color: BUILDER_UI.onSurface }}>
                   Invitation Builder
                 </p>
                 <p className="text-[9px] uppercase tracking-tight"
-                  style={{ color: `${CANVAS.onSurfaceVar}70` }}>
+                  style={{ color: `${BUILDER_UI.onSurfaceVar}70` }}>
                   {invitation?.groomName?.first && invitation?.brideName?.first
                     ? `${invitation.groomName.first} & ${invitation.brideName.first}`
                     : "Your Wedding"}
@@ -928,8 +953,8 @@ const CreateInvitation = () => {
                   onClick={() => setActiveSection(sec.id)}
                   className="px-6 py-3 flex items-center gap-3 text-left transition-all text-xs font-bold tracking-widest uppercase"
                   style={{
-                    backgroundColor: isActive ? CANVAS.surface : "transparent",
-                    color: isActive ? CANVAS.primary : `${CANVAS.primary}50`,
+                    backgroundColor: isActive ? BUILDER_UI.selected : "transparent",
+                    color: isActive ? BUILDER_UI.primary : `${BUILDER_UI.primary}50`,
                     borderRadius: isActive ? "0 2rem 2rem 0" : undefined,
                     marginLeft: isActive ? "1rem" : undefined,
                     paddingLeft: isActive ? "1rem" : undefined,
@@ -945,23 +970,23 @@ const CreateInvitation = () => {
 
         {/* Center workspace — active section controls */}
         <main className="flex-1 overflow-y-auto p-10"
-          style={{ backgroundColor: "#f4f4ef" }}>
+          style={{ backgroundColor: BUILDER_UI.surface }}>
           <div className="max-w-2xl mx-auto">
 
             {/* Section header */}
             <div className="flex justify-between items-end mb-10">
               <div>
                 <h2 className="text-3xl font-semibold mb-1"
-                  style={{ color: CANVAS.onSurface }}>
+                  style={{ color: BUILDER_UI.onSurface }}>
                   {SECTIONS.find(s => s.id === activeSection)?.label || "Settings"}
                 </h2>
                 <p className="text-xs uppercase tracking-widest font-bold"
-                  style={{ color: CANVAS.onSurfaceVar }}>
+                  style={{ color: BUILDER_UI.onSurfaceVar }}>
                   Configuration Panel
                 </p>
               </div>
               {saved && (
-                <span className="text-xs font-bold" style={{ color: CANVAS.primary }}>
+                <span className="text-xs font-bold" style={{ color: BUILDER_UI.primary }}>
                   Draft Saved ✓
                 </span>
               )}
@@ -972,11 +997,13 @@ const CreateInvitation = () => {
           </div>
         </main>
 
-        {/* Right side — phone preview */}
+        {/* Right side — phone preview. This surrounding "stage" area is builder
+            chrome; the <PhonePreview> component itself keeps the invitation's
+            own CANVAS / user-selected colors untouched. */}
         <aside className="w-[400px] flex-shrink-0 flex items-center justify-center border-l"
           style={{
-            backgroundColor: CANVAS.surface,
-            borderColor: `${CANVAS.outline}10`,
+            backgroundColor: BUILDER_UI.surface,
+            borderColor: BUILDER_UI.outline,
             height: "calc(100vh - 4rem)",
             position: "sticky",
             top: "4rem",
