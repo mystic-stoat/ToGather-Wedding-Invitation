@@ -15,3 +15,4 @@ Kris Pritchett:
 
 
 Jesus Zambrano:
+- Change Color Palette
