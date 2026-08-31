@@ -7,52 +7,56 @@
 @layer base {
   :root {
     /* ── Page & sidebar background ───────────────────────────────────────────
-     * #F3EDEB — warm pinkish cream (confirmed image 2)                       */
-    --background:         14 25% 94%;
-    --foreground:         0 0% 16%;       /* #2A2A2A near-black text          */
+     * #F7F3EE — warm ivory                                                    */
+    --background:         33 36% 95.1%;
+    --foreground:         0 0% 17.3%;     /* #2C2C2C charcoal text            */
 
-    /* ── Cards — pure white panels ──────────────────────────────────────────  */
+    /* ── Cards — clean white panels ──────────────────────────────────────── */
     --card:               0 0% 100%;
-    --card-foreground:    0 0% 16%;
+    --card-foreground:    0 0% 17.3%;
     --popover:            0 0% 100%;
-    --popover-foreground: 0 0% 16%;
+    --popover-foreground: 0 0% 17.3%;
 
-    /* ── Primary — #839878 lighter sage green (confirmed by user) ────────── */
-    --primary:            99 13% 53%;
+    /* ── Primary — #3F5F47 dark green (buttons, brand) ────────────────────── */
+    --primary:            135 20.3% 31%;
     --primary-foreground: 0 0% 100%;
 
-    /* ── Secondary — soft sage ───────────────────────────────────────────── */
-    --secondary:          99 12% 75%;
-    --secondary-foreground: 99 13% 25%;
+    /* ── Secondary — #5F8D6B softer green (secondary emphasis/hover) ──────── */
+    --secondary:          136 19.5% 46.3%;
+    --secondary-foreground: 0 0% 100%;
 
-    /* ── Muted — #A89A93 warm tan (section labels: OVERVIEW, PLANNING) ───── */
-    --muted:              20 11% 88%;
-    --muted-foreground:   20 11% 62%;     /* #A89A93 confirmed image 1        */
+    /* ── Muted — warm neutral derived from the background/border hues ─────── */
+    --muted:              33 25% 91%;
+    --muted-foreground:   30 8% 42%;
 
-    /* ── Accent — golden amber (pending) ─────────────────────────────────── */
-    --accent:             38 58% 54%;     /* #D09B45                          */
-    --accent-foreground:  0 0% 16%;
+    /* ── Accent — #FCECEF subtle blush (badges, highlighted/selected states,
+     * hover backgrounds) — foreground is charcoal since the tint is very light */
+    --accent:             349 72.7% 95.7%;
+    --accent-foreground:  0 0% 17.3%;
+    /* Slightly deeper blush for decorative uses that need more visibility
+     * than the near-white --accent (e.g. small icons, gradient accents)    */
+    --accent-light:       349 45% 82%;
 
-    /* ── Destructive — dusty rose (declined) ─────────────────────────────── */
+    /* ── Destructive — stays semantically red/rose (declined, errors) ─────── */
     --destructive:        356 44% 59%;    /* #C9666E                          */
     --destructive-foreground: 0 0% 100%;
 
-    /* ── Borders — warm to match background hue ──────────────────────────── */
-    --border:             14 15% 86%;
-    --input:              14 15% 86%;
-    --ring:               99 13% 53%;
+    /* ── Borders — #E7DED4 warm beige ──────────────────────────────────────── */
+    --border:             32 28.4% 86.9%;
+    --input:              32 28.4% 86.9%;
+    --ring:               135 20.3% 31%;  /* matches primary — green focus rings, not blue */
 
     --radius: 0.75rem;
 
-    /* ── Sidebar — same background as page ───────────────────────────────── */
-    --sidebar-background:          14 25% 94%;
-    --sidebar-foreground:          0 0% 16%;
-    --sidebar-primary:             99 13% 53%;
+    /* ── Sidebar — same design system as the rest of the app ──────────────── */
+    --sidebar-background:          33 36% 95.1%;
+    --sidebar-foreground:          0 0% 17.3%;
+    --sidebar-primary:             135 20.3% 31%;
     --sidebar-primary-foreground:  0 0% 100%;
-    --sidebar-accent:              99 12% 75%;
-    --sidebar-accent-foreground:   99 13% 25%;
-    --sidebar-border:              14 15% 86%;
-    --sidebar-ring:                99 13% 53%;
+    --sidebar-accent:              136 19.5% 46.3%;
+    --sidebar-accent-foreground:   0 0% 100%;
+    --sidebar-border:              32 28.4% 86.9%;
+    --sidebar-ring:                135 20.3% 31%;
   }
 
   .dark {

@@ -46,7 +46,7 @@ const getInitials = (name = "") =>
 const avatarColor = (name = "") => {
   const colors = [
     "bg-primary/20 text-primary",
-    "bg-accent/20 text-accent",
+    "bg-accent text-accent-foreground",
     "bg-secondary/20 text-secondary",
     "bg-blue-100 text-blue-600",
     "bg-orange-100 text-orange-600",
@@ -65,10 +65,13 @@ const timeAgo = (timestamp) => {
   return `${Math.floor(diff / 86400)} days ago`;
 };
 
-// Returns the right color classes for each RSVP status badge — exact Figma hex
+// Returns the right color classes for each RSVP status badge — tuned to
+// harmonize with the ToGather warm palette while keeping each status's
+// semantic color (accepted = green, declined = red, pending = amber).
+// Kept in sync with the identical map in GuestList.jsx.
 const statusBadge = (status) => {
   const map = {
-    Accepted: "bg-[#E6EFEA] text-[#3C6B54]",
+    Accepted: "bg-[#E7F0EA] text-[#3F5F47]",
     Declined: "bg-[#F7E6E6] text-[#C9666E]",
     Pending:  "bg-[#FDF3E1] text-[#D09B45]",
   };
@@ -307,9 +310,9 @@ const Dashboard = () => {
   // Percentage of guests who have responded (accepted or declined)
   const progress = total > 0 ? Math.round(((accepted + declined) / total) * 100) : 0;
 
-  // Donut chart data — exact Figma colors
+  // Donut chart data — matches the statusBadge colors above
   const rsvpChartData = [
-    { name: "Accepted", value: accepted || 0, color: "#3C6B54" },
+    { name: "Accepted", value: accepted || 0, color: "#3F5F47" },
     { name: "Declined", value: declined || 0, color: "#C9666E" },
     { name: "Pending",  value: pending  || 0, color: "#D09B45" },
   ];
@@ -424,7 +427,7 @@ const Dashboard = () => {
               </div>
 
               {/* Mini invitation preview */}
-              <div className="bg-[#f9f6f2] rounded-xl border border-border/30 p-6 text-center mb-4 min-h-[160px] flex flex-col items-center justify-center">
+              <div className="bg-muted/60 rounded-xl border border-border/30 p-6 text-center mb-4 min-h-[160px] flex flex-col items-center justify-center">
                 {coupleNames ? (
                   <>
                     <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-2">
@@ -483,14 +486,14 @@ const Dashboard = () => {
                         data={
                           total > 0
                             ? rsvpChartData
-                            : [{ name: "empty", value: 1, color: "hsl(24, 16%, 88%)" }]
+                            : [{ name: "empty", value: 1, color: "hsl(32, 20%, 88%)" }]
                         }
                         cx="50%" cy="50%"
                         innerRadius={42} outerRadius={58}
                         dataKey="value"
                         strokeWidth={0}
                       >
-                        {(total > 0 ? rsvpChartData : [{ color: "hsl(24, 16%, 88%)" }]).map((d, i) => (
+                        {(total > 0 ? rsvpChartData : [{ color: "hsl(32, 20%, 88%)" }]).map((d, i) => (
                           <Cell key={i} fill={d.color} />
                         ))}
                       </Pie>
@@ -508,7 +511,7 @@ const Dashboard = () => {
                 {/* Legend */}
                 <div className="space-y-2 text-sm">
                   <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-[#3C6B54]" />
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#3F5F47]" />
                     <span className="font-medium text-foreground">{accepted}</span>
                     <span className="text-muted-foreground">Accepted</span>
                   </div>

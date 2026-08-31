@@ -36,8 +36,8 @@ const Features = () => <section id="features" className="py-24 md:py-32">
         {features.map((f, i) => <ScrollReveal key={f.title} delay={80}>
             <div className={`flex flex-col md:flex-row items-center gap-12 ${i % 2 === 1 ? "md:flex-row-reverse" : ""}`}>
               <div className="flex-1 space-y-4">
-                <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-accent/20">
-                  <f.icon className="w-6 h-6 text-accent" />
+                <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-primary/10">
+                  <f.icon className="w-6 h-6 text-primary" />
                 </div>
                 <h3 className="font-heading text-2xl md:text-3xl font-semibold text-foreground">{f.title}</h3>
                 <p className="text-muted-foreground max-w-md text-pretty">{f.desc}</p>

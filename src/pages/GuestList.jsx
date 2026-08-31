@@ -46,7 +46,7 @@ const getInitials = (name = "") =>
 const avatarColor = (name = "") => {
   const colors = [
     "bg-primary/20 text-primary",
-    "bg-accent/20 text-accent",
+    "bg-accent text-accent-foreground",
     "bg-secondary/20 text-secondary",
     "bg-blue-100 text-blue-600",
     "bg-orange-100 text-orange-600",
@@ -55,10 +55,13 @@ const avatarColor = (name = "") => {
   return colors[name.charCodeAt(0) % colors.length];
 };
 
-// Returns Tailwind classes for the RSVP status badge — exact Figma hex
+// Returns Tailwind classes for the RSVP status badge — tuned to harmonize
+// with the ToGather warm palette while keeping each status's semantic color
+// (accepted = green, declined = red, pending = amber).
+// Kept in sync with the identical map in Dashboard.jsx.
 const statusBadge = (status) => {
   const map = {
-    Accepted: "bg-[#E6EFEA] text-[#3C6B54] border border-[#3C6B54]/15",
+    Accepted: "bg-[#E7F0EA] text-[#3F5F47] border border-[#3F5F47]/15",
     Declined: "bg-[#F7E6E6] text-[#C9666E] border border-[#C9666E]/20",
     Pending:  "bg-[#FDF3E1] text-[#D09B45] border border-[#D09B45]/25",
   };
