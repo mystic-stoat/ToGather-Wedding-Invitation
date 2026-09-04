@@ -26,13 +26,10 @@ import { Eye, EyeOff, Mail, Lock, UserRound } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { createUserProfile } from "@/lib/firestore"; // creates the bethrothed doc
 import Logo from "@/assets/logo.svg";
-
-const FieldError = ({message}) =>
-  message ? (
-    <div className="bg-destructive/10 border border-destructive/20 rounded-xl px-3 py-2 mb-1.5">
-      <p className="text-sm text-destructive">{message}</p>
-    </div>
-  ) : null;
+import FormError from "@/components/ui/form-error";
+import { useFormState } from "@/hooks/useFormState";
+import { validateEmail, validateCreatePassword, validateName, validateConfirmPassword } from "@/utils/validation";
+import { validateConfirmPassword } from "../utils/validation";
 
 const Signup = () => {
   const navigate = useNavigate();
@@ -45,33 +42,28 @@ const Signup = () => {
   const [confirm, setConfirm]           = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm]   = useState(false);
-  const [errors, setErrors]             = useState({});
-  const [loading, setLoading]           = useState(false);
+  // error state
+  const { errors, setErrors, loading, setLoading, clearError } = useFormState();
 
   // ── Validation ────────────────────────────────────────────────────────────
   const validate = () => {
     const errs = {};
-    if (!name.trim())
-      errs.name = "Full name is required";
-    if (!email)
-      errs.email = "Email is required";
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
-      errs.email = "Enter a valid email address";
-    if (!password)
-      errs.password = "Password is required";
-    else if (password.length < 8)
-      errs.password = "Must be at least 8 characters";
-    else if (FORBIDDEN.test(password))
-      errs.password = "Password contains an invalid character";
-    else if ((password.match(/[a-zA-Z]/g) || []).length < 7)
-      errs.password = "Must contain at least 7 letters";
-    else if (!/\d/.test(password))
-      errs.password = "Must contain at least 1 number";
-
-    if (!confirm)
-      errs.confirm = "Please confirm your password";
-    else if (confirm !== password)
-      errs.confirm = "Passwords don't match";
+    const nameError = validateName(name);
+    if (nameError) {
+      errs.name = nameError;
+    }
+    const emailError = validateEmail(email);
+    if (emailError) {
+      errs.email = emailError;
+    }
+    const passwordError = validateCreatePassword(password);
+    if (passwordError) {
+      errs.password = passwordError;
+    }
+    const confirmError = validateConfirmPassword(password, confirm);
+    if (confirmError) {
+      errs.confirm = confirmError;
+    }
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -111,10 +103,6 @@ const Signup = () => {
     }
   };
 
-  // Helper: remove a field's error when user starts typing again
-  const clearError = (key) =>
-    setErrors((prev) => { const next = { ...prev }; delete next[key]; return next; });
-
   const FORBIDDEN = /[\s/\\:'"`,;<>|?*]/;
 
   const blockForbiddenChars = (e) => {
@@ -148,7 +136,7 @@ const Signup = () => {
             </div>
 
             {/* General error banner */}
-            <FieldError message={errors.general} />
+            <FormError message={errors.general} />
 
             <form className="space-y-5" onSubmit={handleSubmit} noValidate>
 
@@ -172,7 +160,7 @@ const Signup = () => {
                     } 
                     className={inputCls("name")} />
                 </div>
-                <FieldError message={errors.name} />
+                <FormError message={errors.name} />
               </div>
 
               {/* Email */}
@@ -184,7 +172,7 @@ const Signup = () => {
                     onChange={(e) => { setEmail(e.target.value); clearError("email"); }}
                     className={inputCls("email")} />
                 </div>
-                <FieldError message={errors.email}/>
+                <FormError message={errors.email}/>
               </div>
 
               {/* Password */}
@@ -203,7 +191,7 @@ const Signup = () => {
                     {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
                 </div>
-                <FieldError message={errors.password}/>
+                <FormError message={errors.password}/>
               </div>
 
               {/* Confirm Password */}
@@ -221,7 +209,7 @@ const Signup = () => {
                     {showConfirm ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
                 </div>
-                <FieldError message={errors.confirm}/>
+                <FormError message={errors.confirm}/>
               </div>
 
               {/* Submit */}
