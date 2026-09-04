@@ -121,7 +121,6 @@ const Login = () => {
                 <Label htmlFor="email" className="text-sm font-semibold text-foreground">
                   Email Address
                 </Label>
-                <FormError message={errors.email} />
                 <div className="relative">
                   <Input
                     id="email"
@@ -138,6 +137,7 @@ const Login = () => {
                     }`}
                   />
                 </div>
+                <FormError message={errors.email} />
               </div>
 
               {/* Password field with show/hide toggle */}
@@ -147,7 +147,6 @@ const Login = () => {
                     Password
                   </Label>
                 </div>
-                <FormError message={errors.password} />
                 <div className="relative">
                   <Input
                     id="password"
@@ -172,6 +171,7 @@ const Login = () => {
                     {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
                 </div>
+                <FormError message={errors.password} />
               </div>
 
               {/* Submit button — disabled + spinner while loading */}

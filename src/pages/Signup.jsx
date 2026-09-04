@@ -29,7 +29,6 @@ import Logo from "@/assets/logo.svg";
 import FormError from "@/components/ui/form-error";
 import { useFormState } from "@/hooks/useFormState";
 import { validateEmail, validateCreatePassword, validateName, validateConfirmPassword } from "@/utils/validation";
-import { validateConfirmPassword } from "../utils/validation";
 
 const Signup = () => {
   const navigate = useNavigate();
