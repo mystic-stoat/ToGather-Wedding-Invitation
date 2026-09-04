@@ -25,48 +25,37 @@ import Footer from "@/components/Footer";
 import { Eye, EyeOff, Mail, Lock } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import Logo from "@/assets/logo.svg";
+import FormError from "@/components/ui/form-error";
+import { useFormState } from "@/hooks/useFormState";
+import { validateEmail } from "@/utils/validation";
 
-const FieldError = ({message}) =>
-  message ? (
-    <div className="bg-destructive/10 border border-destructive/20 rounded-xl px-3 py-2 mb-1.5">
-      <p className="text-sm text-destructive">{message}</p>
-    </div>
-  ) : null;
 
 const Login = () => {
   const navigate = useNavigate();
   const { login, userProfile } = useAuth(); // get login function from AuthContext
 
   // ── Form state ────────────────────────────────────────────────────────────
+  const { errors, setErrors, loading, setLoading, clearError } = useFormState();
   const [email, setEmail]               = useState("");
   const [password, setPassword]         = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [errors, setErrors]             = useState({}); // field-level errors
-  const [loading, setLoading]           = useState(false);
   
   // ── Client-side validation ────────────────────────────────────────────────
   // Runs before hitting Firebase — catches obvious mistakes instantly
   // without a network request
   const validate = () => {
     const errs = {};
-    let skipFirebaseAuth = false;
     // setting err flags and returning false will allow setting of errors on feilds
-    // setting skipFirebaseAuth to true, and returning true will allow generalized failed auth message
-    if (!email)
-      errs.email = "Email is required";
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
-      errs.email = "Enter a valid email address";
-    if (!password)
-      errs.password = "Password is required";
-    else if (password.length < 8)
-      skipFirebaseAuth = true;
+    const emailError = validateEmail(email);
+    if (emailError) {
+      errs.email = emailError;
+    }
+    
+    if (!password) errs.password = "Password is required";
     
     // loads errs into error.* which is then indexed in the html (JSX) below
     setErrors(errs);
-    return {
-      isValid: Object.keys(errs).length === 0, // true means no errors
-      skipFirebaseAuth
-    }
+    return Object.keys(errs).length == 0;
   };
 
   // ── Form submission ───────────────────────────────────────────────────────
@@ -75,18 +64,13 @@ const Login = () => {
     setLoading(true);
     setErrors({});
 
-    const {isValid, skipFirebaseAuth } = validate();
+    const isValid = validate();
 
     if (!isValid) {
       setLoading(false);
       return;
     }
 
-    if (skipFirebaseAuth) {
-      setErrors({general: "Incorrect email or password. Please try again."});
-      setLoading(false);
-      return;
-    }
     try {
       // Call Firebase via AuthContext
       await login(email, password);
@@ -130,14 +114,14 @@ const Login = () => {
             <form className="space-y-5" onSubmit={handleSubmit} noValidate>
               
               {/* General error — now rendered with the same component, above the email field */}
-              <FieldError message={errors.general} />
+              <FormError message={errors.general} />
 
               {/* Email field */}
               <div className="space-y-1.5">
                 <Label htmlFor="email" className="text-sm font-semibold text-foreground">
                   Email Address
                 </Label>
-                <FieldError message={errors.email} />
+                <FormError message={errors.email} />
                 <div className="relative">
                   <Input
                     id="email"
@@ -147,7 +131,7 @@ const Login = () => {
                     onChange={(e) => {
                       setEmail(e.target.value);
                       // Clear the error for this field as soon as user starts typing
-                      setErrors((prev) => ({ ...prev, email: undefined }));
+                      clearError("email");
                     }}
                     className={`text-center h-12 pl-10 pr-11 bg-background border rounded-xl transition-all focus:ring-2 focus:ring-primary/20 ${
                       errors.email ? "border-destructive" : "border-border"
@@ -163,7 +147,7 @@ const Login = () => {
                     Password
                   </Label>
                 </div>
-                <FieldError message={errors.password} />
+                <FormError message={errors.password} />
                 <div className="relative">
                   <Input
                     id="password"
@@ -172,7 +156,7 @@ const Login = () => {
                     value={password}
                     onChange={(e) => {
                       setPassword(e.target.value);
-                      setErrors((prev) => ({ ...prev, password: undefined }));
+                      clearError("password");
                     }}
                     className={`text-center h-12 pl-10 pr-11 bg-background border rounded-xl transition-all focus:ring-2 focus:ring-primary/20 ${
                       errors.password ? "border-destructive" : "border-border"
