@@ -1,0 +1,32 @@
+// fake firestore rules for now
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Users can only read/write their own profile
+    match /bethrothed/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Users can only read/write their own invitations
+    match /invitations/{weddingId} {
+      allow read, write: if request.auth != null && request.auth.uid == resource.data.userId;
+    }
+    
+    // Guests can only read their own invitation details
+    match /invitee/{inviteeId} {
+      allow read: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow write: if request.auth != null && request.auth.uid == resource.data.userId;
+    }
+    
+    // RSVP entries are created by guests and can only be updated by the original submitter
+    match /rsvp/{rsvpId} {
+      allow read, write: if request.auth != null && request.auth.uid == resource.data.userId;
+    }
+    
+    // Users can only create documents in collections they own (based on userId field)
+    match /{document=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}

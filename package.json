@@ -7,7 +7,11 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test": "vitest run --exclude='**/*.integration.test.*'",
+    "test:watch": "vitest --exclude='**/*.integration.test.*' --ui",
+    "test:integration": "vitest run '.integration.test.jsx'",
+    "test:all": "npm run test && npm run test:integration"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

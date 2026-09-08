@@ -7,6 +7,7 @@
 // KEY SETTINGS:
 //   - plugin-react-swc: compiles JSX to JavaScript (SWC is faster than Babel)
 //   - @/* alias: lets you write @/components/... instead of ../../components/...
+//   - test.include: tells Vitest to find unit tests with *.test.jsx pattern
 // ─────────────────────────────────────────────────────────────────────────────
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
@@ -18,7 +19,7 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
-      // This is why you can write: import X from "@/components/..."
+      // This is why you can write: import X from "@/components/...\
       // It maps "@" to the "src" folder automatically
       "@": path.resolve(__dirname, "./src"),
     },
@@ -27,5 +28,6 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.js'],
     globals: true,
+    include: ['**/*.test.jsx'],
   },
 });
