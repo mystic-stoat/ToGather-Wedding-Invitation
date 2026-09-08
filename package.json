@@ -8,10 +8,11 @@
     "build": "vite build",
     "preview": "vite preview",
     "lint": "eslint .",
-    "test": "vitest run --exclude='**/*.integration.test.*'",
-    "test:watch": "vitest --exclude='**/*.integration.test.*' --ui",
-    "test:integration": "vitest run '.integration.test.jsx'",
-    "test:all": "npm run test && npm run test:integration"
+    "test:unit": "vitest run --project unit",
+    "test:integration:auth": "vitest run --project integration:auth",
+    "test:integration:firestore": "vitest run --project integration:firestore",
+    "test:all": "vitest run --project all",
+    "test:watch": "vitest --project all --ui"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
@@ -49,7 +50,7 @@
     "cmdk": "^1.1.1",
     "date-fns": "^3.6.0",
     "embla-carousel-react": "^8.6.0",
-    "firebase": "^11.0.0",
+    "firebase": "^12.18.0",
     "input-otp": "^1.4.2",
     "lucide-react": "^0.462.0",
     "next-themes": "^0.3.0",
@@ -68,11 +69,13 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.32.0",
+    "@firebase/rules-unit-testing": "^5.0.2",
     "@playwright/test": "^1.57.0",
     "@tailwindcss/typography": "^0.5.16",
     "@testing-library/jest-dom": "^6.6.0",
     "@testing-library/react": "^16.0.0",
     "@vitejs/plugin-react-swc": "^3.11.0",
+    "@vitest/ui": "^3.2.4",
     "autoprefixer": "^10.4.21",
     "eslint": "^9.32.0",
     "eslint-plugin-react-hooks": "^5.2.0",

@@ -25,9 +25,48 @@ export default defineConfig({
     },
   },
   test: {
-    environment: 'jsdom',
-    setupFiles: ['./src/test/setup.js'],
-    globals: true,
-    include: ['**/*.test.jsx'],
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: 'unit',
+          environment: 'jsdom',
+          globals: true,
+          include: ['**/*.test.jsx'],
+          exclude: ['**/*.integration.test.*'],
+          setupFiles: ['./src/test/setup.js'],
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'integration:auth',
+          environment: 'jsdom',
+          globals: true,
+          include: ['**/Login.integration.test.jsx'],
+          setupFiles: ['./src/test/setup.integration.js'],
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'integration:firestore',
+          environment: 'jsdom',
+          globals: true,
+          include: ['**/firestoreRules.integration.test.jsx'],
+          setupFiles: ['./src/test/setup.integration.js'],
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'all',
+          environment: 'jsdom',
+          globals: true,
+          include: ['**/*.test.jsx'],
+          setupFiles: ['./src/test/setup.integration.js'],
+        },
+      },
+    ]
   },
 });

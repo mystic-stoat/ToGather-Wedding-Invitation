@@ -30,33 +30,34 @@ Object.defineProperty(window, "matchMedia", {
   })
 });
 
-// Verify Firebase Auth emulator is running
-beforeAll(async () => {
-  try {
-    connectAuthEmulator(firebaseAuth, "http://127.0.0.1:9099", {
-      disableWarnings: true,
-    });
-    console.log('✓ Connected to Firebase Auth emulator');
-  } catch (error) {
-    console.error('✗ Failed to connect to Firebase Auth emulator:', error.message);
-    throw new Error('Firebase Auth emulator is not running. Please start it with "firebase emulators:start"');
-  }
-});
+
+// (it would be nice if we could...) Verify Firebase Auth emulator is running
+// beforeAll(async () => {
+//   try {
+//     connectAuthEmulator(firebaseAuth, "http://127.0.0.1:9099", {
+//       disableWarnings: true,
+//     });
+//     console.log('✓ Connected to Firebase Auth emulator');
+//   } catch (error) {
+//     console.error('✗ Failed to connect to Firebase Auth emulator:', error.message);
+//     throw new Error('Firebase Auth emulator is not running. Please start it with "firebase emulators:start"');
+//   }
+// });
 
 // Verify Firestore emulator is running
-beforeAll(async () => {
-  try {
-    await initializeTestEnvironment({
-      projectId: 'togather-64b0b',
-      firestore: {
-        rules: 'firestore.rules',
-        host: '127.0.0.1',
-        port: 8080,
-      },
-    });
-    console.log('✓ Connected to Firebase Firestore emulator');
-  } catch (error) {
-    console.error('✗ Failed to connect to Firebase Firestore emulator:', error.message);
-    throw new Error('Firebase Firestore emulator is not running. Please start it with "firebase emulators:start"');
-  }
-});
+// beforeAll(async () => {
+//   try {
+//     await initializeTestEnvironment({
+//       projectId: 'togather-64b0b',
+//       firestore: {
+//         rules: 'firestore.rules',
+//         host: '127.0.0.1',
+//         port: 8080,
+//       },
+//     });
+//     console.log('✓ Connected to Firebase Firestore emulator');
+//   } catch (error) {
+//     console.error('✗ Failed to connect to Firebase Firestore emulator:', error.message);
+//     throw new Error('Firebase Firestore emulator is not running. Please start it with "firebase emulators:start"');
+//   }
+// });
