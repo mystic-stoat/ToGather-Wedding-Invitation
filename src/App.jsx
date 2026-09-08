@@ -25,6 +25,7 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 // Page imports — each route loads one of these
 import Index            from "./pages/Index.jsx";
 import Login            from "./pages/Login.jsx";
+import ForgotPassword   from "./pages/ForgotPassword.jsx";
 import Signup           from "./pages/Signup.jsx";
 import Dashboard        from "./pages/Dashboard.jsx";
 import WeddingDetails   from "./pages/WeddingDetails.jsx";
@@ -122,6 +123,7 @@ const App = () => (
             {/* ── Public routes — redirects to /dashboard if already logged in ── */}
             <Route path="/"      element={<PublicRoute><Index /></PublicRoute>} />
             <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
+            <Route path="/forgot-password" element={<PublicRoute><ForgotPassword /></PublicRoute>} />
             <Route path="/signup" element={<PublicRoute><Signup /></PublicRoute>} />
  
             {/* RSVP is fully public — guests don't have accounts */}
