@@ -2,7 +2,8 @@
 
 
 Colten Mikulastik:
-- Created test cases for Login, and Signup
+- Created unit test cases for Login, and Signup
+- Created integration test cases for firebase auth, and firestore
 - Configured Hosting
 - Created form-error component, statefunction, and validation utility (consistent input-validation)
 

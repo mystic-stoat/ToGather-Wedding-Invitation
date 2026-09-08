@@ -15,11 +15,34 @@ ToGather is a React-based wedding invitation management application designed for
 
 ## Project Structure
 ```
-
-src/ ├── App.jsx # Root component with routing ├── main.jsx # Entry point ├── components/ # Reusable UI components │ ├── Navbar.jsx # Navigation bar │ ├── Hero.jsx # Hero section │ ├── Features.jsx # Features section │ ├── CTA.jsx # Call to action section\
-│ ├── Footer.jsx # Footer component │ ├── AppHeader.jsx # Application header │ ├── NavLink.jsx # Navigation link component │ ├── ScrollReveal.jsx # Scroll animation component │ └── ui/ # shadcn/ui components (not shown in detail) ├── contexts/ # Authentication context │ └── AuthContext.jsx # Authentication provider and hooks ├── pages/ # Page-level components (routes) │ ├── Index.jsx # Landing page │ ├── Login.jsx # Login page │ ├── Signup.jsx # Registration page\
-│ ├── Dashboard.jsx # User dashboard │ ├── WeddingDetails.jsx # Wedding details management │ ├── CreateInvitation.jsx # Invitation creation │ ├── GuestList.jsx # Guest list management │ ├── RSVP.jsx # RSVP form │ └── NotFound.jsx # 404 page ├── lib/ # Firebase configuration and utilities │ └── firebase.js # Firebase initialization └── assets/ # Static assets
-
+src/ 
+├── App.jsx # Root component with routing 
+├── main.jsx # Entry point
+├── components/ # Reusable UI components
+│ ├── Navbar.jsx # Navigation bar
+│ ├── Hero.jsx # Hero section
+│ ├── Features.jsx # Features section
+│ ├── CTA.jsx # Call to action section\
+│ ├── Footer.jsx # Footer component
+│ ├── AppHeader.jsx # Application header
+│ ├── NavLink.jsx # Navigation link component
+│ ├── ScrollReveal.jsx # Scroll animation component
+│ └── ui/ # shadcn/ui components (not shown in detail)
+├── contexts/ # Authentication context
+│ └── AuthContext.jsx # Authentication provider and hooks
+├── pages/ # Page-level components (routes)
+│ ├── Index.jsx # Landing page
+│ ├── Login.jsx # Login page
+│ ├── Signup.jsx # Registration page\
+│ ├── Dashboard.jsx # User dashboard
+│ ├── WeddingDetails.jsx # Wedding details management
+│ ├── CreateInvitation.jsx # Invitation creation
+│ ├── GuestList.jsx # Guest list management
+│ ├── RSVP.jsx # RSVP form
+│ └── NotFound.jsx # 404 page
+├── lib/ # Firebase configuration and utilities 
+│ └── firebase.js # Firebase initialization
+└── assets/ # Static assets
 ```
 
 ## Key Components and Their Purposes
@@ -84,10 +107,13 @@ src/ ├── App.jsx # Root component with routing ├── main.jsx # Entry 
 
 ### Firestore Data Structure
 ```
-
-bethrothed/ (collection) └── {userId} (document) ├── fullName ├── email\
-├── weddingDetails ├── guests └── createdAt
-
+bethrothed/ (collection) 
+└── {userId} (document)
+├── fullName
+├── email\
+├── weddingDetails
+├── guests
+└── createdAt
 ```
 
 ## Navigation Guide
@@ -136,7 +162,6 @@ bethrothed/ (collection) └── {userId} (document) ├── fullName ├─
 - No need for each page to check Firebase separately
 
 ## Common Development Tasks
-
 1. **Adding a new page**: Create file in `src/pages/`, add route in `App.jsx`
 2. **Adding UI component**: Create component in `src/components/`
 3. **Modifying authentication**: Update logic in `AuthContext.jsx` 
@@ -144,8 +169,8 @@ bethrothed/ (collection) └── {userId} (document) ├── fullName ├─
 5. **Adding Firestore data**: Use Firebase SDK in context or page components
 
 ## Testing Strategy
-
-- Unit tests for validation functions and helper utilities
-- Integration tests for form submission flows  
-- End-to-end tests for full user journeys
+- checkout TESTS.MD
+- tests run by vitest, but called  through npm scripts:
+- Unit tests for components, and input validation
+- Integration tests for firebse service calls
 - Mock Firebase calls during testing
