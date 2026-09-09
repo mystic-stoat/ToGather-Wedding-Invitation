@@ -171,21 +171,29 @@ const Sidebar = ({ invitation, onLogout }) => {
 };
 
 // ── Add Guest Modal ───────────────────────────────────────────────────────────
+// Mirrors GuestList.jsx's Add Guest modal (same fields: name, email, group,
+// plus one limit) so adding a guest gives the same result no matter which
+// page you add them from.
 const AddGuestModal = ({ onAdd, onClose, saving }) => {
   const [name, setName]                 = useState("");
+  const [email, setEmail]               = useState("");
+  const [group, setGroup]               = useState("Family");
   const [plusOneLimit, setPlusOneLimit] = useState(0);
   const [error, setError]               = useState("");
 
   const handleSubmit = () => {
     if (!name.trim()) { setError("Guest name is required."); return; }
-    onAdd(name.trim(), Number(plusOneLimit));
+    onAdd(name.trim(), email.trim(), group, Number(plusOneLimit));
   };
+
+  const groups = ["Family", "Friends", "Coworkers", "Other"];
 
   return (
     <div className="fixed inset-0 bg-foreground/20 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-card rounded-2xl border border-border/50 shadow-xl p-6 w-full max-w-sm space-y-5">
         <h3 className="font-heading text-lg font-semibold text-foreground italic">Add a Guest</h3>
 
+        {/* Guest name */}
         <div className="space-y-1.5">
           <label className="text-sm font-medium text-muted-foreground">Guest Name *</label>
           <Input placeholder="Full name" value={name} autoFocus
@@ -194,6 +202,34 @@ const AddGuestModal = ({ onAdd, onClose, saving }) => {
           {error && <p className="text-xs text-destructive">{error}</p>}
         </div>
 
+        {/* Email */}
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium text-muted-foreground">
+            Email <span className="text-muted-foreground/60 font-normal">(optional)</span>
+          </label>
+          <Input type="email" placeholder="guest@email.com" value={email}
+            onChange={e => setEmail(e.target.value)}
+            className="h-11 bg-background border-border/60 rounded-xl" />
+        </div>
+
+        {/* Group */}
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium text-muted-foreground">Group</label>
+          <div className="flex flex-wrap gap-2">
+            {groups.map(g => (
+              <button key={g} onClick={() => setGroup(g)}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all border ${
+                  group === g
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "bg-card text-foreground border-border/60 hover:border-primary/40"
+                }`}>
+                {g}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Plus one limit */}
         <div className="space-y-1.5">
           <label className="text-sm font-medium text-muted-foreground">Plus One Limit</label>
           <div className="flex gap-2">
@@ -263,11 +299,12 @@ const Dashboard = () => {
   };
 
   // ── Add a guest ────────────────────────────────────────────────────────────
-  const handleAddGuest = async (name, plusOneLimit) => {
+  const handleAddGuest = async (name, email, group, plusOneLimit) => {
     if (!invitation?.weddingId) return;
     setAddingSaving(true);
     try {
-      await addInvitee(invitation.weddingId, name, plusOneLimit);
+      // addInvitee creates the Firestore doc and generates a unique RSVP token
+      await addInvitee(invitation.weddingId, name, plusOneLimit, email, group);
       const updated = await getInvitees(invitation.weddingId);
       setGuests(updated);
       setShowAddModal(false);
