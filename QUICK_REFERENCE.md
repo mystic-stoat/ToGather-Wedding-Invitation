@@ -17,185 +17,99 @@ npm run preview
 
 # Run linter
 npm run lint
-```
+
+# Run unit tests
+npm run test:unit
+
+# Run integration tests
+npm run test:integration:auth
+npm run test:integration:firestore
+npm run test:all
+npm run test:watch
+````
 
 ## 📝 File Locations
 
 ### Pages
-- `src/pages/RegisterPage.jsx` - Registration form
-- `src/pages/LoginPage.jsx` - Login form (placeholder)
-- `src/pages/DashboardPage.jsx` - Main dashboard
+
+- `src/pages/Index.jsx` - Landing page with hero, features, CTA, and footer
+- `src/pages/Login.jsx` - Login form for existing users
+- `src/pages/Signup.jsx` - Registration form for new users
+- `src/pages/Dashboard.jsx` - Main dashboard
+- `src/pages/WeddingDetails.jsx` - Wedding information management
+- `src/pages/CreateInvitation.jsx` - Invitation creation tool
+- `src/pages/GuestList.jsx` - Guest list management
+- `src/pages/RSVP.jsx` - RSVP form for guests
 
 ### Services
-- `src/services/firebase.js` - Firebase config & auth functions
+
+- `src/lib/firebase.js` - Firebase config & auth functions
+
+### Contexts
+
+- `src/contexts/AuthContext.jsx` - Authentication provider and hooks
 
 ### Utilities
+
 - `src/utils/validation.js` - Form validation helpers
 
 ### Routing
+
 - `src/App.jsx` - Main router setup
 
-## 🔥 Firebase Setup Checklist
+### Hooks
 
-- [ ] Create Firebase project
-- [ ] Enable Email/Password authentication
-- [ ] Create Firestore database
-- [ ] Copy Firebase config credentials
-- [ ] Update `src/services/firebase.js` with credentials
-- [ ] Test registration flow
+- `src/hooks/use-toast.js` - Toast notification hook
+- `src/hooks/useFormState.js` - Form state management hook
 
 ## 🎯 Key Functions Reference
 
-### Firebase Functions (`services/firebase.js`)
+### Authentication Functions (`contexts/AuthContext.jsx`)
+
 ```javascript
 // Register new user
-await registerUser(email, password, fullName)
+await signup(email, password, fullName)
 
 // Login existing user
-await loginUser(email, password)
+await login(email, password)
 
 // Logout current user
-await logoutUser()
+await logout()
+
+// Reset password
+await resetPassword(email)
 ```
 
 ### Validation Functions (`utils/validation.js`)
+
 ```javascript
 // Validate email format
-isValidEmail(email) // returns boolean
+validateEmail(email)
 
 // Check password length (min 8)
-isValidPassword(password) // returns boolean
+validateCreatePassword(password) // returns boolean
 
 // Verify passwords match
-passwordsMatch(password, confirmPassword) // returns boolean
+validateConfirmPassword(password, confirmPassword) // returns boolean
 
 // Check full name
-isValidFullName(fullName) // returns boolean
-
-// Get friendly error message
-getAuthErrorMessage(errorCode) // returns string
+validateName(naem) // returns boolean
 ```
 
-## 🎨 Color Palette
-
-```css
-/* Primary Colors */
---primary-gold: #d4a574;
---primary-gold-dark: #c99361;
-
-/* Neutral Colors */
---text-dark: #2d2d2d;
---text-medium: #6b6b6b;
---text-light: #8b8b8b;
-
-/* Background */
---bg-gradient: linear-gradient(135deg, #f8f3f0 0%, #fefcfb 50%, #f5ebe6 100%);
---bg-white: #ffffff;
-
-/* Error */
---error-red: #e85d75;
---error-bg: #fff5f7;
-```
-
-## 📐 Component Structure Template
+## ️ Current Routes
 
 ```javascript
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import './ComponentName.css';
+/               → Public landing page
+/login          → Login page (public)
+/signup          → Registration page (public)
+/dashboard       → Dashboard (protected)
+/wedding-details   → Wedding details management (protected)
+/create-invitation → Invitation creation (protected)
+/guest-list    → Guest list management (protected)
+/rsvp/:inviteeId/:token → RSVP form (public)
 
-const ComponentName = () => {
-  // State
-  const [state, setState] = useState(initialValue);
-  const navigate = useNavigate();
-
-  // Handlers
-  const handleAction = () => {
-    // Logic here
-  };
-
-  // Render
-  return (
-    <div className="component-container">
-      {/* JSX here */}
-    </div>
-  );
-};
-
-export default ComponentName;
+/*              → 404 Not Found page
 ```
-
-## 🛣️ Current Routes
-
-```javascript
-/               → Redirects to /register
-/register       → Registration page
-/login          → Login page (placeholder)
-/dashboard      → Dashboard (protected)
-/*              → Redirects to /register
-```
-
-## 🔐 Firebase Error Codes
-
-| Code | Meaning |
-|------|---------|
-| `auth/email-already-in-use` | Email taken |
-| `auth/invalid-email` | Bad email format |
-| `auth/weak-password` | Password < 6 chars |
-| `auth/network-request-failed` | No internet |
-| `auth/too-many-requests` | Rate limited |
-
-## 🎓 Common Tasks
-
-### Add a New Page
-1. Create `src/pages/NewPage.jsx`
-2. Create `src/pages/NewPage.css`
-3. Add route in `src/App.jsx`:
-   ```javascript
-   <Route path="/new" element={<NewPage />} />
-   ```
-
-### Add Form Validation
-1. Add validation function to `src/utils/validation.js`
-2. Import in component
-3. Call in `validateForm()` function
-
-### Add Firebase Function
-1. Add to `src/services/firebase.js`
-2. Import in component
-3. Call with try/catch for errors
-
-### Update Styles
-- Component styles: Edit `ComponentName.css`
-- Global styles: Edit `src/index.css`
-- App-wide: Edit `src/App.css`
-
-## 🐛 Debugging Tips
-
-### Check Browser Console
-- Press F12 or Cmd+Option+I
-- Look for red errors
-- Check Network tab for failed requests
-
-### Firebase Console
-- Authentication tab: See registered users
-- Firestore tab: See user documents
-- Check security rules if permission denied
-
-### Common Issues
-```bash
-# Port already in use
-# Kill process on port 5173
-lsof -ti:5173 | xargs kill -9
-
-# Clear cache
-rm -rf node_modules package-lock.json
-npm install
-
-# Clear browser cache
-Hard reload: Cmd+Shift+R (Mac) or Ctrl+Shift+R (Windows)
-```
-
 ## 📦 Dependencies Overview
 
 ```json
@@ -204,43 +118,53 @@ Hard reload: Cmd+Shift+R (Mac) or Ctrl+Shift+R (Windows)
     "react": "UI library",
     "react-dom": "React renderer",
     "firebase": "Backend services",
-    "react-router-dom": "Routing"
+    "react-router-dom": "Routing",
+    "@tanstack/react-query": "Data fetching",
+    "react-hook-form": "Form handling",
+    "zod": "Validation",
+    "@radix-ui/react-accordion": "UI component",
+    "@radix-ui/react-alert-dialog": "UI component",
+    "@radix-ui/react-aspect-ratio": "UI component",
+    "@radix-ui/react-avatar": "UI component",
+    "@radix-ui/react-checkbox": "UI component",
+    "@radix-ui/react-collapsible": "UI component",
+    "@radix-ui/react-context-menu": "UI component",
+    "@radix-ui/react-dialog": "UI component",
+    "@radix-ui/react-dropdown-menu": "UI component",
+    "@radix-ui/react-hover-card": "UI component",
+    "@radix-ui/react-label": "UI component",
+    "@radix-ui/react-menubar": "UI component",
+    "@radix-ui/react-navigation-menu": "UI component",
+    "@radix-ui/react-popover": "UI component",
+    "@radix-ui/react-progress": "UI component",
+    "@radix-ui/react-radio-group": "UI component",
+    "@radix-ui/react-scroll-area": "UI component",
+    "@radix-ui/react-select": "UI component",
+    "@radix-ui/react-separator": "UI component",
+    "@radix-ui/react-slider": "UI component",
+    "@radix-ui/react-slot": "UI component",
+    "@radix-ui/react-switch": "UI component",
+    "@radix-ui/react-tabs": "UI component",
+    "@radix-ui/react-toast": "UI component",
+    "@radix-ui/react-toggle": "UI component",
+    "@radix-ui/react-toggle-group": "UI component",
+    "@radix-ui/react-tooltip": "UI component",
+    "sonner": "Toast notifications",
+    "tailwind-merge": "Tailwind CSS utility",
+    "class-variance-authority": "CSS class management"
   },
   "devDependencies": {
     "vite": "Build tool",
-    "@vitejs/plugin-react": "React plugin for Vite",
-    "eslint": "Code linter"
+    "@vitejs/plugin-react-swc": "React plugin for Vite",
+    "eslint": "Code linter",
+    "@testing-library/react": "Testing library",
+    "@testing-library/jest-dom": "Jest DOM matchers",
+    "@vitest/ui": "Vitest UI",
+    "jsdom": "DOM implementation",
+    "vitest": "Testing framework"
   }
 }
 ```
-
-## 🎯 Next Implementation Steps
-
-### Priority 1: Login Page
-- [ ] Create form UI similar to register
-- [ ] Add email/password inputs
-- [ ] Implement `loginUser()` function
-- [ ] Add error handling
-- [ ] Redirect to dashboard on success
-
-### Priority 2: Password Reset
-- [ ] Add "Forgot Password?" link
-- [ ] Create password reset page
-- [ ] Use Firebase `sendPasswordResetEmail()`
-- [ ] Show success message
-
-### Priority 3: Protected Routes
-- [ ] Create AuthContext
-- [ ] Check auth state in routes
-- [ ] Redirect unauthenticated users
-
-## 💡 Pro Tips
-
-1. **Environment Variables**: Always use `.env` for Firebase config in production
-2. **Git Commits**: Make small, focused commits with clear messages
-3. **Testing**: Test on both desktop and mobile viewports
-4. **Security**: Never commit Firebase credentials to Git
-5. **Documentation**: Comment complex logic for future reference
 
 ## 📞 Support Resources
 
@@ -248,7 +172,5 @@ Hard reload: Cmd+Shift+R (Mac) or Ctrl+Shift+R (Windows)
 - React Documentation: https://react.dev
 - Vite Documentation: https://vitejs.dev
 - React Router: https://reactrouter.com
-
----
-
-**Quick Reference v1.0** | ToGather Capstone Project
+- Tailwind CSS: https://tailwindcss.com
+- React Query: https://tanstack.com/query/latest
