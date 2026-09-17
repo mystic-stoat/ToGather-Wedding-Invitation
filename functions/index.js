@@ -9,6 +9,14 @@
 
 const {setGlobalOptions} = require("firebase-functions");
 const {onRequest} = require("firebase-functions/https");
+const {onDocumentUpdated} = require("firebase-functions/v2/firestore");
+const {getFirestore} = require("firebase-admin/firestore");
+const {initializeApp} = require("firebase-admin/app");
+const mailjet = require('node-mailjet').apiConnect(
+  process.env.MJ_APIKEY_PUBLIC,
+  process.env.MJ_APIKEY_PRIVATE,
+)
+
 // const logger = require("firebase-functions/logger");
 
 // For cost control, you can set the maximum number of containers that can be
@@ -36,5 +44,64 @@ setGlobalOptions({maxInstances: 5});
 exports.echo = onRequest(async (req, res) => {
   // Send back a message that we've successfully written the message
   res.json({result: req.query.text});
+  try {
+    const result = mailjet
+      .post("send", { version: "v3.1" })
+      .request({
+        Messages: [
+          {
+            From: {
+              Email: "invites.togather@gmail.com",
+            }
+            ,
+            To: [
+              {
+                Email: "coltenmikulastik@my.unt.edu",
+              }
+            ],
+            Subject: "test",
+            TextPart: "hey this is a test",
+            HTMLPart: "<h3> what the hell </h3>"
+          }
+        ]
+      })
+  } catch (err) {
+    console.log(err)
+  }
 });
 // can be tested with: "curl <endpoint-url>?text=hello"
+
+initializeApp();
+const db = getFirestore();
+
+exports.sendInvitesOnPublish = onDocumentUpdated("invitations/{invitationId}", async (event) => {
+  const before = event.data.before.data();
+  const after = event.data.after.data();
+  const invitationId = event.params.invitationId;
+
+  console.log(`[${invitationId}] before.isPublished=${before.isPublished} after.isPublished=${after.isPublished}`);
+
+  if (before.isPublished === after.isPublished) {
+    console.log(`[${invitationId}] isPublished didn't change, skipping`);
+    return;
+  }
+  if (!after.isPublished) {
+    console.log(`[${invitationId}] flipped to false, skipping`);
+    return;
+  }
+
+  console.log(`[${invitationId}] published, weddingId=${invitationId}`);
+
+  const pendingSnap = await db.collection("invitee")
+    .where("weddingId", "==", invitationId)
+    .where("emailStatus", "in", ["pending", "failed"])
+    .get();
+
+  console.log(`[${invitationId}] found ${pendingSnap.size} pending invitees`);
+  pendingSnap.docs.forEach(doc => {
+    const data = doc.data();
+    console.log(`  - ${doc.id}: ${data.email} (status: ${data.emailStatus})`);
+  });
+
+  // stage 2 (sending) goes here next
+});
