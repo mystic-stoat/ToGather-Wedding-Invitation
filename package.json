@@ -12,7 +12,8 @@
     "test:integration:auth": "vitest run --project integration:auth",
     "test:integration:firestore": "vitest run --project integration:firestore",
     "test:all": "vitest run --project all",
-    "test:watch": "vitest --project all --ui"
+    "test:watch": "vitest --project all --ui",
+    "start:emulators": "firebase emulators:start --export-on-exit=./emulator-data --import=./emulator-data --only functions,firestore,auth"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
