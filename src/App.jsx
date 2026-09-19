@@ -28,7 +28,8 @@ import Login            from "./pages/Login.jsx";
 import ForgotPassword   from "./pages/ForgotPassword.jsx";
 import Signup           from "./pages/Signup.jsx";
 import Dashboard        from "./pages/Dashboard.jsx";
-import WeddingDetails   from "./pages/WeddingDetails.jsx";
+import WeddingDetails     from "./pages/WeddingDetails.jsx";
+import WeddingDetailsEdit from "./pages/WeddingDetailsEdit.jsx";
 import CreateInvitation from "./pages/CreateInvitation.jsx";
 import RSVP             from "./pages/RSVP.jsx";
 import GuestList        from "./pages/GuestList.jsx";
@@ -135,6 +136,8 @@ const App = () => (
               element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/wedding-details"
               element={<ProtectedRoute><WeddingDetails /></ProtectedRoute>} />
+            <Route path="/wedding-details/edit"
+              element={<ProtectedRoute><WeddingDetailsEdit /></ProtectedRoute>} />
             <Route path="/create-invitation"
               element={<ProtectedRoute><CreateInvitation /></ProtectedRoute>} />
             <Route path="/guest-list"
