@@ -28,7 +28,7 @@ import {
   Heart, Lock, Palette, Type, Music, Sparkles, LayoutDashboard,
   BookOpen, Calendar, Image, MapPin, BookHeart, CheckSquare,
   BookMarked, ArrowLeft, Save, Globe, Upload, ChevronRight,
-  Eye, Volume2, Pause, Play, Info, Loader2,
+  Eye, Volume2, Info, Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -397,67 +397,199 @@ const GreetingsPanel = ({ settings, onChange }) => (
   </div>
 );
 
+// ── Spotify link helper ───────────────────────────────────────────────────────
+// Parses a Spotify "share" link (e.g. https://open.spotify.com/track/ID?si=...)
+// and returns the track ID, or null if the link isn't a valid Spotify track URL.
+// No network calls — this is pure string/URL parsing so invalid input can never
+// throw or crash the page.
+const parseSpotifyTrackUrl = (rawUrl) => {
+  if (!rawUrl || typeof rawUrl !== "string") return null;
+  const trimmed = rawUrl.trim();
+  if (!trimmed) return null;
+
+  let parsed;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    return null; // not a valid URL at all
+  }
+
+  const host = parsed.hostname.replace(/^www\./, "");
+  if (host !== "open.spotify.com") return null;
+
+  // Matches "/track/{id}" — ignores query params like "?si=..." since we
+  // only ever read pathname, not search.
+  const match = parsed.pathname.match(/^\/track\/([a-zA-Z0-9]+)\/?$/);
+  if (!match) return null;
+
+  const trackId = match[1];
+  // Spotify base62 IDs are 22 characters; allow a little slack either way.
+  if (!/^[a-zA-Z0-9]{10,30}$/.test(trackId)) return null;
+
+  return trackId;
+};
+
 // ── Center Panel: Music ───────────────────────────────────────────────────────
+// Simple Spotify-link integration: the host pastes a Spotify "share" link for a
+// track, we extract the track ID (no Spotify API calls), and display Spotify's
+// own official embed player. No custom audio player, no uploads, no autoplay.
 const MusicPanel = ({ settings, onChange }) => {
-  const [playing, setPlaying] = useState(false);
+  const hasSong = Boolean(settings.musicTrackId);
+
+  // The link input is shown whenever there's no song yet, or the user clicked
+  // "Change Song". The currently selected song (if any) stays selected the
+  // whole time — it's only replaced once a new link validates successfully.
+  const [showLinkInput, setShowLinkInput] = useState(!hasSong);
+  const [linkValue, setLinkValue] = useState("");
+  const [error, setError] = useState("");
+
+  const handleAddSong = () => {
+    const trackId = parseSpotifyTrackUrl(linkValue);
+    if (!trackId) {
+      setError("That doesn't look like a Spotify song link. Copy a track link from Spotify's Share menu and try again.");
+      return;
+    }
+    onChange("musicTrackId", trackId);
+    onChange("musicSpotifyUrl", linkValue.trim());
+    setError("");
+    setLinkValue("");
+    setShowLinkInput(false);
+  };
+
+  const handleChangeSong = () => {
+    // Keep the existing song selected — just reopen the input so the user
+    // can paste a replacement link.
+    setLinkValue("");
+    setError("");
+    setShowLinkInput(true);
+  };
+
+  const handleRemove = () => {
+    onChange("musicTrackId", "");
+    onChange("musicSpotifyUrl", "");
+    // musicShowOnInvitation is intentionally left untouched.
+    setLinkValue("");
+    setError("");
+    setShowLinkInput(true);
+  };
+
   return (
     <div className="space-y-6">
+      {/* Add from Spotify */}
       <div>
         <h3 className="text-xs font-bold tracking-widest uppercase mb-4"
           style={{ color: BUILDER_UI.onSurfaceVar }}>
-          Background Music
+          Add from Spotify
         </h3>
-        <div className="border-2 border-dashed rounded-lg p-8 flex flex-col items-center text-center"
-          style={{ borderColor: BUILDER_UI.outline, backgroundColor: BUILDER_UI.surfaceContainer }}>
-          <Music size={28} className="mb-3" style={{ color: BUILDER_UI.primary }} />
-          <p className="font-bold mb-1" style={{ color: BUILDER_UI.onSurface }}>Upload Music</p>
-          <p className="text-xs mb-4" style={{ color: BUILDER_UI.onSurfaceVar }}>MP3 or WAV, max 10MB</p>
-          <button className="px-6 py-2 text-sm font-bold uppercase tracking-widest"
-            style={{ backgroundColor: BUILDER_UI.primary, color: "#FFFFFF" }}>
-            Select File
-          </button>
+        <div className="rounded-lg p-6"
+          style={{ backgroundColor: BUILDER_UI.surfaceContainer, border: `1px solid ${BUILDER_UI.outline}` }}>
+          <div className="flex items-center gap-2 mb-2">
+            <Volume2 size={16} style={{ color: BUILDER_UI.primary }} />
+            <p className="text-sm font-bold" style={{ color: BUILDER_UI.onSurface }}>
+              Add from Spotify
+            </p>
+          </div>
+          <div className="flex items-start gap-2 mb-4 p-3 rounded-lg"
+            style={{ backgroundColor: BUILDER_UI.surfaceHigh }}>
+            <Info size={14} className="mt-0.5 flex-shrink-0" style={{ color: BUILDER_UI.onSurfaceVar }} />
+            <p className="text-xs" style={{ color: BUILDER_UI.onSurfaceVar }}>
+              Find a song on Spotify, select Share, then copy and paste the song link below.
+            </p>
+          </div>
+
+          {showLinkInput && (
+            <>
+              <label className="text-xs font-bold tracking-widest uppercase mb-2 block"
+                style={{ color: BUILDER_UI.onSurfaceVar }}>
+                Spotify Link
+              </label>
+              <div className="flex gap-3">
+                <Input
+                  value={linkValue}
+                  onChange={e => { setLinkValue(e.target.value); if (error) setError(""); }}
+                  placeholder="https://open.spotify.com/track/..."
+                  className="h-11 rounded-lg border-0 border-b-2 flex-1"
+                  style={{ borderColor: BUILDER_UI.outline, backgroundColor: BUILDER_UI.surfaceContainer }}
+                />
+                <button onClick={handleAddSong}
+                  className="px-6 rounded-lg text-sm font-bold uppercase tracking-widest flex-shrink-0"
+                  style={{ backgroundColor: BUILDER_UI.primary, color: "#FFFFFF" }}>
+                  Add Song
+                </button>
+              </div>
+              {error && (
+                <p className="text-xs mt-2" style={{ color: "#b3261e" }}>
+                  {error}
+                </p>
+              )}
+              {hasSong && (
+                <button onClick={() => { setShowLinkInput(false); setLinkValue(""); setError(""); }}
+                  className="text-xs mt-3 font-semibold underline"
+                  style={{ color: BUILDER_UI.onSurfaceVar }}>
+                  Cancel
+                </button>
+              )}
+            </>
+          )}
         </div>
       </div>
 
+      {/* Selected Song — Spotify's own embed player, no custom player built */}
+      {hasSong && (
+        <div>
+          <h3 className="text-xs font-bold tracking-widest uppercase mb-4"
+            style={{ color: BUILDER_UI.onSurfaceVar }}>
+            Selected Song
+          </h3>
+          <div className="rounded-lg p-4"
+            style={{ backgroundColor: BUILDER_UI.surfaceContainer, border: `1px solid ${BUILDER_UI.outline}` }}>
+            <iframe
+              title="Spotify song preview"
+              src={`https://open.spotify.com/embed/track/${settings.musicTrackId}`}
+              width="100%"
+              height="152"
+              style={{ borderRadius: "12px", border: "none" }}
+              allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+              loading="lazy"
+            />
+            <div className="flex items-center gap-4 mt-4">
+              <button onClick={handleChangeSong}
+                className="px-5 py-2 text-xs font-bold uppercase tracking-widest rounded-lg"
+                style={{ backgroundColor: BUILDER_UI.surfaceHigh, color: BUILDER_UI.onSurface }}>
+                Change Song
+              </button>
+              <button onClick={handleRemove}
+                className="text-xs font-bold uppercase tracking-widest"
+                style={{ color: BUILDER_UI.onSurfaceVar }}>
+                Remove
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Playback Settings */}
       <div>
         <h3 className="text-xs font-bold tracking-widest uppercase mb-4"
           style={{ color: BUILDER_UI.onSurfaceVar }}>
           Playback Settings
         </h3>
-        <div className="p-4 rounded-lg flex items-center gap-4"
+        <div className="p-4 rounded-lg flex items-center justify-between"
           style={{ backgroundColor: BUILDER_UI.surfaceContainer }}>
-          <div className="w-12 h-12 rounded-lg flex items-center justify-center"
-            style={{ backgroundColor: BUILDER_UI.surfaceHigh }}>
-            <Music size={20} style={{ color: BUILDER_UI.primary }} />
-          </div>
-          <div className="flex-1">
+          <div>
             <p className="text-sm font-bold" style={{ color: BUILDER_UI.onSurface }}>
-              {settings.musicTitle || "No song selected"}
+              Show music on invitation
             </p>
             <p className="text-xs" style={{ color: BUILDER_UI.onSurfaceVar }}>
-              {settings.musicArtist || "Upload a song above"}
+              Guests can play this song on your invitation.
             </p>
           </div>
-          <button onClick={() => setPlaying(!playing)}
-            className="w-10 h-10 rounded-full flex items-center justify-center"
-            style={{ backgroundColor: BUILDER_UI.primary }}>
-            {playing
-              ? <Pause size={18} className="text-white" />
-              : <Play size={18} className="text-white" />}
-          </button>
-        </div>
-
-        <div className="mt-4 flex items-center justify-between">
-          <span className="text-xs font-bold tracking-widest uppercase"
-            style={{ color: BUILDER_UI.onSurfaceVar }}>
-            Auto-play
-          </span>
           <button
-            onClick={() => onChange("musicAutoplay", !settings.musicAutoplay)}
-            className="w-12 h-6 rounded-full transition-colors relative"
-            style={{ backgroundColor: settings.musicAutoplay ? BUILDER_UI.primary : BUILDER_UI.surfaceHigh }}>
+            onClick={() => onChange("musicShowOnInvitation", !settings.musicShowOnInvitation)}
+            className="w-12 h-6 rounded-full transition-colors relative flex-shrink-0"
+            style={{ backgroundColor: settings.musicShowOnInvitation ? BUILDER_UI.primary : BUILDER_UI.surfaceHigh }}>
             <div className="w-5 h-5 bg-white rounded-full absolute top-0.5 transition-transform"
-              style={{ transform: settings.musicAutoplay ? "translateX(26px)" : "translateX(2px)" }} />
+              style={{ transform: settings.musicShowOnInvitation ? "translateX(26px)" : "translateX(2px)" }} />
           </button>
         </div>
       </div>
@@ -584,25 +716,26 @@ const PhonePreview = ({ invitation, settings }) => {
             </p>
           </div>
 
-          {/* Music player */}
-          <div className="p-6 text-center" style={{ backgroundColor: CANVAS.surface }}>
-            <h2 className="text-base mb-4"
-              style={{ fontFamily: headingFont, color: CANVAS.onSurface }}>
-              Music
-            </h2>
-            <div className="rounded-xl p-3 flex items-center gap-3 border"
-              style={{ backgroundColor: CANVAS.surfaceContainer, borderColor: `${CANVAS.outline}30` }}>
-              <div className="w-10 h-10 rounded-lg flex items-center justify-center"
-                style={{ backgroundColor: CANVAS.surfaceHigh }}>
-                <Music size={14} style={{ color: primaryColor }} />
-              </div>
-              <div className="flex-1 text-left">
-                <p className="text-[9px] font-bold" style={{ color: CANVAS.onSurface }}>Song title</p>
-                <p className="text-[8px]" style={{ color: CANVAS.onSurfaceVar }}>Artist</p>
-              </div>
-              <Play size={14} style={{ color: primaryColor }} />
+          {/* Music player — only shown once a real Spotify song is selected
+              AND the host has "Show music on invitation" enabled. No fake
+              placeholder song info is ever displayed. */}
+          {settings.musicTrackId && settings.musicShowOnInvitation && (
+            <div className="p-6 text-center" style={{ backgroundColor: CANVAS.surface }}>
+              <h2 className="text-base mb-4"
+                style={{ fontFamily: headingFont, color: CANVAS.onSurface }}>
+                Music
+              </h2>
+              <iframe
+                title="Spotify song"
+                src={`https://open.spotify.com/embed/track/${settings.musicTrackId}`}
+                width="100%"
+                height="80"
+                style={{ borderRadius: "12px", border: "none" }}
+                allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+                loading="lazy"
+              />
             </div>
-          </div>
+          )}
 
           {/* Wedding date */}
           <div className="p-6 text-center" style={{ backgroundColor: "#ffffff" }}>
@@ -711,9 +844,9 @@ const CreateInvitation = () => {
     layoutStyle:      "poster",
     greetingTitle:    "",
     greetingMessage:  "",
-    musicTitle:       "",
-    musicArtist:      "",
-    musicAutoplay:    false,
+    musicTrackId:          "",
+    musicSpotifyUrl:       "",
+    musicShowOnInvitation: true,
     isPublished:      false,
     inviteDeadline:   "",
     closureTitle:     "",
@@ -739,6 +872,9 @@ const CreateInvitation = () => {
             greetingMessage: inv.greetingMessage || prev.greetingMessage,
             greetingTitle:   inv.greetingTitle   || prev.greetingTitle,
             inviteDeadline:  inv.inviteDeadline  || prev.inviteDeadline,
+            musicTrackId:          inv.musicTrackId          || prev.musicTrackId,
+            musicSpotifyUrl:       inv.musicSpotifyUrl       || prev.musicSpotifyUrl,
+            musicShowOnInvitation: inv.musicShowOnInvitation ?? prev.musicShowOnInvitation,
             isPublished:     inv.isPublished     || false,
           }));
         }
