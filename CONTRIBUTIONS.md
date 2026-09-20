@@ -14,7 +14,10 @@ Keiran Indraanei:
 - Integrated the existing Firebase password reset functionality into the Forgot Password workflow
 
 Christopher Nguyen:
-
+- Created the wireframe and prototype for the Spotify music feature
+- Implemented Spotify music integration using share links, embedded playback, and invitation display settings
+- Created the wireframe and prototype for the AI Wedding Planner feature
+  
 Kris Pritchett:
 
 - Setup links for social media
