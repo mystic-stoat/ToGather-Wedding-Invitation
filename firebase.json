@@ -21,7 +21,8 @@
       "port": 5001
     },
     "firestore": {
-      "port": 8080
+      "port": 8080,
+      "rules": "firestore.rules"
     },
     "hosting": {
       "port": 5000
@@ -33,5 +34,21 @@
       "enabled": true
     },
     "singleProjectMode": true
-  }
+  },
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "disallowLegacyRuntimeConfig": true,
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log",
+        "*.local"
+      ],
+      "predeploy": [
+      ]
+    }
+  ]
 }

@@ -6,6 +6,10 @@ Colten Mikulastik:
 - Created integration test cases for firebase auth, and firestore
 - Configured Hosting
 - Created form-error component, statefunction, and validation utility (consistent input-validation)
+- Wrote Cloud Function for Email Sending
+- consolidated emulator env, allowing for test suit
+- created SMTP2GO MOCK emailer
+- emailer testing suite created
 
 Keiran Indraanei:
 
