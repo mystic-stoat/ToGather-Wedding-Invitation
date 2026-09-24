@@ -122,12 +122,10 @@ const Signup = () => {
 
             {/* Brand header */}
             <div className="text-center space-y-4">
-              <div className="inline-block bg-secondary rounded-xl px-6 py-3">
                 <img src={Logo} className="h-20 mx-auto w-auto"/>
                 <span className="font-heading text-2xl font-bold tracking-tight">
                   ToGather
                 </span>
-              </div>
               <h1 className="font-heading text-2xl font-semibold text-foreground">
                 Create your account
               </h1>
