@@ -8,7 +8,7 @@
 //   you only update it here, not in every page.
 //
 // DATABASE STRUCTURE (matches your ER diagram):
-//   bethrothed/{userId}      — host user profile (created on signup)
+//   betrothed/{userId}      — host user profile (created on signup)
 //   invitations/{weddingId}  — wedding details + invitation style
 //   invitee/{inviteeId}      — one doc per guest
 //   rsvp/{rsvpId}            — one doc per RSVP submission
@@ -46,7 +46,7 @@ import { db } from "@/lib/firebase";
 // Use these types in pages so TypeScript catches typos and missing fields.
 // ══════════════════════════════════════════════════════════════════════════════
 
-/** Shape of a document in the `bethrothed` collection */
+/** Shape of a document in the `betrothed` collection */
 
 /** Shape of a document in the `invitations` collection */
 
@@ -55,7 +55,7 @@ import { db } from "@/lib/firebase";
 /** Shape of a document in the `rsvp` collection */
 
 // ══════════════════════════════════════════════════════════════════════════════
-// BETHROTHED — User Profile Functions
+// BETROTHED — User Profile Functions
 // ══════════════════════════════════════════════════════════════════════════════
 
 /**
@@ -65,7 +65,7 @@ import { db } from "@/lib/firebase";
  */
 export const createUserProfile = async (uid, name, email) => {
   // doc(db, "collection", "documentId") — creates a reference to a specific doc
-  const ref = doc(db, "bethrothed", uid);
+  const ref = doc(db, "betrothed", uid);
   await setDoc(ref, {
     userId: uid,
     email,
@@ -81,7 +81,7 @@ export const createUserProfile = async (uid, name, email) => {
  * Returns null if they don't have a profile yet.
  */
 export const getUserProfile = async uid => {
-  const ref = doc(db, "bethrothed", uid);
+  const ref = doc(db, "betrothed", uid);
   const snap = await getDoc(ref);
   // snap.exists() is false if no document was found
   return snap.exists() ? snap.data() : null;
@@ -259,15 +259,18 @@ export const getInviteeByToken = async token => {
  * The main function called when a guest submits their RSVP form.
  * Does three things in order:
  *   1. Validates the token (makes sure the link is real and not already used)
- *   2. Creates a new document in the `rsvp` collection with their answers
- *   3. Updates the `invitee` document to reflect their response
+ *   2. Prevents duplicate submissions using tokenUsed
+ *   3. Updates the `invitee` document with their RSVP response
  *
+ *   RSVP stored directly in invitee doc
+ * 
  * Returns { success: true } or { success: false, error: "message" }
  */
 export const submitRSVP = async (token, response) => {
   try {
     // Step 1: Find the guest by their token
     const invitee = await getInviteeByToken(token);
+
     if (!invitee || !invitee.inviteeId) {
       return {
         success: false,
@@ -284,39 +287,46 @@ export const submitRSVP = async (token, response) => {
       };
     }
 
+    //Describes how the RSVP worked if we ever need again
+
     // Step 3: Write their response to the `rsvp` collection.
     // IMPORTANT: `token` must be included here because the Firestore security
     // rule verifies it matches the token stored on the invitee document.
     // Without it, the rule rejects the write with "Missing or insufficient permissions".
     // `plusOnes` stores the names and meal preferences of any extra guests.
-    const rsvpRef = collection(db, "rsvp");
-    const rsvpDoc = await addDoc(rsvpRef, {
-      inviteeId:           invitee.inviteeId,
-      token:               token,               // required by Firestore security rule
-      attending:           response.attending,
-      dietaryRestrictions: response.dietaryRestrictions,
-      guestCount:          response.guestCount, // total party size including plus ones
-      plusOnes:            response.plusOnes || [], // array of { name, meal } for each plus one
-      submittedAt:         serverTimestamp(),
-    });
+    //const rsvpRef = collection(db, "rsvp");
+
+    //const rsvpDoc = await addDoc(rsvpRef, {
+      //inviteeId:           invitee.inviteeId,
+      //token:               token,               // required by Firestore security rule
+      //attending:           response.attending,
+      //dietaryRestrictions: response.dietaryRestrictions,
+      //guestCount:          response.guestCount, // total party size including plus ones
+      //plusOnes:            response.plusOnes || [], // array of { name, meal } for each plus one
+      //submittedAt:         serverTimestamp(),
+    //});
 
     // Step 4: Update the invitee doc so the dashboard and guest list reflect the response.
     // Also sets tokenUsed = true so the link cannot be used again (prevents duplicates).
     // plusOnes is stored on the invitee doc too so the guest list page can show them.
     await updateInvitee(invitee.inviteeId, {
-      rsvpId:              rsvpDoc.id,                              // link to their rsvp doc
+      //rsvpId:              rsvpDoc.id,                              // link to their rsvp doc
       attending:           response.attending,
+      guestCount:          response.guestCount, //added from the rsvp table
       dietaryRestrictions: response.dietaryRestrictions,
       plusOnes:            response.plusOnes || [],                 // plus one names + meals
       rsvpStatus:          response.attending ? "Accepted" : "Declined", // shown in guest list
       tokenUsed:           true,                                    // prevents duplicate RSVPs
       respondedAt:         serverTimestamp(),                       // used for "X hours ago" in dashboard
     });
+
     return {
       success: true
     };
+
   } catch (err) {
     console.error("RSVP submission error:", err);
+
     return {
       success: false,
       error: "Something went wrong. Please try again."
@@ -330,13 +340,15 @@ export const submitRSVP = async (token, response) => {
  * Used if the dashboard wants to show detailed response info.
  */
 export const getRSVPByInvitee = async inviteeId => {
-  const ref = collection(db, "rsvp");
-  const q = query(ref, where("inviteeId", "==", inviteeId));
-  const snap = await getDocs(q);
+  const ref = doc(db, "invitee", inviteeId); //collection to doc and rsvp to invitee
+  //const q = query(ref, where("inviteeId", "==", inviteeId)); //unneeded after removing rsvp table
+  const snap = await getDocs(ref);
+
   if (snap.empty) return null;
-  const d = snap.docs[0];
+  //const d = snap.docs[0];
+
   return {
-    rsvpId: d.id,
-    ...d.data()
+    rsvpId: snap.id,
+    ...snap.data()
   };
 };

@@ -14,9 +14,10 @@ ToGather is a React-based wedding invitation management application designed for
 - **Data Fetching**: React Query (TanStack)
 
 ## Project Structure
+
 ```
-src/ 
-├── App.jsx # Root component with routing 
+src/
+├── App.jsx # Root component with routing
 ├── main.jsx # Entry point
 ├── components/ # Reusable UI components
 │ ├── Navbar.jsx # Navigation bar
@@ -40,7 +41,7 @@ src/
 │ ├── GuestList.jsx # Guest list management
 │ ├── RSVP.jsx # RSVP form
 │ └── NotFound.jsx # 404 page
-├── lib/ # Firebase configuration and utilities 
+├── lib/ # Firebase configuration and utilities
 │ └── firebase.js # Firebase initialization
 └── assets/ # Static assets
 ```
@@ -48,16 +49,18 @@ src/
 ## Key Components and Their Purposes
 
 ### Authentication Context (`src/contexts/AuthContext.jsx`)
+
 - **Purpose**: Manages user authentication state across the entire application
 - **Functions**: login, signup, logout, resetPassword
 - **Usage**: Any component can call `useAuth()` to access user data and auth functions
 - **Data**: User object, loading state, and profile data from Firestore
 
 ### Routing Structure (`src/App.jsx`)
+
 - **Public Routes** (accessible without login):
   - `/` - Landing page
   - `/login` - Login page
-  - `/signup` - Registration page  
+  - `/signup` - Registration page
   - `/rsvp/:inviteeId/:token` - RSVP form (public)
 - **Protected Routes** (require login):
   - `/dashboard` - User dashboard
@@ -68,7 +71,7 @@ src/
 ### Main Pages and Their Functions
 
 1. **Index.jsx** (`/`) - Landing page with hero, features, CTA, and footer
-2. **Login.jsx** (`/login`) - Login form for existing users  
+2. **Login.jsx** (`/login`) - Login form for existing users
 3. **Signup.jsx** (`/signup`) - Registration form for new users
 4. **Dashboard.jsx** (`/dashboard`) - Main user dashboard
 5. **WeddingDetails.jsx** (`/wedding-details`) - Wedding information management
@@ -78,7 +81,7 @@ src/
 
 ## Authentication Flow
 
-1. **Login Process**: 
+1. **Login Process**:
    - User navigates to `/login`
    - Enters email and password
    - `signInWithEmailAndPassword()` is called
@@ -102,12 +105,14 @@ src/
 ## Database Integration
 
 ### Firebase Services Used
+
 - **Firebase Authentication**: User authentication and session management
 - **Firestore**: Storage of user profiles, wedding details, and guest information
 
 ### Firestore Data Structure
+
 ```
-bethrothed/ (collection) 
+betrothed/ (collection)
 └── {userId} (document)
 ├── fullName
 ├── email\
@@ -150,27 +155,32 @@ bethrothed/ (collection)
 ## Key Concepts
 
 ### Protected Routes
+
 - Pages wrapped with `ProtectedRoute` component require authentication
 - Non-authenticated users are redirected to `/login`
 
-### Public Routes  
+### Public Routes
+
 - Pages wrapped with `PublicRoute` component are accessible when NOT logged in
 - Logged-in users are automatically redirected to `/dashboard`
 
 ### Context Usage
+
 - All components can access auth state using `useAuth()` hook
 - No need for each page to check Firebase separately
 
 ## Common Development Tasks
+
 1. **Adding a new page**: Create file in `src/pages/`, add route in `App.jsx`
 2. **Adding UI component**: Create component in `src/components/`
-3. **Modifying authentication**: Update logic in `AuthContext.jsx` 
+3. **Modifying authentication**: Update logic in `AuthContext.jsx`
 4. **Changing routing**: Modify routes in `App.jsx`
 5. **Adding Firestore data**: Use Firebase SDK in context or page components
 
 ## Testing Strategy
+
 - checkout TESTS.MD
-- tests run by vitest, but called  through npm scripts:
+- tests run by vitest, but called through npm scripts:
 - Unit tests for components, and input validation
 - Integration tests for firebse service calls
 - Mock Firebase calls during testing

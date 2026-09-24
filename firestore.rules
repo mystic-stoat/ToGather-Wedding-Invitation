@@ -4,19 +4,58 @@ service cloud.firestore {
   match /databases/{database}/documents {
     
     // Users can only read/write their own profile
-    match /bethrothed/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+    match /betrothed/{userId} {
+
+      allow read, update, delete: if request.auth != null
+        && request.auth.uid == userId;
+
+      allow create: if request.auth != null
+        && request.auth.uid == userId;
     }
     
     // Users can only read/write their own invitations
     match /invitations/{weddingId} {
-      allow read, write: if request.auth != null && request.auth.uid == resource.data.userId;
+
+      // Host can read/update/delete their own invitation
+      allow read, update, delete: if request.auth != null
+        && request.auth.uid == resource.data.userId;
+
+      // Host can create an invitation they own
+      allow create: if request.auth != null
+        && request.auth.uid == request.resource.data.userId;
+
+      // Public RSVP page can read invitation information, may remove
+      allow read: if true;
     }
     
     // Guests can only read their own invitation details
     match /invitee/{inviteeId} {
-      allow read: if request.auth != null && request.auth.uid == resource.data.userId;
-      allow write: if request.auth != null && request.auth.uid == resource.data.userId;
+
+      //Create an invitee only for this wedding
+      allow create: if request.auth != null
+        && request.auth.uid ==
+          get(
+            /databases/$(database)/documents/invitations/$(request.resource.data.weddingId)
+          ).data.userId;
+
+      //Manage invitees with read, update, delete
+      allow create: if request.auth != null
+        && request.auth.uid ==
+          get(
+            /databases/$(database)/documents/invitations/$(request.resource.data.weddingId)
+          ).data.userId;
+
+      //Guests can read an invitee doc using the link or token provided
+      allow read: if true;
+
+      //Used for RSVP submission, says that the initial token used value is false and the token matches the stored token
+      //Also makes sure only specific data is modified
+      allow update: if resource.data.tokenUsed == false
+        && resource.data.token == request.resource.data.token
+        && resource.data.weddingId == request.resource.data.weddingId
+        && resource.data.token == request.resource.data.token
+        && resource.data.name == request.resource.data.name
+        && resource.data.plusOneLimit == request.resource.data.plusOneLimit;
     }
     
     // RSVP entries are created by guests and can only be updated by the original submitter
