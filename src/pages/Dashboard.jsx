@@ -94,12 +94,12 @@ const Sidebar = ({ invitation, onLogout }) => {
   // Reusable nav link component
   const NavItem = ({ to, icon: Icon, label, active = false }) => (
     <Link to={to}
-      className={`flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition-colors ${
+      className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-full text-sm transition-colors ${
         active
-          ? "bg-primary text-primary-foreground font-medium"
+          ? "bg-sidebar-primary text-sidebar-primary-foreground font-medium"
           : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
       }`}>
-      <Icon size={16} />
+      <Icon size={14} />
       {label}
       {active && <ChevronRight size={14} className="ml-auto" />}
     </Link>
@@ -107,7 +107,7 @@ const Sidebar = ({ invitation, onLogout }) => {
 
   return (
     // Hidden on mobile (lg:flex shows it on desktop)
-    <aside className="hidden lg:flex flex-col w-56 min-h-screen bg-background border-r border-border/50 px-4 py-6 flex-shrink-0">
+    <aside className="hidden lg:flex flex-col w-52 min-h-screen bg-sidebar border-r border-border/50 px-3 py-6 flex-shrink-0">
 
       {/* Brand */}
       <div className="flex items-center gap-2 mb-1 px-1">
@@ -119,16 +119,16 @@ const Sidebar = ({ invitation, onLogout }) => {
       <p className="text-xs text-muted-foreground px-1 mb-8">Plan the day. Share the joy.</p>
 
       {/* Nav sections */}
-      <nav className="flex-1 space-y-6">
+      <nav className="flex-1 space-y-4">
         <div>
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-3 mb-2">
+          <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider px-2.5 mb-1.5">
             Overview
           </p>
           <NavItem to="/dashboard" icon={LayoutDashboard} label="Dashboard" active />
         </div>
 
         <div>
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-3 mb-2">
+          <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider px-2.5 mb-1.5">
             Planning
           </p>
           <div className="space-y-0.5">
@@ -140,7 +140,7 @@ const Sidebar = ({ invitation, onLogout }) => {
         </div>
 
         <div>
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-3 mb-2">
+          <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider px-2.5 mb-1.5">
             Invitations
           </p>
           <div className="space-y-0.5">
@@ -154,7 +154,7 @@ const Sidebar = ({ invitation, onLogout }) => {
       {/* Bottom: couple info + logout */}
       <div className="space-y-3 mt-6">
         {coupleNames && (
-          <div className="bg-primary/8 rounded-xl px-3 py-3 border border-primary/15">
+          <div className="bg-sidebar-accent rounded-xl px-3 py-3">
             <p className="text-sm font-semibold text-foreground">{coupleNames}</p>
             {weddingDate && (
               <p className="text-xs text-muted-foreground mt-0.5">{weddingDate}</p>
@@ -190,7 +190,7 @@ const AddGuestModal = ({ onAdd, onClose, saving }) => {
           <label className="text-sm font-medium text-muted-foreground">Guest Name *</label>
           <Input placeholder="Full name" value={name} autoFocus
             onChange={e => { setName(e.target.value); setError(""); }}
-            className="h-11 bg-background border-border/60 rounded-xl" />
+            className="h-11 border-border/60 rounded-xl" />
           {error && <p className="text-xs text-destructive">{error}</p>}
         </div>
 

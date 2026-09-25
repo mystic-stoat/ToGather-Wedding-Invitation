@@ -109,7 +109,7 @@ const Signup = () => {
   };
   // Helper: adds red border to input if that field has an error
   const inputCls = (key) =>
-    `h-12 pl-10 bg-background border rounded-xl transition-all focus:ring-2 focus:ring-primary/20 ${
+    `h-12 pl-10 border rounded-xl transition-all focus:ring-2 focus:ring-primary/20 ${
       errors[key] ? "border-destructive" : "border-border"
     }`;
 
