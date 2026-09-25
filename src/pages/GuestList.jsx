@@ -15,14 +15,15 @@
 //   Name | Email | Group | Plus One | RSVP | Meal/Dietary
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import Papa from "papaparse";
 import {
   Users, UserPlus, Search, Trash2, Loader2,
   ChevronDown, ChevronUp, Heart, LayoutDashboard,
   Gift, MapPin, CalendarCheck, Mail, Smartphone,
   ChevronRight, LogOut, UserRound, Pencil,
-  Download, Filter,
+  Download, Filter, Upload, X, FileText, AlertCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -46,7 +47,7 @@ const getInitials = (name = "") =>
 const avatarColor = (name = "") => {
   const colors = [
     "bg-primary/20 text-primary",
-    "bg-accent/20 text-accent",
+    "bg-accent text-accent-foreground",
     "bg-secondary/20 text-secondary",
     "bg-blue-100 text-blue-600",
     "bg-orange-100 text-orange-600",
@@ -55,14 +56,143 @@ const avatarColor = (name = "") => {
   return colors[name.charCodeAt(0) % colors.length];
 };
 
-// Returns Tailwind classes for the RSVP status badge — exact Figma hex
+// Returns Tailwind classes for the RSVP status badge — tuned to harmonize
+// with the ToGather warm palette while keeping each status's semantic color
+// (accepted = green, declined = red, pending = amber).
+// Kept in sync with the identical map in Dashboard.jsx.
 const statusBadge = (status) => {
   const map = {
-    Accepted: "bg-[#E6EFEA] text-[#3C6B54] border border-[#3C6B54]/15",
+    Accepted: "bg-[#E7F0EA] text-[#3F5F47] border border-[#3F5F47]/15",
     Declined: "bg-[#F7E6E6] text-[#C9666E] border border-[#C9666E]/20",
     Pending:  "bg-[#FDF3E1] text-[#D09B45] border border-[#D09B45]/25",
   };
   return map[status] || "bg-muted text-muted-foreground border border-border";
+};
+
+// ── CSV Import Helpers ───────────────────────────────────────────────────────
+// Kept in sync with the groups offered in the existing Add Guest form —
+// CSV import must accept exactly these values (case-insensitive) and no others.
+const VALID_GROUPS = ["Family", "Friends", "Coworkers", "Other"];
+
+// Same email shape check used implicitly by <Input type="email"> in the
+// manual Add Guest form — kept simple since email is optional here too.
+const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
+// Case-insensitive match against VALID_GROUPS, returned with the exact
+// capitalization the rest of the app expects (e.g. "family" → "Family").
+// Returns null if the value doesn't match any allowed group.
+const normalizeGroup = (value) => {
+  const match = VALID_GROUPS.find(g => g.toLowerCase() === value.trim().toLowerCase());
+  return match || null;
+};
+
+// The four columns this feature expects, matched case-insensitively and
+// independent of column order. If any is missing, the whole file is rejected
+// before any row-level validation happens.
+const EXPECTED_CSV_HEADERS = ["name", "email", "group", "plus one limit"];
+
+// Maps a parsed CSV row (raw header strings as keys) into a lookup keyed by
+// the normalized field name, so header capitalization/spacing doesn't matter.
+const normalizeRowKeys = (row, headerMap) => {
+  const out = {};
+  for (const [normalized, original] of Object.entries(headerMap)) {
+    out[normalized] = (row[original] ?? "").toString().trim();
+  }
+  return out;
+};
+
+/**
+ * validateCsvGuests
+ * Parses CSV text with Papa Parse and validates every row against the same
+ * rules as the manual Add Guest form. Nothing is written to Firestore here —
+ * this only produces a report of what would be imported and what's wrong.
+ *
+ * Returns:
+ *   { headerError: string }                                 — bad/missing columns, stop here
+ *   { headerError: null, rows: [...], errors: [...] }        — per-row results
+ *     rows[i]   = { line, name, email, group, plusOneLimit } for VALID rows only
+ *     errors[i] = { line, messages: [...] } for INVALID rows
+ */
+const validateCsvGuests = (csvText) => {
+  const parsed = Papa.parse(csvText, {
+    header: true,
+    skipEmptyLines: "greedy", // ignores fully blank lines, including ones with only commas
+    transformHeader: (h) => h.trim(),
+  });
+
+  if (parsed.errors?.length) {
+    // Papa Parse itself flags structurally broken CSV (unclosed quotes, etc.)
+    const first = parsed.errors[0];
+    return { headerError: `Could not read this CSV file (${first.message}). Please check the file and try again.` };
+  }
+
+  const actualHeaders = parsed.meta.fields || [];
+  const headerMap = {}; // normalized name -> actual header string in the file
+  for (const expected of EXPECTED_CSV_HEADERS) {
+    const found = actualHeaders.find(h => h.toLowerCase() === expected);
+    if (found) headerMap[expected] = found;
+  }
+  const missing = EXPECTED_CSV_HEADERS.filter(h => !headerMap[h]);
+  if (missing.length > 0) {
+    return {
+      headerError:
+        `This CSV is missing required column(s): ${missing.join(", ")}. ` +
+        `Expected columns are: Name, Email, Group, Plus One Limit.`,
+    };
+  }
+
+  const rows = [];
+  const errors = [];
+
+  parsed.data.forEach((rawRow, i) => {
+    const line = i + 2; // +1 for 0-index, +1 for the header row
+    const row = normalizeRowKeys(rawRow, headerMap);
+
+    // Ignore completely empty rows (all four fields blank)
+    const isEmptyRow = !row.name && !row.email && !row.group && !row["plus one limit"];
+    if (isEmptyRow) return;
+
+    const messages = [];
+
+    if (!row.name) {
+      messages.push("Name is required.");
+    }
+
+    if (row.email && !isValidEmail(row.email)) {
+      messages.push(`Invalid email format: "${row.email}".`);
+    }
+
+    const normalizedGroup = row.group ? normalizeGroup(row.group) : null;
+    if (!row.group) {
+      messages.push("Group is required.");
+    } else if (!normalizedGroup) {
+      messages.push(`Invalid group "${row.group}". Must be one of: ${VALID_GROUPS.join(", ")}.`);
+    }
+
+    let plusOneLimit = null;
+    const rawLimit = row["plus one limit"];
+    if (rawLimit === "") {
+      messages.push("Plus One Limit is required.");
+    } else if (!/^[0-3]$/.test(rawLimit)) {
+      messages.push(`Invalid Plus One Limit "${rawLimit}". Must be 0, 1, 2, or 3.`);
+    } else {
+      plusOneLimit = Number(rawLimit);
+    }
+
+    if (messages.length > 0) {
+      errors.push({ line, messages });
+    } else {
+      rows.push({
+        line,
+        name: row.name,
+        email: row.email, // already optional/blank-safe
+        group: normalizedGroup,
+        plusOneLimit,
+      });
+    }
+  });
+
+  return { headerError: null, rows, errors };
 };
 
 // ── Sidebar ───────────────────────────────────────────────────────────────────
@@ -227,6 +357,194 @@ const AddGuestModal = ({ onAdd, onClose, saving }) => {
   );
 };
 
+// ── Import CSV Modal ─────────────────────────────────────────────────────────
+// Bulk version of AddGuestModal: parses + validates a CSV client-side, then
+// hands the parent a clean list of rows to run through the SAME addInvitee()
+// call the manual Add Guest form uses. No new token/RSVP logic lives here.
+const ImportCsvModal = ({ onImport, onClose, importing }) => {
+  const [fileName, setFileName]   = useState("");
+  const [isDragging, setIsDragging] = useState(false);
+  const [headerError, setHeaderError] = useState("");
+  const [validRows, setValidRows]     = useState([]);
+  const [rowErrors, setRowErrors]     = useState([]);
+  const [hasFile, setHasFile]         = useState(false);
+  const fileInputRef = useRef(null);
+
+  const resetResults = () => {
+    setHeaderError("");
+    setValidRows([]);
+    setRowErrors([]);
+  };
+
+  const handleFile = (file) => {
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith(".csv")) {
+      resetResults();
+      setFileName(file.name);
+      setHasFile(true);
+      setHeaderError("Please upload a .csv file.");
+      return;
+    }
+    setFileName(file.name);
+    setHasFile(true);
+    resetResults();
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const result = validateCsvGuests(e.target.result);
+      if (result.headerError) {
+        setHeaderError(result.headerError);
+      } else {
+        setValidRows(result.rows);
+        setRowErrors(result.errors);
+      }
+    };
+    reader.onerror = () => setHeaderError("Could not read this file. Please try again.");
+    reader.readAsText(file);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+    handleFile(e.dataTransfer.files?.[0]);
+  };
+
+  // Import is only allowed once the whole file is clean —
+  // any remaining row errors block the button entirely.
+  const canImport = hasFile && !headerError && rowErrors.length === 0 && validRows.length > 0;
+
+  return (
+    <div className="fixed inset-0 bg-foreground/20 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-card rounded-2xl border border-border/50 shadow-xl p-6 w-full max-w-lg space-y-5 max-h-[90vh] overflow-y-auto">
+
+        {/* Header */}
+        <div className="flex items-start justify-between">
+          <div>
+            <h3 className="font-heading text-lg font-semibold text-foreground italic">Import Guest List</h3>
+            <p className="text-sm text-muted-foreground mt-1">
+              Upload a CSV file to add multiple guests at once.
+            </p>
+          </div>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Drag and drop area */}
+        <div
+          onDragOver={e => { e.preventDefault(); setIsDragging(true); }}
+          onDragLeave={() => setIsDragging(false)}
+          onDrop={handleDrop}
+          onClick={() => fileInputRef.current?.click()}
+          className={`border-2 border-dashed rounded-2xl px-6 py-10 flex flex-col items-center gap-3 text-center cursor-pointer transition-colors ${
+            isDragging ? "border-primary bg-primary/5" : "border-border/60 bg-background hover:border-primary/40"
+          }`}
+        >
+          <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center text-muted-foreground">
+            {hasFile ? <FileText size={18} /> : <Upload size={18} />}
+          </div>
+          {hasFile ? (
+            <p className="text-sm font-medium text-foreground">{fileName}</p>
+          ) : (
+            <>
+              <p className="text-sm font-medium text-foreground">Drag and drop your CSV file here</p>
+              <p className="text-xs text-muted-foreground">or click to browse from your computer</p>
+            </>
+          )}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="rounded-xl mt-1"
+            onClick={e => { e.stopPropagation(); fileInputRef.current?.click(); }}
+          >
+            Choose File
+          </Button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv"
+            className="hidden"
+            onChange={e => handleFile(e.target.files?.[0])}
+          />
+        </div>
+
+        {/* Expected columns */}
+        <div className="bg-muted/40 rounded-xl px-4 py-3 border border-border/40">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">
+            Expected CSV columns format:
+          </p>
+          <p className="text-sm text-foreground font-mono">Name, Email, Group, Plus One Limit</p>
+          <p className="text-xs text-muted-foreground mt-1">
+            Group must be Family, Friends, Coworkers, or Other. Plus One Limit must be 0, 1, 2, or 3. Email is optional.
+          </p>
+        </div>
+
+        {/* Header-level error (bad/missing columns, unreadable file) */}
+        {headerError && (
+          <div className="flex items-start gap-2 bg-destructive/8 border border-destructive/20 rounded-xl px-4 py-3">
+            <AlertCircle size={16} className="text-destructive flex-shrink-0 mt-0.5" />
+            <p className="text-sm text-destructive">{headerError}</p>
+          </div>
+        )}
+
+        {/* Row-level validation report */}
+        {!headerError && hasFile && rowErrors.length > 0 && (
+          <div className="space-y-2">
+            <div className="flex items-start gap-2 bg-destructive/8 border border-destructive/20 rounded-xl px-4 py-3">
+              <AlertCircle size={16} className="text-destructive flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-destructive">
+                {rowErrors.length} row{rowErrors.length === 1 ? "" : "s"} need{rowErrors.length === 1 ? "s" : ""} to be fixed before you can import.
+                Nothing will be imported until every row passes.
+              </p>
+            </div>
+            <div className="max-h-40 overflow-y-auto rounded-xl border border-border/40 divide-y divide-border/30">
+              {rowErrors.map(err => (
+                <div key={err.line} className="px-4 py-2 text-xs">
+                  <span className="font-semibold text-foreground">Row {err.line}: </span>
+                  <span className="text-muted-foreground">{err.messages.join(" ")}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Success summary once the whole file is clean */}
+        {!headerError && hasFile && rowErrors.length === 0 && validRows.length > 0 && (
+          <div className="bg-primary/8 border border-primary/20 rounded-xl px-4 py-3">
+            <p className="text-sm text-foreground">
+              {validRows.length} guest{validRows.length === 1 ? "" : "s"} ready to import.
+            </p>
+          </div>
+        )}
+
+        {/* File parsed but contained no usable rows at all */}
+        {!headerError && hasFile && rowErrors.length === 0 && validRows.length === 0 && (
+          <div className="bg-muted/40 border border-border/40 rounded-xl px-4 py-3">
+            <p className="text-sm text-muted-foreground">No guest rows found in this file.</p>
+          </div>
+        )}
+
+        <div className="flex gap-3">
+          <Button variant="outline" className="flex-1 rounded-xl" onClick={onClose} disabled={importing}>
+            Cancel
+          </Button>
+          <Button
+            variant="default"
+            className="flex-1 rounded-xl"
+            disabled={!canImport || importing}
+            onClick={() => onImport(validRows)}
+          >
+            {importing
+              ? <span className="flex items-center gap-2"><Loader2 size={14} className="animate-spin" />Importing...</span>
+              : "Import Guests"}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ── Guest Row ─────────────────────────────────────────────────────────────────
 // Each guest row — click to expand and see plus one details
 const GuestRow = ({ guest, onDelete, deleting, onCopyLink }) => {
@@ -374,6 +692,8 @@ const GuestList = () => {
   const [showAddModal, setShowAddModal]   = useState(false);
   const [addingSaving, setAddingSaving]   = useState(false);
   const [deletingId, setDeletingId]       = useState(null);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importingCsv, setImportingCsv]       = useState(false);
 
   // ── Load invitation + guests on mount ──────────────────────────────────────
   useEffect(() => {
@@ -412,6 +732,30 @@ const GuestList = () => {
       alert("Add guest failed: " + err.message);
     } finally {
       setAddingSaving(false);
+    }
+  };
+
+  // ── Import guests from CSV ─────────────────────────────────────────────────
+  // Rows arrive here already fully validated (ImportCsvModal only enables the
+  // button once every row is clean). Each row is created through the exact
+  // same addInvitee() call the manual Add Guest form uses, so RSVP token
+  // generation and the Firestore document shape are identical either way.
+  const handleImportGuests = async (rows) => {
+    if (!invitation?.weddingId || rows.length === 0) return;
+    setImportingCsv(true);
+    try {
+      for (const row of rows) {
+        await addInvitee(invitation.weddingId, row.name, row.plusOneLimit, row.email, row.group);
+      }
+      const updated = await getInvitees(invitation.weddingId);
+      setGuests(updated);
+      setShowImportModal(false);
+      alert(`Imported ${rows.length} guest${rows.length === 1 ? "" : "s"} successfully.`);
+    } catch (err) {
+      console.error("CSV import error:", err);
+      alert("Import failed: " + err.message);
+    } finally {
+      setImportingCsv(false);
     }
   };
 
@@ -485,6 +829,15 @@ const GuestList = () => {
         />
       )}
 
+      {/* Import CSV Modal */}
+      {showImportModal && (
+        <ImportCsvModal
+          onImport={handleImportGuests}
+          onClose={() => setShowImportModal(false)}
+          importing={importingCsv}
+        />
+      )}
+
       {/* Main content */}
       <main className="flex-1 min-h-screen overflow-y-auto">
 
@@ -517,6 +870,16 @@ const GuestList = () => {
               {/* Export CSV — placeholder for future feature */}
               <Button variant="outline" size="sm" className="rounded-xl gap-2 border-border/60">
                 <Download size={15} /> Export CSV
+              </Button>
+              <Button variant="outline" size="sm" className="rounded-xl gap-2 border-border/60"
+                onClick={() => {
+                  if (!invitation?.weddingId) {
+                    alert("Please fill in your wedding details first.");
+                    return;
+                  }
+                  setShowImportModal(true);
+                }}>
+                <Upload size={15} /> Import CSV
               </Button>
               <Button variant="default" size="sm" className="rounded-xl gap-2"
                 onClick={() => {

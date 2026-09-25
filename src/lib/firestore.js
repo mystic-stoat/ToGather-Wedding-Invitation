@@ -185,7 +185,8 @@ export const addInvitee = async (
   guestName,
   plusOneLimit = 0, // default: no plus ones allowed
   email = "",       // optional — shown in the guest list table
-  group = ""        // optional — Family, Friends, Coworkers, etc.
+  group = "",        // optional — Family, Friends, Coworkers, etc.
+  emailStatus = "pending"
 ) => {
   // crypto.randomUUID() generates a unique token like "a3f2c1d4-..."
   // This token is embedded in the guest's personal RSVP link
@@ -196,6 +197,7 @@ export const addInvitee = async (
     guestName,
     email,             // stored for display in the guest list
     group,             // stored for filtering guests by group
+    emailStatus,
     plusOneLimit,
     token,
     tokenUsed: false,  // becomes true after they submit their RSVP

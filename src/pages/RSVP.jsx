@@ -85,7 +85,7 @@ const InvitationHeader = ({ invitation }) => {
     <div className="mb-10 animate-fade-up text-center">
       <div className="mb-4 flex items-center justify-center gap-3">
         <div className="h-px w-16 bg-gradient-to-r from-transparent to-border" />
-        <Heart size={14} className="fill-accent text-accent" />
+        <Heart size={14} className="fill-accent-light text-accent-light" />
         <div className="h-px w-16 bg-gradient-to-l from-transparent to-border" />
       </div>
 
@@ -116,7 +116,7 @@ const InvitationHeader = ({ invitation }) => {
       )}
 
       {invitation?.inviteDeadline && (
-        <p className="mt-2 text-xs font-medium text-accent">
+        <p className="mt-2 text-xs font-medium text-primary">
           Kindly reply by{" "}
           {new Date(invitation.inviteDeadline + "T00:00:00").toLocaleDateString(
             "en-US",
@@ -131,7 +131,7 @@ const InvitationHeader = ({ invitation }) => {
 
       <div className="mt-5 flex items-center justify-center gap-3">
         <div className="h-px w-16 bg-gradient-to-r from-transparent to-border" />
-        <Heart size={14} className="fill-accent text-accent" />
+        <Heart size={14} className="fill-accent-light text-accent-light" />
         <div className="h-px w-16 bg-gradient-to-l from-transparent to-border" />
       </div>
     </div>
@@ -426,7 +426,7 @@ const ConfirmationScreen = ({ isAttending, name, invitation, coupleNames }) => (
         {isAttending ? (
           <Heart size={40} className="fill-primary/30 text-primary" />
         ) : (
-          <Sparkles size={40} className="text-accent" />
+          <Sparkles size={40} className="text-accent-light" />
         )}
       </div>
 

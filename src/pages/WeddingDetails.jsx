@@ -33,8 +33,8 @@ const SectionCard = ({
 }) => <ScrollReveal delay={delay}>
     <section className="bg-card rounded-2xl border border-border/50 shadow-md shadow-foreground/[0.03] p-6 sm:p-8">
       <div className="flex items-center gap-3 mb-6">
-        <div className="w-10 h-10 rounded-xl bg-accent/15 flex items-center justify-center">
-          <Icon size={20} className="text-accent" />
+        <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+          <Icon size={20} className="text-primary" />
         </div>
         <h2 className="font-heading text-xl font-semibold text-foreground italic">{title}</h2>
       </div>
