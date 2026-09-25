@@ -21,6 +21,7 @@ Christopher Nguyen:
 - Added Spotify music integration to the invitation builder
 - Added CSV guest list import and validation
 - Created wireframes and prototypes for the Spotify music, CSV guest import, and AI Wedding Planner features
+- Updated the application UI to match the approved Figma color palette, standardized input backgrounds, updated sidebar styling, and improved Invitation Builder UI consistency.
   
 Kris Pritchett:
 
