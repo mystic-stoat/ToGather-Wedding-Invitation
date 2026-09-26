@@ -63,7 +63,7 @@ const StepIndicator = ({ current, total }) => (
 );
 
 const inputCls =
-  "h-12 bg-background border-border/60 rounded-xl transition-all focus:ring-2 focus:ring-primary/20 focus:border-primary";
+  "h-12 border-border/60 rounded-xl transition-all focus:ring-2 focus:ring-primary/20 focus:border-primary";
 
 // ── Invitation Header — shows real wedding details from Firestore ────────────
 const InvitationHeader = ({ invitation }) => {

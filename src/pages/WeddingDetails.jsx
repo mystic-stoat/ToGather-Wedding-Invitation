@@ -58,7 +58,7 @@ const FormField = ({
       <p className="text-xs text-destructive">{error}</p>
     )}
   </div>;
-const inputCls = "h-12 bg-background border-border/60 rounded-xl transition-all focus:ring-2 focus:ring-primary/20 focus:border-primary";
+const inputCls = "h-12 border-border/60 rounded-xl transition-all focus:ring-2 focus:ring-primary/20 focus:border-primary";
 
 // ── Type for the form — excludes DB-only fields we don't let the user edit ────
 // Omit removes: userId (set from auth), weddingId (set by Firestore),

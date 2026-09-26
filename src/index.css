@@ -1,4 +1,4 @@
-/* src/index.css — ToGather -still need to match color from figma's prototype and match wireframe*/
+/* src/index.css — ToGather — matches the Figma design system palette */
 
 @tailwind base;
 @tailwind components;
@@ -6,9 +6,10 @@
 
 @layer base {
   :root {
-    /* ── Page & sidebar background ───────────────────────────────────────────
-     * #F7F3EE — warm ivory                                                    */
-    --background:         33 36% 95.1%;
+    /* ── Page background ─────────────────────────────────────────────────────
+     * #F7F3ED — warm ivory. Sidebar has its own distinct surface — see
+     * --sidebar-background below — so the two no longer share this value.   */
+    --background:         36 38.5% 94.9%;
     --foreground:         0 0% 17.3%;     /* #2C2C2C charcoal text            */
 
     /* ── Cards — clean white panels ──────────────────────────────────────── */
@@ -29,9 +30,9 @@
     --muted:              33 25% 91%;
     --muted-foreground:   30 8% 42%;
 
-    /* ── Accent — #FCECEF subtle blush (badges, highlighted/selected states,
+    /* ── Accent — #FCEBEF subtle blush (badges, highlighted/selected states,
      * hover backgrounds) — foreground is charcoal since the tint is very light */
-    --accent:             349 72.7% 95.7%;
+    --accent:             345.9 73.9% 95.5%;
     --accent-foreground:  0 0% 17.3%;
     /* Slightly deeper blush for decorative uses that need more visibility
      * than the near-white --accent (e.g. small icons, gradient accents)    */
@@ -48,13 +49,13 @@
 
     --radius: 0.75rem;
 
-    /* ── Sidebar — same design system as the rest of the app ──────────────── */
-    --sidebar-background:          33 36% 95.1%;
+    /* ── Sidebar — its own surface, distinct from the page background ─────── */
+    --sidebar-background:          27.3 26.8% 92%;      /* #F0EAE5 */
     --sidebar-foreground:          0 0% 17.3%;
-    --sidebar-primary:             135 20.3% 31%;
+    --sidebar-primary:             99.4 13.4% 53.3%;    /* #839878 active nav pill */
     --sidebar-primary-foreground:  0 0% 100%;
-    --sidebar-accent:              136 19.5% 46.3%;
-    --sidebar-accent-foreground:   0 0% 100%;
+    --sidebar-accent:              146.7 27.3% 93.5%;   /* #EAF3EE couple-info card */
+    --sidebar-accent-foreground:   0 0% 17.3%;
     --sidebar-border:              32 28.4% 86.9%;
     --sidebar-ring:                135 20.3% 31%;
   }

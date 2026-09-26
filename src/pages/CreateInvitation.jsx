@@ -65,8 +65,9 @@ const CANVAS = {
 const BUILDER_UI = {
   primary:          "#3F5F47", // dark green — active states, buttons, selected borders/text
   primaryLight:     "#5F8D6B", // softer green — hover/secondary emphasis
-  selected:         "#FCECEF", // subtle blush tint — selected card/section background
-  surface:          "#F7F3EE", // warm ivory — page/header/sidebar/workspace background
+  selected:         "#FCEBEF", // subtle blush tint — selected card/section background
+  surface:          "#F7F3ED", // warm ivory — top bar, center workspace & preview stage background
+  sidebar:          "#F0EAE5", // warm beige — left section-nav background, distinct from the workspace
   surfaceContainer: "#FFFFFF", // white — panel cards & input backgrounds
   surfaceHigh:      "#F3EAE3", // warm beige — icon wells, dropzones, toggle-off track
   onSurface:        "#2C2C2C", // charcoal — primary text
@@ -1050,7 +1051,7 @@ const CreateInvitation = () => {
         {/* Left sidebar — section navigation */}
         <aside className="w-64 flex-shrink-0 flex flex-col py-6 overflow-y-auto border-r"
           style={{
-            backgroundColor: BUILDER_UI.surface,
+            backgroundColor: BUILDER_UI.sidebar,
             borderColor: BUILDER_UI.outline,
             height: "calc(100vh - 4rem)",
             position: "sticky",
@@ -1087,7 +1088,7 @@ const CreateInvitation = () => {
               return (
                 <button key={sec.id}
                   onClick={() => setActiveSection(sec.id)}
-                  className="px-6 py-3 flex items-center gap-3 text-left transition-all text-xs font-bold tracking-widest uppercase"
+                  className="px-6 py-3 flex items-center gap-3 text-left transition-all text-xs font-bold tracking-widest uppercase focus:outline-none focus-visible:ring-2 focus-visible:ring-[#3F5F47] focus-visible:ring-offset-2 focus-visible:ring-offset-[#F0EAE5]"
                   style={{
                     backgroundColor: isActive ? BUILDER_UI.selected : "transparent",
                     color: isActive ? BUILDER_UI.primary : `${BUILDER_UI.primary}50`,
