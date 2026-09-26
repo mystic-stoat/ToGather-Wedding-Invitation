@@ -184,7 +184,7 @@ const ForgotPassword = () => {
                       clearError("email");
                       setSuccess("");
                     }}
-                    className={`text-center h-12 pl-10 pr-11 border rounded-xl transition-all focus:ring-2 focus:ring-primary/20 ${
+                    className={`bg-popout h-12 pr-11 border rounded-xl transition-all focus:ring-2 focus:ring-primary/20 ${
                       errors.email ? "border-destructive" : "border-border"
                     }`}
                   />

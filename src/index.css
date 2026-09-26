@@ -9,11 +9,11 @@
     /* ── Page background ─────────────────────────────────────────────────────
      * #F7F3ED — warm ivory. Sidebar has its own distinct surface — see
      * --sidebar-background below — so the two no longer share this value.   */
-    --background:         36 38.5% 94.9%;
+    --background:         22, 31%, 93%;
     --foreground:         0 0% 17.3%;     /* #2C2C2C charcoal text            */
 
     /* ── Cards — clean white panels ──────────────────────────────────────── */
-    --card:               0 0% 100%;
+    --card:               12, 38%, 97%;
     --card-foreground:    0 0% 17.3%;
     --popover:            0 0% 100%;
     --popover-foreground: 0 0% 17.3%;

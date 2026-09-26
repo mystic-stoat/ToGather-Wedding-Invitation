@@ -10,6 +10,8 @@ Colten Mikulastik:
 - consolidated emulator env, allowing for test suit
 - created SMTP2GO MOCK emailer
 - emailer testing suite created
+- Chore: conformed wedding details to new prototype
+- Code Quailty: moved our Sidebar into component, to be called centrally
 
 Keiran Indraanei:
 

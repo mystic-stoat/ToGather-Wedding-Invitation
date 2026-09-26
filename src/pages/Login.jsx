@@ -130,7 +130,7 @@ const Login = () => {
                       // Clear the error for this field as soon as user starts typing
                       clearError("email");
                     }}
-                    className={`text-center h-12 pl-10 pr-11 border rounded-xl transition-all focus:ring-2 focus:ring-primary/20 ${
+                    className={`bg-popover h-12 rounded-xl transition-all focus:ring-2 focus:ring-primary/20 ${
                       errors.email ? "border-destructive" : "border-border"
                     }`}
                   />
@@ -155,7 +155,7 @@ const Login = () => {
                       setPassword(e.target.value);
                       clearError("password");
                     }}
-                    className={`text-center h-12 pl-10 pr-11 border rounded-xl transition-all focus:ring-2 focus:ring-primary/20 ${
+                    className={`bg-popover h-12 pr-11 border rounded-xl transition-all focus:ring-2 focus:ring-primary/20 ${
                       errors.password ? "border-destructive" : "border-border"
                     }`}
                   />
