@@ -6,7 +6,7 @@ import Logo from "@/assets/logo.svg";
 
 const Navbar = () => {
   const [open, setOpen] = useState(false);
-  return <nav className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border/50">
+  return <nav className="fixed top-0 left-0 right-0 z-50 bg-background backdrop-blur-md border-b border-border/50">
       <div className="container mx-auto flex items-center justify-between h-16 px-6">
         <a href="/" className="flex items-cent gap-2 font-heading text-2xl font-bold tracking-tight text-foreground">
           <img src={Logo} className="h-8 w-auto"/>

@@ -7,8 +7,7 @@
 //
 // FIRESTORE COLLECTION: `invitations`
 // FIELDS SAVED: groomName, brideName, weddingDate, ceremonyTime,
-//               inviteDeadline, venueName, venueAddress,
-//               colorPalette1, colorPalette2, font1, font2
+//               inviteDeadline, venueName, venueAddress, receptionName, receptionAddress
 //
 // LAYOUT NOTE: this follows the same sidebar + main-content shell as
 // Dashboard.jsx. Two things below are reconstructed from the migration plan
@@ -26,7 +25,6 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Save, CheckCircle2, Loader2, Menu, X } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { getInvitationByUser, saveInvitation } from "@/lib/firestore";
@@ -43,7 +41,7 @@ const FormField = ({ label, children, error, helper }) => (
 );
 
 const inputCls =
-  "h-12 border-border/60 rounded-xl transition-all focus:ring-2 focus:ring-primary/20 focus:border-primary";
+  "bg-popover h-12 border-border/60 rounded-xl transition-all focus:ring-2 focus:ring-primary/20 focus:border-primary";
 
 // ── Default empty form — used before any data loads or on first visit ─────────
 const EMPTY = {
@@ -52,13 +50,10 @@ const EMPTY = {
   ceremonyTime: "",
   venueName: "",
   venueAddress: "",
+  receptionName: "",
+  receptionAddress: "",
   weddingDate: "",
   inviteDeadline: "",
-  colorPalette1: "#7a9e7e", // matches ToGather's sage green theme
-  colorPalette2: "#f5f0eb", // matches ToGather's warm beige theme
-  font1: "Playfair Display",
-  font2: "DM Sans",
-  gif: "",
 };
 
 const WeddingDetails = () => {
@@ -102,13 +97,10 @@ const WeddingDetails = () => {
             ceremonyTime: invitation.ceremonyTime ?? "",
             venueName: invitation.venueName ?? "",
             venueAddress: invitation.venueAddress ?? "",
+            receptionName: invitation.receptionName ?? "",
+            receptionAddress: invitation.receptionAddress ?? "",
             weddingDate: invitation.weddingDate ?? "",
             inviteDeadline: invitation.inviteDeadline ?? "",
-            colorPalette1: invitation.colorPalette1 ?? EMPTY.colorPalette1,
-            colorPalette2: invitation.colorPalette2 ?? EMPTY.colorPalette2,
-            font1: invitation.font1 ?? EMPTY.font1,
-            font2: invitation.font2 ?? EMPTY.font2,
-            gif: invitation.gif ?? "",
           });
         }
         // If invitation is null they're a new user — form stays as EMPTY defaults
@@ -142,8 +134,10 @@ const WeddingDetails = () => {
       errors.inviteDeadline = "RSVP deadline must be on or before the wedding date.";
     }
 
-    if (!form.venueName.trim()) errors.venueName = "Venue name is required.";
-    if (!form.venueAddress.trim()) errors.venueAddress = "Venue address is required.";
+    if (!form.venueName.trim()) errors.venueName = "Wedding venue name is required.";
+    if (!form.venueAddress.trim()) errors.venueAddress = "Wedding venue address is required.";
+    if (!form.receptionName.trim()) errors.receptionName = "Reception venue name is required.";
+    if (!form.receptionAddress.trim()) errors.receptionAddress = "Reception venue address is required.";
 
     setFieldErrors(errors);
     return Object.keys(errors).length === 0;
@@ -378,7 +372,7 @@ const WeddingDetails = () => {
             <section className="space-y-6">
               <h2 className="font-heading text-xl font-semibold text-foreground">Venue & Location</h2>
 
-              <FormField label="Venue Name" error={fieldErrors.venueName}>
+              <FormField label="Wedding Venue Name" error={fieldErrors.venueName}>
                 <Input
                   placeholder="The Grand Pavilion"
                   value={form.venueName}
@@ -387,91 +381,35 @@ const WeddingDetails = () => {
                 />
               </FormField>
 
-              <FormField label="Venue Address" error={fieldErrors.venueAddress}>
+              <FormField label="Wedding Venue Address" error={fieldErrors.venueAddress}>
                 <Input
-                  placeholder="123 Garden Lane, Austin, TX 78701"
+                  placeholder="1001 Main Street, Denton, TX 75077"
                   value={form.venueAddress}
                   onChange={e => set("venueAddress", e.target.value)}
                   className={inputCls}
                 />
               </FormField>
+              <FormField label="Reception Venue Name" error={fieldErrors.receptionName}>
+                <Input
+                  placeholder="The Grand Pavilion"
+                  value={form.receptionName}
+                  onChange={e => set("receptionName", e.target.value)}
+                  className={inputCls}
+                />
+              </FormField>
+
+              <FormField label="Reception Venue Address" error={fieldErrors.receptionAddress}>
+                <Input
+                  placeholder="1001 Main Street, Denton, TX 75077"
+                  value={form.receptionAddress}
+                  onChange={e => set("receptionAddress", e.target.value)}
+                  className={inputCls}
+                />
+              </FormField>
             </section>
-
-            {/* ── Invitation Style ── */}
-            {/* These values are used by CreateInvitation.tsx to style the invitation */}
-            <section className="space-y-6">
-              <h2 className="font-heading text-xl font-semibold text-foreground">Invitation Style</h2>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <FormField label="Primary Color">
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="color"
-                      value={form.colorPalette1}
-                      onChange={e => set("colorPalette1", e.target.value)}
-                      className="w-12 h-12 rounded-xl border border-border/60 cursor-pointer bg-background p-1"
-                    />
-                    <Input
-                      value={form.colorPalette1}
-                      onChange={e => set("colorPalette1", e.target.value)}
-                      className={inputCls}
-                      placeholder="#7a9e7e"
-                    />
-                  </div>
-                </FormField>
-
-                <FormField label="Secondary Color">
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="color"
-                      value={form.colorPalette2}
-                      onChange={e => set("colorPalette2", e.target.value)}
-                      className="w-12 h-12 rounded-xl border border-border/60 cursor-pointer bg-background p-1"
-                    />
-                    <Input
-                      value={form.colorPalette2}
-                      onChange={e => set("colorPalette2", e.target.value)}
-                      className={inputCls}
-                      placeholder="#f5f0eb"
-                    />
-                  </div>
-                </FormField>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <FormField label="Heading Font">
-                  <Select value={form.font1} onValueChange={v => set("font1", v)}>
-                    <SelectTrigger className={inputCls}>
-                      <SelectValue placeholder="Select font..." />
-                    </SelectTrigger>
-                    <SelectContent className="rounded-xl">
-                      <SelectItem value="Playfair Display">Playfair Display</SelectItem>
-                      <SelectItem value="Cormorant Garamond">Cormorant Garamond</SelectItem>
-                      <SelectItem value="Great Vibes">Great Vibes</SelectItem>
-                      <SelectItem value="Libre Baskerville">Libre Baskerville</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </FormField>
-
-                <FormField label="Body Font">
-                  <Select value={form.font2} onValueChange={v => set("font2", v)}>
-                    <SelectTrigger className={inputCls}>
-                      <SelectValue placeholder="Select font..." />
-                    </SelectTrigger>
-                    <SelectContent className="rounded-xl">
-                      <SelectItem value="DM Sans">DM Sans</SelectItem>
-                      <SelectItem value="Lato">Lato</SelectItem>
-                      <SelectItem value="Nunito">Nunito</SelectItem>
-                      <SelectItem value="Source Sans 3">Source Sans 3</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </FormField>
-              </div>
               <div className="flex items-center gap-3">
-                {saveError && <p className="text-xs text-destructive">{saveError}</p>}
                 {saveButton}
               </div>
-            </section>
           </div>
         </div>
       </main>
