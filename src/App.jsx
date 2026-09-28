@@ -32,6 +32,7 @@ import WeddingDetails   from "./pages/WeddingDetails.jsx";
 import CreateInvitation from "./pages/CreateInvitation.jsx";
 import RSVP             from "./pages/RSVP.jsx";
 import GuestList        from "./pages/GuestList.jsx";
+import Registry         from "./pages/Registry.jsx";
 import NotFound         from "./pages/NotFound.jsx";
  
 // React Query client — manages caching for API/Firestore calls
@@ -139,6 +140,8 @@ const App = () => (
               element={<ProtectedRoute><CreateInvitation /></ProtectedRoute>} />
             <Route path="/guest-list"
               element={<ProtectedRoute><GuestList /></ProtectedRoute>} />
+            <Route path="/gift-registry"
+              element={<ProtectedRoute><Registry /></ProtectedRoute>} />
 
             {/* Catch-all — shows 404 page for any unknown URL */}
             <Route path="*" element={<NotFound />} />

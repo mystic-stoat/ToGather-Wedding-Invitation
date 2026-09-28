@@ -40,6 +40,8 @@ import {
   Sparkles,
   Loader2,
   AlertCircle,
+  Gift,
+  ExternalLink,
 } from "lucide-react";
 import { submitRSVP } from "@/lib/firestore";
 import { doc, getDoc } from "firebase/firestore";
@@ -479,6 +481,58 @@ const ConfirmationScreen = ({ isAttending, name, invitation, coupleNames }) => (
   </div>
 );
 
+// ── Registry section — visible registries + the couple's registry message ─────
+// Guest-facing only: rendered below the RSVP card on the public page.
+// Registries are embedded on the invitation doc this page already loads —
+// no extra Firestore query. Only entries with isVisible === true render
+// (visibility is enforced client-side since the invitation doc is already
+// public to the guest). Returns null when there's no message and no
+// visible registries so the section never renders empty.
+const RegistrySection = ({ registries = [], registryMessage }) => {
+  const visible = registries.filter(r => r.isVisible === true);
+  const hasMessage = Boolean(registryMessage?.trim());
+  if (!hasMessage && visible.length === 0) return null;
+
+  return (
+    <section className="mt-6 rounded-2xl border border-border/50 bg-card p-6 shadow-sm animate-fade-up">
+      <div className="mb-4 flex items-center justify-center gap-3">
+        <div className="h-px w-10 bg-gradient-to-r from-transparent to-border" />
+        <Gift size={15} className="text-primary" />
+        <div className="h-px w-10 bg-gradient-to-l from-transparent to-border" />
+      </div>
+
+      <h2 className="font-heading text-xl font-semibold italic text-foreground text-center">
+        Gift Registry
+      </h2>
+
+      {hasMessage && (
+        <p className="mt-3 text-center text-sm text-muted-foreground leading-relaxed">
+          {registryMessage}
+        </p>
+      )}
+
+      {visible.length > 0 && (
+        <ul className="mt-5 space-y-2">
+          {visible.map(r => (
+            <li key={r.id}>
+              <a
+                href={r.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center gap-2 rounded-xl border border-border/50 bg-background px-4 py-3 text-sm font-medium text-foreground transition-colors hover:border-primary/40 hover:text-primary"
+              >
+                <Gift size={14} className="text-primary flex-shrink-0" />
+                <span className="truncate">{r.name}</span>
+                <ExternalLink size={13} className="text-muted-foreground flex-shrink-0" />
+              </a>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+};
+
 // ── Main RSVP page ────────────────────────────────────────────────────────────
 const RSVP = () => {
   const { inviteeId, token } = useParams();
@@ -815,6 +869,12 @@ const RSVP = () => {
               </>
             )}
           </div>
+
+          {/* Gift registry — visible entries + message from the invitation doc */}
+          <RegistrySection
+            registries={invitation?.registries}
+            registryMessage={invitation?.registryMessage}
+          />
 
           <p className="mt-6 text-center text-xs text-muted-foreground">
             Powered by{" "}
