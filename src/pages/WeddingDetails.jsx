@@ -49,9 +49,9 @@ const EMPTY = {
   brideName: { first: "", middle: "", last: "" },
   ceremonyTime: "",
   venueName: "",
-  venueAddress: "",
+  venueURL: "",
   receptionName: "",
-  receptionAddress: "",
+  receptionURL: "",
   weddingDate: "",
   inviteDeadline: "",
 };
@@ -96,9 +96,9 @@ const WeddingDetails = () => {
             brideName: invitation.brideName ?? EMPTY.brideName,
             ceremonyTime: invitation.ceremonyTime ?? "",
             venueName: invitation.venueName ?? "",
-            venueAddress: invitation.venueAddress ?? "",
+            venueURL: invitation.venueURL ?? "",
             receptionName: invitation.receptionName ?? "",
-            receptionAddress: invitation.receptionAddress ?? "",
+            receptionURL: invitation.receptionURL ?? "",
             weddingDate: invitation.weddingDate ?? "",
             inviteDeadline: invitation.inviteDeadline ?? "",
           });
@@ -135,9 +135,7 @@ const WeddingDetails = () => {
     }
 
     if (!form.venueName.trim()) errors.venueName = "Wedding venue name is required.";
-    if (!form.venueAddress.trim()) errors.venueAddress = "Wedding venue address is required.";
     if (!form.receptionName.trim()) errors.receptionName = "Reception venue name is required.";
-    if (!form.receptionAddress.trim()) errors.receptionAddress = "Reception venue address is required.";
 
     setFieldErrors(errors);
     return Object.keys(errors).length === 0;
@@ -381,11 +379,11 @@ const WeddingDetails = () => {
                 />
               </FormField>
 
-              <FormField label="Wedding Venue Address" error={fieldErrors.venueAddress}>
+              <FormField label="Wedding Venue Google Maps Link" error={fieldErrors.venueURL}>
                 <Input
-                  placeholder="1001 Main Street, Denton, TX 75077"
-                  value={form.venueAddress}
-                  onChange={e => set("venueAddress", e.target.value)}
+                  placeholder="https://google.com/..."
+                  value={form.venueURL}
+                  onChange={e => set("venueURL", e.target.value)}
                   className={inputCls}
                 />
               </FormField>
@@ -398,11 +396,11 @@ const WeddingDetails = () => {
                 />
               </FormField>
 
-              <FormField label="Reception Venue Address" error={fieldErrors.receptionAddress}>
+              <FormField label="Reception Venue Google Maps Link" error={fieldErrors.receptionURL}>
                 <Input
-                  placeholder="1001 Main Street, Denton, TX 75077"
-                  value={form.receptionAddress}
-                  onChange={e => set("receptionAddress", e.target.value)}
+                  placeholder="https://google.com/..."
+                  value={form.receptionURL}
+                  onChange={e => set("receptionURL", e.target.value)}
                   className={inputCls}
                 />
               </FormField>
