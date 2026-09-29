@@ -35,6 +35,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthContext";
 import { getInvitationByUser, saveInvitation } from "@/lib/firestore";
+import GoogleMapEmbed, { buildMapQuery, mapLinkUrl } from "@/components/GoogleMapEmbed";
 
 // ── Stitch-inspired color palette for the invitation canvas ───────────────────
 // This describes the actual wedding invitation artifact rendered in
@@ -651,6 +652,7 @@ const PhonePreview = ({ invitation, settings }) => {
 
   const groomFirst = invitation?.groomName?.first || "Groom";
   const brideFirst = invitation?.brideName?.first || "Bride";
+  const venueQuery = buildMapQuery(invitation?.venueName, invitation?.venueAddress);
 
   const formattedDate = invitation?.weddingDate
     ? new Date(invitation.weddingDate + "T00:00:00").toLocaleDateString("en-US", {
@@ -760,9 +762,9 @@ const PhonePreview = ({ invitation, settings }) => {
               style={{ fontFamily: headingFont, color: CANVAS.onSurface }}>
               Wedding Venue
             </h2>
-            <div className="rounded-xl h-24 flex items-center justify-center mb-3"
-              style={{ backgroundColor: CANVAS.surfaceHigh }}>
-              <MapPin size={20} style={{ color: CANVAS.outline }} />
+            <div className="mb-3">
+              <GoogleMapEmbed query={venueQuery} heightClass="h-28" interactive={false}
+                title="Venue map preview" />
             </div>
             <p className="text-[10px] font-bold" style={{ color: CANVAS.onSurface }}>
               {invitation?.venueName || "Venue Name"}
@@ -770,10 +772,22 @@ const PhonePreview = ({ invitation, settings }) => {
             <p className="text-[9px]" style={{ color: CANVAS.onSurfaceVar }}>
               {invitation?.venueAddress || "Venue Address"}
             </p>
-            <button className="w-full mt-3 py-2 rounded-full text-white text-[9px] font-bold"
-              style={{ backgroundColor: `${primaryColor}b3` }}>
-              Get directions
-            </button>
+            {venueQuery ? (
+              <a
+                href={invitation?.venueURL || mapLinkUrl(venueQuery)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block w-full mt-3 py-2 rounded-full text-white text-[9px] font-bold"
+                style={{ backgroundColor: `${primaryColor}b3` }}
+              >
+                Get directions
+              </a>
+            ) : (
+              <button className="w-full mt-3 py-2 rounded-full text-white text-[9px] font-bold"
+                style={{ backgroundColor: `${primaryColor}b3` }}>
+                Get directions
+              </button>
+            )}
           </div>
 
           {/* RSVP section */}
