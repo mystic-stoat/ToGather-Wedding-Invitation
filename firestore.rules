@@ -1,71 +1,168 @@
 // fake firestore rules for now
+//Testing new rules
+
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // Users can only read/write their own profile
+
+    /*
+     * Helper:
+     * Checks whether the currently authenticated user owns
+     * the wedding identified by weddingId.
+     */
+    function isWeddingHost(weddingId) {
+      return request.auth != null
+        && get(
+          /databases/$(database)/documents/invitations/$(weddingId)
+        ).data.userId == request.auth.uid;
+    }
+
+
+    /*
+     * ============================================================
+     * BETROTHED
+     * ============================================================
+     *
+     * A user can only access their own profile document.
+     */
     match /betrothed/{userId} {
 
-      allow read, update, delete: if request.auth != null
-        && request.auth.uid == userId;
-
-      allow create: if request.auth != null
+      allow read, create, update, delete:
+        if request.auth != null
         && request.auth.uid == userId;
     }
-    
-    // Users can only read/write their own invitations
+
+
+    /*
+     * ============================================================
+     * INVITATIONS
+     * ============================================================
+     *
+     * The invitation document ID is the weddingId.
+     *
+     * Public read is intentional because the public wedding/
+     * RSVP page needs to retrieve invitation information.
+     *
+     * Only the wedding owner can create, update, or delete it.
+     */
     match /invitations/{weddingId} {
 
-      // Host can read/update/delete their own invitation
-      allow read, update, delete: if request.auth != null
-        && request.auth.uid == resource.data.userId;
+      // Public wedding/RSVP page
+      allow read: if true;
 
-      // Host can create an invitation they own
-      allow create: if request.auth != null
+      // Only the authenticated owner can create the invitation
+      allow create:
+        if request.auth != null
         && request.auth.uid == request.resource.data.userId;
 
-      // Public RSVP page can read invitation information, may remove
-      allow read: if true;
+      // Only the owner of the existing invitation can modify it
+      allow update, delete:
+        if request.auth != null
+        && request.auth.uid == resource.data.userId;
     }
-    
-    // Guests can only read their own invitation details
+
+
+    /*
+     * ============================================================
+     * INVITEES
+     * ============================================================
+     *
+     * Each document is:
+     *
+     *   /invitee/{inviteeId}
+     *
+     * The document ID is also the application's invitee/RSVP ID.
+     *
+     * Hosts create/manage invitees.
+     *
+     * Guests can read an invitee document because the public RSVP
+     * page needs to retrieve it using the invitation token.
+     *
+     * Guests may only submit an RSVP once, using the stored token.
+     */
     match /invitee/{inviteeId} {
 
-      //Create an invitee only for this wedding
-      allow create: if request.auth != null
-        && request.auth.uid ==
-          get(
-            /databases/$(database)/documents/invitations/$(request.resource.data.weddingId)
-          ).data.userId;
+      /*
+       * HOST CREATE
+       *
+       * The weddingId supplied in the new invitee document must
+       * belong to the authenticated user.
+       */
+      allow create:
+        if isWeddingHost(request.resource.data.weddingId);
 
-      //Manage invitees with read, update, delete
-      allow create: if request.auth != null
-        && request.auth.uid ==
-          get(
-            /databases/$(database)/documents/invitations/$(request.resource.data.weddingId)
-          ).data.userId;
 
-      //Guests can read an invitee doc using the link or token provided
+      /*
+       * PUBLIC READ
+       *
+       * Required for token-based public RSVP lookup.
+       */
       allow read: if true;
 
-      //Used for RSVP submission, says that the initial token used value is false and the token matches the stored token
-      //Also makes sure only specific data is modified
-      allow update: if resource.data.tokenUsed == false
-        && resource.data.token == request.resource.data.token
-        && resource.data.weddingId == request.resource.data.weddingId
-        && resource.data.token == request.resource.data.token
-        && resource.data.name == request.resource.data.name
-        && resource.data.plusOneLimit == request.resource.data.plusOneLimit;
-    }
-    
-    // RSVP entries are created by guests and can only be updated by the original submitter
-    match /rsvp/{rsvpId} {
-      allow read, write: if request.auth != null && request.auth.uid == resource.data.userId;
-    }
-    
-    // Users can only create documents in collections they own (based on userId field)
-    match /{document=**} {
-      allow read, write: if request.auth != null;
+
+      /*
+       * HOST UPDATE
+       *
+       * A wedding host can modify their own invitees.
+       */
+      allow update:
+        if isWeddingHost(resource.data.weddingId);
+
+
+      /*
+       * GUEST RSVP UPDATE
+       *
+       * Guests are allowed to modify ONLY the RSVP fields.
+       *
+       * They must:
+       *   1. Have an unused token.
+       *   2. Supply the exact stored token.
+       *   3. Keep the same weddingId.
+       *   4. Change tokenUsed from false -> true.
+       *   5. Only modify the permitted RSVP fields.
+       */
+      allow update:
+        if resource.data.tokenUsed == false
+        && request.resource.data.token == resource.data.token
+        && request.resource.data.weddingId == resource.data.weddingId
+        && request.resource.data.tokenUsed == true
+
+        /*
+         * Guests cannot modify identity/invitation fields.
+         * These are the ONLY fields a guest RSVP submission
+         * is allowed to change.
+         */
+        && request.resource.data
+             .diff(resource.data)
+             .affectedKeys()
+             .hasOnly([
+               'attending',
+               'guestCount',
+               'dietaryRestrictions',
+               'plusOnes',
+               'rsvpStatus',
+               'tokenUsed',
+               'respondedAt'
+             ])
+
+        /*
+         * Validate the resulting RSVP data.
+         */
+        && request.resource.data.attending is bool
+        && request.resource.data.guestCount is number
+        && request.resource.data.dietaryRestrictions is string
+        && request.resource.data.plusOnes is list
+        && request.resource.data.rsvpStatus is string
+        && request.resource.data.rsvpStatus in ['Accepted', 'Declined']
+        && request.resource.data.respondedAt is timestamp;
+
+
+      /*
+       * Only the wedding host can delete an invitee.
+       */
+      allow delete:
+        if isWeddingHost(resource.data.weddingId);
     }
   }
 }
