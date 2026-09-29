@@ -16,13 +16,11 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState, useEffect, useRef } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import Papa from "papaparse";
 import {
   Users, UserPlus, Search, Trash2, Loader2,
-  ChevronDown, ChevronUp, Heart, LayoutDashboard,
-  Gift, MapPin, CalendarCheck, Mail, Smartphone,
-  ChevronRight, LogOut, UserRound, Pencil,
+  ChevronDown, ChevronUp, Heart, LogOut,
   Download, Filter, Upload, X, FileText, AlertCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -34,7 +32,7 @@ import {
   addInvitee,
   deleteInvitee,
 } from "@/lib/firestore";
-import Logo from "@/assets/logo.svg";
+import Sidebar from "@/components/Sidebar"
 
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -195,81 +193,6 @@ const validateCsvGuests = (csvText) => {
   return { headerError: null, rows, errors };
 };
 
-// ── Sidebar ───────────────────────────────────────────────────────────────────
-// Same sidebar as Dashboard for consistent navigation
-const Sidebar = ({ invitation, onLogout }) => {
-  const groomFirst  = invitation?.groomName?.first || "";
-  const brideFirst  = invitation?.brideName?.first || "";
-  const coupleNames = groomFirst && brideFirst ? `${groomFirst} & ${brideFirst}` : null;
-  const weddingDate = invitation?.weddingDate
-    ? new Date(invitation.weddingDate + "T00:00:00").toLocaleDateString("en-US", {
-        month: "long", day: "numeric", year: "numeric",
-      })
-    : null;
-
-  const NavItem = ({ to, icon: Icon, label, active = false }) => (
-    <Link to={to}
-      className={`flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition-colors ${
-        active
-          ? "bg-primary text-primary-foreground font-medium"
-          : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
-      }`}>
-      <Icon size={16} />
-      {label}
-      {active && <ChevronRight size={14} className="ml-auto" />}
-    </Link>
-  );
-
-  return (
-    <aside className="hidden lg:flex flex-col w-56 min-h-screen bg-background border-r border-border/50 px-4 py-6 flex-shrink-0">
-      <div className="flex items-center gap-2 mb-1 px-1">
-
-        <img src={Logo} className="h-8 w-auto"/>
-
-        <span className="font-heading text-lg font-semibold text-foreground">ToGather</span>
-      </div>
-      <p className="text-xs text-muted-foreground px-1 mb-8">Plan the day. Share the joy.</p>
-
-      <nav className="flex-1 space-y-6">
-        <div>
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-3 mb-2">Overview</p>
-          <NavItem to="/dashboard"   icon={LayoutDashboard} label="Dashboard" />
-        </div>
-        <div>
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-3 mb-2">Planning</p>
-          <div className="space-y-0.5">
-            <NavItem to="/wedding-details" icon={Heart}        label="Wedding Details" />
-            <NavItem to="/guest-list"      icon={Users}        label="Guest List"      active />
-            <NavItem to="/dashboard"       icon={Gift}         label="Registry" />
-            <NavItem to="/dashboard"       icon={MapPin}       label="Travel & Stay" />
-          </div>
-        </div>
-        <div>
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-3 mb-2">Invitations</p>
-          <div className="space-y-0.5">
-            <NavItem to="/dashboard"         icon={CalendarCheck} label="Save the Date" />
-            <NavItem to="/dashboard"         icon={Mail}          label="Paper Invitations" />
-            <NavItem to="/create-invitation" icon={Smartphone}    label="Mobile Invitation" />
-          </div>
-        </div>
-      </nav>
-
-      <div className="space-y-3 mt-6">
-        {coupleNames && (
-          <div className="bg-primary/8 rounded-xl px-3 py-3 border border-primary/15">
-            <p className="text-sm font-semibold text-foreground">{coupleNames}</p>
-            {weddingDate && <p className="text-xs text-muted-foreground mt-0.5">{weddingDate}</p>}
-          </div>
-        )}
-        <button onClick={onLogout}
-          className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-sm text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors">
-          <LogOut size={15} /> Log out
-        </button>
-      </div>
-    </aside>
-  );
-};
-
 // ── Add Guest Modal ───────────────────────────────────────────────────────────
 const AddGuestModal = ({ onAdd, onClose, saving }) => {
   const [name, setName]                 = useState("");
@@ -295,7 +218,7 @@ const AddGuestModal = ({ onAdd, onClose, saving }) => {
           <label className="text-sm font-medium text-muted-foreground">Guest Name *</label>
           <Input placeholder="Full name" value={name} autoFocus
             onChange={e => { setName(e.target.value); setError(""); }}
-            className="h-11 bg-background border-border/60 rounded-xl" />
+            className="h-11 border-border/60 rounded-xl" />
           {error && <p className="text-xs text-destructive">{error}</p>}
         </div>
 
@@ -306,7 +229,7 @@ const AddGuestModal = ({ onAdd, onClose, saving }) => {
           </label>
           <Input type="email" placeholder="guest@email.com" value={email}
             onChange={e => setEmail(e.target.value)}
-            className="h-11 bg-background border-border/60 rounded-xl" />
+            className="h-11 border-border/60 rounded-xl" />
         </div>
 
         {/* Group */}

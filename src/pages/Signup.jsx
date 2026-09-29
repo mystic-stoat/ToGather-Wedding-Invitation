@@ -109,7 +109,7 @@ const Signup = () => {
   };
   // Helper: adds red border to input if that field has an error
   const inputCls = (key) =>
-    `h-12 pl-10 bg-background border rounded-xl transition-all focus:ring-2 focus:ring-primary/20 ${
+    `bg-popover h-12 border rounded-xl transition-all focus:ring-2 focus:ring-primary/20 ${
       errors[key] ? "border-destructive" : "border-border"
     }`;
 
@@ -122,12 +122,10 @@ const Signup = () => {
 
             {/* Brand header */}
             <div className="text-center space-y-4">
-              <div className="inline-block bg-secondary rounded-xl px-6 py-3">
                 <img src={Logo} className="h-20 mx-auto w-auto"/>
                 <span className="font-heading text-2xl font-bold tracking-tight">
                   ToGather
                 </span>
-              </div>
               <h1 className="font-heading text-2xl font-semibold text-foreground">
                 Create your account
               </h1>
@@ -143,7 +141,6 @@ const Signup = () => {
               <div className="space-y-1.5">
                 <Label htmlFor="name" className="text-sm font-semibold text-foreground">Full name</Label>
                 <div className="relative">
-                  <UserRound size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
                   <Input id="name" placeholder="Jane Smith" value={name}
                     onChange={(e) => { 
                       const formatted = e.target.value
@@ -166,7 +163,6 @@ const Signup = () => {
               <div className="space-y-1.5">
                 <Label htmlFor="email" className="text-sm font-semibold text-foreground">Email Address</Label>
                 <div className="relative">
-                  <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
                   <Input id="email" type="email" placeholder="you@example.com" value={email}
                     onChange={(e) => { setEmail(e.target.value); clearError("email"); }}
                     className={inputCls("email")} />
@@ -178,7 +174,6 @@ const Signup = () => {
               <div className="space-y-1.5">
                 <Label htmlFor="password" className="text-sm font-semibold text-foreground">Password</Label>
                 <div className="relative">
-                  <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
                   <Input id="password" type={showPassword ? "text" : "password"}
                     placeholder="At least 8 characters..." value={password}
                     onChange={(e) => { setPassword(e.target.value); clearError("password"); }}
@@ -197,7 +192,6 @@ const Signup = () => {
               <div className="space-y-1.5">
                 <Label htmlFor="confirm" className="text-sm font-semibold text-foreground">Confirm Password</Label>
                 <div className="relative">
-                  <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
                   <Input id="confirm" type={showConfirm ? "text" : "password"}
                     placeholder="Re-enter your password..." value={confirm}
                     onChange={(e) => { setConfirm(e.target.value); clearError("confirm"); }}

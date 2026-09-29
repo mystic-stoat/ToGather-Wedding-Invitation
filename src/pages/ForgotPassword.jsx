@@ -128,7 +128,6 @@ const ForgotPassword = () => {
 
 {/* Brand header */}
             <div className="text-center space-y-4">
-              <div className="inline-block bg-secondary rounded-xl px-6 py-3">
                 <img
                   src={Logo}
                   className="h-20 mx-auto w-auto"
@@ -138,7 +137,6 @@ const ForgotPassword = () => {
                 <span className="font-heading text-2xl font-bold tracking-tight">
                   ToGather
                 </span>
-              </div>
 
               <div>
                 <h1 className="font-heading text-2xl font-semibold text-foreground">
@@ -186,7 +184,7 @@ const ForgotPassword = () => {
                       clearError("email");
                       setSuccess("");
                     }}
-                    className={`text-center h-12 pl-10 pr-11 bg-background border rounded-xl transition-all focus:ring-2 focus:ring-primary/20 ${
+                    className={`bg-popout h-12 pr-11 border rounded-xl transition-all focus:ring-2 focus:ring-primary/20 ${
                       errors.email ? "border-destructive" : "border-border"
                     }`}
                   />
