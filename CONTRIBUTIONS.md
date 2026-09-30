@@ -1,6 +1,7 @@
 # Contributions: list the major features, modules, or documents they contributed to.
 
 Colten Mikulastik:
+
 - Created test cases for Login, and Signup
 - Created unit test cases for Login, and Signup
 - Created integration test cases for firebase auth, and firestore
@@ -20,9 +21,11 @@ Keiran Indraanei:
 - Integrated the existing Firebase password reset functionality into the Forgot Password workflow
 
 Christopher Nguyen:
+
 - Added Spotify music integration to the invitation builder
 - Added CSV guest list import and validation
 - Created wireframes and prototypes for the Spotify music, CSV guest import, and AI Wedding Planner features
+
 - Updated the application UI to match the approved Figma color palette, standardized input backgrounds, updated sidebar styling, and improved Invitation Builder UI consistency.
   
 Kris Pritchett:
@@ -32,6 +35,12 @@ Kris Pritchett:
   deprecation
 - Changed how the placeholders work to better accomodate future links
 - Now using react-icons/si to handle the icon display and deprecation of the instagram library.
+- 9/23/2026
+- Reduced the database tables from 4 to 3
+- Moved elements from RSVP table into Invitee table
+- Updated Firestore local rules for potential use as production rules
+- Updated firestore.js to reflect updated rules and tables
+- Updated the Betrothed document name for readability
 
 Jesus Zambrano:
 

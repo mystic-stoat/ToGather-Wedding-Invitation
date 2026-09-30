@@ -4,7 +4,7 @@
 //   New user registration. When the form submits, TWO things happen:
 //
 //   1. Firebase Auth account is created (handles login credentials)
-//   2. A `bethrothed` document is created in Firestore (stores profile info)
+//   2. A `betrothed` document is created in Firestore (stores profile info)
 //
 // WHY BOTH?
 //   Firebase Auth only stores email + password for authentication.
@@ -24,7 +24,7 @@ import { Label } from "@/components/ui/label";
 import Footer from "@/components/Footer";
 import { Eye, EyeOff, Mail, Lock, UserRound } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { createUserProfile } from "@/lib/firestore"; // creates the bethrothed doc
+import { createUserProfile } from "@/lib/firestore"; // creates the betrothed doc
 import Logo from "@/assets/logo.svg";
 import FormError from "@/components/ui/form-error";
 import { useFormState } from "@/hooks/useFormState";
@@ -80,7 +80,7 @@ const Signup = () => {
       // signup() is in AuthContext — calls Firebase and returns { uid }
       const { uid } = await signup(name.trim(), email, password);
 
-      // Step 2: Create the Firestore profile document in `bethrothed` collection
+      // Step 2: Create the Firestore profile document in `betrothed` collection
       // We use the Firebase Auth uid as the document ID so it's easy to look up
       await createUserProfile(uid, name.trim(), email);
 
