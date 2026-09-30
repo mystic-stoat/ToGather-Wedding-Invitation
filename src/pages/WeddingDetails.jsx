@@ -7,7 +7,9 @@
 //
 // FIRESTORE COLLECTION: `invitations`
 // FIELDS SAVED: groomName, brideName, weddingDate, ceremonyTime,
-//               inviteDeadline, venueName, venueAddress, receptionName, receptionAddress
+//               inviteDeadline, venueName, venueAddress, venueURL,
+//               receptionName, receptionAddress, receptionURL,
+//               plus optional Google Place fields (placeId/lat/lng)
 //
 // LAYOUT NOTE: this follows the same sidebar + main-content shell as
 // Dashboard.jsx. Two things below are reconstructed from the migration plan
@@ -29,6 +31,8 @@ import { Save, CheckCircle2, Loader2, Menu, X } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { getInvitationByUser, saveInvitation } from "@/lib/firestore";
 import Sidebar from "@/components/Sidebar";
+import GoogleMapEmbed, { buildMapQuery } from "@/components/GoogleMapEmbed";
+import PlaceAutocompleteInput from "@/components/PlaceAutocompleteInput";
 
 // ── Reusable labeled form field wrapper ───────────────────────────────────────
 const FormField = ({ label, children, error, helper }) => (
@@ -49,9 +53,17 @@ const EMPTY = {
   brideName: { first: "", middle: "", last: "" },
   ceremonyTime: "",
   venueName: "",
+  venueAddress: "",
   venueURL: "",
+  venuePlaceId: "",
+  venueLat: null,
+  venueLng: null,
   receptionName: "",
+  receptionAddress: "",
   receptionURL: "",
+  receptionPlaceId: "",
+  receptionLat: null,
+  receptionLng: null,
   weddingDate: "",
   inviteDeadline: "",
 };
@@ -96,9 +108,19 @@ const WeddingDetails = () => {
             brideName: invitation.brideName ?? EMPTY.brideName,
             ceremonyTime: invitation.ceremonyTime ?? "",
             venueName: invitation.venueName ?? "",
+            // Older docs may only have a pasted URL — seed the input with it
+            // so nothing the host saved is hidden or lost.
+            venueAddress: invitation.venueAddress ?? invitation.venueURL ?? "",
             venueURL: invitation.venueURL ?? "",
+            venuePlaceId: invitation.venuePlaceId ?? "",
+            venueLat: invitation.venueLat ?? null,
+            venueLng: invitation.venueLng ?? null,
             receptionName: invitation.receptionName ?? "",
+            receptionAddress: invitation.receptionAddress ?? invitation.receptionURL ?? "",
             receptionURL: invitation.receptionURL ?? "",
+            receptionPlaceId: invitation.receptionPlaceId ?? "",
+            receptionLat: invitation.receptionLat ?? null,
+            receptionLng: invitation.receptionLng ?? null,
             weddingDate: invitation.weddingDate ?? "",
             inviteDeadline: invitation.inviteDeadline ?? "",
           });
@@ -115,6 +137,21 @@ const WeddingDetails = () => {
 
   // ── Update a top-level string field ────────────────────────────────────────
   const set = (field, value) => setForm(prev => ({ ...prev, [field]: value }));
+
+  // ── Google Places selection — `which` is "venue" or "reception" ────────────
+  // Writes formattedAddress to *Address, the place's googleMapsURI to *URL,
+  // plus placeId/coords. The name field is only filled if still empty.
+  const handlePlaceSelect = (which) => (place) => {
+    setForm(prev => ({
+      ...prev,
+      [`${which}Name`]: prev[`${which}Name`] || place.name,
+      [`${which}Address`]: place.address,
+      [`${which}URL`]: place.url || prev[`${which}URL`],
+      [`${which}PlaceId`]: place.placeId,
+      [`${which}Lat`]: place.lat,
+      [`${which}Lng`]: place.lng,
+    }));
+  };
 
   // ── Update a nested name field ──────────────────────────────────────────────
   const setName = (partner, part, value) =>
@@ -379,14 +416,23 @@ const WeddingDetails = () => {
                 />
               </FormField>
 
-              <FormField label="Wedding Venue Google Maps Link" error={fieldErrors.venueURL}>
-                <Input
-                  placeholder="https://google.com/..."
-                  value={form.venueURL}
-                  onChange={e => set("venueURL", e.target.value)}
+              <FormField label="Wedding Venue Location" error={fieldErrors.venueAddress}>
+                <PlaceAutocompleteInput
+                  placeholder="Start typing a venue or address…"
+                  aria-label="Wedding venue location"
+                  value={form.venueAddress}
+                  onChange={v => set("venueAddress", v)}
+                  onPlaceSelect={handlePlaceSelect("venue")}
                   className={inputCls}
                 />
               </FormField>
+
+              <GoogleMapEmbed
+                query={buildMapQuery(form.venueName, form.venueAddress)}
+                linkUrl={form.venueURL || undefined}
+                showLink
+              />
+
               <FormField label="Reception Venue Name" error={fieldErrors.receptionName}>
                 <Input
                   placeholder="The Grand Pavilion"
@@ -396,14 +442,23 @@ const WeddingDetails = () => {
                 />
               </FormField>
 
-              <FormField label="Reception Venue Google Maps Link" error={fieldErrors.receptionURL}>
-                <Input
-                  placeholder="https://google.com/..."
-                  value={form.receptionURL}
-                  onChange={e => set("receptionURL", e.target.value)}
+              <FormField label="Reception Location" error={fieldErrors.receptionAddress}>
+                <PlaceAutocompleteInput
+                  placeholder="Start typing a venue or address…"
+                  aria-label="Reception location"
+                  value={form.receptionAddress}
+                  onChange={v => set("receptionAddress", v)}
+                  onPlaceSelect={handlePlaceSelect("reception")}
                   className={inputCls}
                 />
               </FormField>
+
+              <GoogleMapEmbed
+                query={buildMapQuery(form.receptionName, form.receptionAddress)}
+                linkUrl={form.receptionURL || undefined}
+                showLink
+                title="Reception map"
+              />
             </section>
               <div className="flex items-center gap-3">
                 {saveButton}
