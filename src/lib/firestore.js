@@ -36,7 +36,8 @@ where,
 // filter condition for a query
 orderBy,
 // sort order for a query
-serverTimestamp // Firebase server time (more reliable than client time)
+serverTimestamp, // Firebase server time (more reliable than client time)
+runTransaction // atomic read-modify-write — used for the embedded registries array
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
@@ -339,4 +340,88 @@ export const getRSVPByInvitee = async inviteeId => {
     rsvpId: d.id,
     ...d.data()
   };
+};
+
+// ══════════════════════════════════════════════════════════════════════════════
+// REGISTRIES — Gift Registry Functions
+// ══════════════════════════════════════════════════════════════════════════════
+// Registries are NOT their own collection. They live inside the wedding's
+// invitation document as an embedded array, per the team's ERD:
+//
+//   invitations/{weddingId}.registries = [ { id, name, url, isVisible }, ... ]
+//   invitations/{weddingId}.registryMessage = string
+//
+// Add/edit/delete/toggle all do a read-modify-write on that array inside a
+// Firestore transaction so two quick edits can't overwrite each other, and so
+// no other field on the invitation document is touched.
+// crypto.randomUUID() gives each entry a stable unique id (same generator
+// addInvitee uses for RSVP tokens) — the array index is never the id.
+
+/**
+ * registriesRef / readRegistries
+ * Internal: fetch the invitation doc inside a transaction and return the array.
+ */
+const readRegistries = async (transaction, invRef) => {
+  const snap = await transaction.get(invRef);
+  if (!snap.exists()) throw new Error("Wedding not found.");
+  return snap.data().registries || [];
+};
+
+/**
+ * addRegistry
+ * Appends a new registry entry to the invitation's `registries` array.
+ * Returns the updated array so callers can refresh UI without a second query.
+ */
+export const addRegistry = async (weddingId, { name, url, isVisible = true }) => {
+  const invRef = doc(db, "invitations", weddingId);
+  return runTransaction(db, async transaction => {
+    const registries = await readRegistries(transaction, invRef);
+    const updated = [...registries, { id: crypto.randomUUID(), name, url, isVisible }];
+    transaction.update(invRef, { registries: updated });
+    return updated;
+  });
+};
+
+/**
+ * updateRegistry
+ * Updates allowed fields (name, url, isVisible) on a single registry entry
+ * inside the invitation's `registries` array. Other entries are untouched.
+ * Returns the updated array.
+ */
+export const updateRegistry = async (weddingId, registryId, updates) => {
+  const invRef = doc(db, "invitations", weddingId);
+  return runTransaction(db, async transaction => {
+    const registries = await readRegistries(transaction, invRef);
+    if (!registries.some(r => r.id === registryId)) {
+      throw new Error("Registry not found.");
+    }
+    const updated = registries.map(r =>
+      r.id === registryId
+        ? {
+            ...r,
+            ...(updates.name !== undefined && { name: updates.name }),
+            ...(updates.url !== undefined && { url: updates.url }),
+            ...(updates.isVisible !== undefined && { isVisible: updates.isVisible }),
+          }
+        : r
+    );
+    transaction.update(invRef, { registries: updated });
+    return updated;
+  });
+};
+
+/**
+ * deleteRegistry
+ * Removes a single registry entry from the invitation's `registries` array.
+ * Does not touch the wedding's invitee or rsvp data.
+ * Returns the updated array.
+ */
+export const deleteRegistry = async (weddingId, registryId) => {
+  const invRef = doc(db, "invitations", weddingId);
+  return runTransaction(db, async transaction => {
+    const registries = await readRegistries(transaction, invRef);
+    const updated = registries.filter(r => r.id !== registryId);
+    transaction.update(invRef, { registries: updated });
+    return updated;
+  });
 };
