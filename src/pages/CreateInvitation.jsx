@@ -663,9 +663,9 @@ const PhonePreview = ({ invitation, settings }) => {
     <div className="relative w-[300px] h-[600px] rounded-[3rem] p-3 shadow-2xl border-4 flex-shrink-0"
       style={{ backgroundColor: "#1a1c19", borderColor: "#2f312e" }}>
 
-      {/* iPhone notch */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-6 rounded-b-2xl z-20"
-        style={{ backgroundColor: "#1a1c19" }} />
+      {/* Speaker slit — subtle centered bar in the top bezel */}
+      <div className="absolute top-1 left-1/2 -translate-x-1/2 w-12 h-1 rounded-full z-20"
+        style={{ backgroundColor: "#3a3d3a" }} />
 
       {/* Screen */}
       <div className="w-full h-full rounded-[2.5rem] overflow-hidden"
