@@ -19,6 +19,10 @@ Keiran Indraanei:
 - Created the Forgot Password page and password reset
   interface
 - Integrated the existing Firebase password reset functionality into the Forgot Password workflow
+- Created the initial AI Wedding Assistant chat interface
+- Added the Wedding Assistant as a protected application route
+- Implemented section selection and a guided Wedding Details conversation flow
+- Added message input, conversation history, and completion response functionality
 
 Christopher Nguyen:
 
