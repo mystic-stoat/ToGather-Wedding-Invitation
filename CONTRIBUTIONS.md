@@ -13,12 +13,18 @@ Colten Mikulastik:
 - emailer testing suite created
 - Chore: conformed wedding details to new prototype
 - Code Quailty: moved our Sidebar into component, to be called centrally
+- Wedding details: moved database entries and worked with formalizing google maps embed
+- AI-Chat Interface: integrated more into project, and worked with the position and layout of components
 
 Keiran Indraanei:
 
 - Created the Forgot Password page and password reset
   interface
 - Integrated the existing Firebase password reset functionality into the Forgot Password workflow
+- Created the initial AI Wedding Assistant chat interface
+- Added the Wedding Assistant as a protected application route
+- Implemented section selection and a guided Wedding Details conversation flow
+- Added message input, conversation history, and completion response functionality
 
 Christopher Nguyen:
 
