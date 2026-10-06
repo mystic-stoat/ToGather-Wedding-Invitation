@@ -56,7 +56,6 @@ const Sidebar = ({ invitation, onLogout }) => {
             <NavItem to="/wedding-details"    icon={Heart}        label="Wedding Details"   active={location.pathname === "/wedding-details"} />
             <NavItem to="/guest-list"         icon={Users}        label="Guest List"        active={location.pathname === "/guest-list"}/>
             <NavItem to="/gift-registry"      icon={Gift}         label="Registry"          active={location.pathname === "/gift-registry"}/>
-            <NavItem to="/dashboard"          icon={MapPin}       label="Travel & Stay"     active={location.pathname === "/travel-and-stay"}/>
             <NavItem to="/wedding-assistant"  icon={MapPin}       label="Wedding Assistant" active={location.pathname === "/wedding-assistant"}/>
           </div>
         </div>
