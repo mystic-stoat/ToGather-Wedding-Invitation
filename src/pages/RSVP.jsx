@@ -22,13 +22,6 @@ import { useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import Footer from "@/components/Footer";
 import {
   Heart,
@@ -44,6 +37,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { submitRSVP } from "@/lib/firestore";
+import { normalizeMealOptions } from "@/lib/rsvpOptions";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
@@ -66,6 +60,46 @@ const StepIndicator = ({ current, total }) => (
 
 const inputCls =
   "h-12 border-border/60 rounded-xl transition-all focus:ring-2 focus:ring-primary/20 focus:border-primary";
+
+// Empty plus-one record — same shape that is saved to Firestore
+const emptyPlusOne = () => ({ name: "", mealId: "", meal: "", dietaryRestrictions: "" });
+
+// ── Meal picker — host-configured options, one choice, never preselected ────
+// Rendered only when the host configured at least one meal option.
+const MealPicker = ({ options, value, onSelect, error, compact = false }) => (
+  <div className="space-y-2" role="radiogroup">
+    <div className={`grid gap-2 ${compact ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1"}`}>
+      {options.map((opt) => {
+        const selected = value === opt.id;
+        return (
+          <button
+            key={opt.id}
+            type="button"
+            role="radio"
+            aria-checked={selected}
+            onClick={() => onSelect(opt)}
+            className={`relative rounded-xl border-2 px-4 py-3 text-left transition-all duration-150 ${
+              selected
+                ? "border-primary bg-primary/8 shadow-sm"
+                : "border-border/60 bg-card hover:border-primary/40"
+            } ${error && !selected ? "border-destructive/60" : ""}`}
+          >
+            <p className="pr-6 text-sm font-semibold text-foreground">{opt.name}</p>
+            {opt.description && (
+              <p className="mt-0.5 text-xs text-muted-foreground">{opt.description}</p>
+            )}
+            {selected && (
+              <span className="absolute right-3 top-3 flex h-4 w-4 items-center justify-center rounded-full bg-primary">
+                <CheckCircle2 size={10} className="text-primary-foreground" />
+              </span>
+            )}
+          </button>
+        );
+      })}
+    </div>
+    {error && <p className="text-xs text-destructive">{error}</p>}
+  </div>
+);
 
 // ── Invitation Header — shows real wedding details from Firestore ────────────
 const InvitationHeader = ({ invitation }) => {
@@ -220,7 +254,7 @@ const StepAttendance = ({ value, onChange }) => (
 );
 
 // ── Step 2 — Your Info ────────────────────────────────────────────────────────
-const StepYourInfo = ({ data, onChange, errors, isAttending }) => (
+const StepYourInfo = ({ data, onChange, errors, isAttending, mealOptions }) => (
   <div className="animate-fade-up space-y-6">
     <div className="space-y-1 text-center">
       <h2 className="font-heading text-2xl font-semibold italic text-foreground">
@@ -281,21 +315,33 @@ const StepYourInfo = ({ data, onChange, errors, isAttending }) => (
         </p>
       </div>
 
+      {isAttending && mealOptions.length > 0 && (
+        <div className="space-y-1.5">
+          <Label className="text-sm font-medium text-muted-foreground">Meal *</Label>
+          <MealPicker
+            options={mealOptions}
+            value={data.mealId}
+            onSelect={(opt) => {
+              onChange("mealId", opt.id);
+              onChange("meal", opt.name);
+            }}
+            error={errors.mealId}
+          />
+        </div>
+      )}
+
       {isAttending && (
         <div className="space-y-1.5">
           <Label className="text-sm font-medium text-muted-foreground">
-            Dietary Restrictions
+            Dietary Restrictions / Allergies
             <span className="font-normal text-muted-foreground/60"> (optional)</span>
           </Label>
           <Input
-            placeholder="Gluten-free, nut allergy, chicken, etc."
+            placeholder="e.g. Gluten-free, peanut allergy"
             value={data.dietaryNotes}
             onChange={(e) => onChange("dietaryNotes", e.target.value)}
             className={inputCls}
           />
-          <p className="text-xs text-muted-foreground">
-            Include your meal preference and any dietary needs.
-          </p>
         </div>
       )}
     </div>
@@ -303,23 +349,23 @@ const StepYourInfo = ({ data, onChange, errors, isAttending }) => (
 );
 
 // ── Step 3 — Plus Ones ────────────────────────────────────────────────────────
-const StepPlusOnes = ({ data, onChange, maxPlusOnes, mealOptions }) => {
+const StepPlusOnes = ({ data, onChange, maxPlusOnes, mealOptions, errors, onClearError }) => {
   const limit = maxPlusOnes ?? 3;
 
   const updatePlusOneCount = (count) => {
     const current = data.plusOnes;
     const updated = Array.from({ length: count }, (_, i) => ({
-      name: current[i]?.name ?? "",
-      meal: current[i]?.meal ?? "",
+      ...emptyPlusOne(),
+      ...(current[i] || {}),
     }));
 
     onChange("plusOneCount", count);
     onChange("plusOnes", updated);
   };
 
-  const updatePlusOne = (index, field, value) => {
+  const updatePlusOne = (index, changes) => {
     const updated = data.plusOnes.map((p, i) =>
-      i === index ? { ...p, [field]: value } : p
+      i === index ? { ...p, ...changes } : p
     );
     onChange("plusOnes", updated);
   };
@@ -371,7 +417,7 @@ const StepPlusOnes = ({ data, onChange, maxPlusOnes, mealOptions }) => {
                 <p className="text-sm font-semibold text-foreground">Guest {i + 1}</p>
               </div>
 
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="space-y-3">
                 <div className="space-y-1.5">
                   <Label className="text-xs font-medium text-muted-foreground">
                     Full Name
@@ -379,30 +425,40 @@ const StepPlusOnes = ({ data, onChange, maxPlusOnes, mealOptions }) => {
                   <Input
                     placeholder="Guest name"
                     value={guest.name}
-                    onChange={(e) => updatePlusOne(i, "name", e.target.value)}
+                    onChange={(e) => updatePlusOne(i, { name: e.target.value })}
                     className={inputCls}
                   />
                 </div>
 
+                {mealOptions.length > 0 && (
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-muted-foreground">
+                      Meal *
+                    </Label>
+                    <MealPicker
+                      compact
+                      options={mealOptions}
+                      value={guest.mealId}
+                      onSelect={(opt) => {
+                        updatePlusOne(i, { mealId: opt.id, meal: opt.name });
+                        onClearError(`plusOne_${i}_meal`);
+                      }}
+                      error={errors[`plusOne_${i}_meal`]}
+                    />
+                  </div>
+                )}
+
                 <div className="space-y-1.5">
                   <Label className="text-xs font-medium text-muted-foreground">
-                    Meal Preference
+                    Dietary Restrictions / Allergies
+                    <span className="font-normal text-muted-foreground/60"> (optional)</span>
                   </Label>
-                  <Select
-                    value={guest.meal}
-                    onValueChange={(v) => updatePlusOne(i, "meal", v)}
-                  >
-                    <SelectTrigger className={inputCls}>
-                      <SelectValue placeholder="Select meal..." />
-                    </SelectTrigger>
-                    <SelectContent className="rounded-xl">
-                      {mealOptions.map((meal) => (
-                        <SelectItem key={meal} value={meal.toLowerCase()}>
-                          {meal}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Input
+                    placeholder="e.g. Gluten-free, peanut allergy"
+                    value={guest.dietaryRestrictions}
+                    onChange={(e) => updatePlusOne(i, { dietaryRestrictions: e.target.value })}
+                    className={inputCls}
+                  />
                 </div>
               </div>
             </div>
@@ -545,6 +601,7 @@ const RSVP = () => {
 
   const [step, setStep] = useState(0);
   const [submitted, setSubmitted] = useState(false);
+  const [submittedFirstName, setSubmittedFirstName] = useState(""); // name actually saved
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [errors, setErrors] = useState({});
@@ -557,13 +614,15 @@ const RSVP = () => {
     plusOneCount: 0,
     plusOnes: [],
     dietaryNotes: "",
+    mealId: "", // main guest meal option id — never preselected
+    meal: "",   // main guest meal name snapshot
   });
 
   const isAttending = form.attendance === "attending";
 
-  const mealOptions = invitation?.mealOptions?.length
-    ? invitation.mealOptions
-    : ["Chicken", "Fish", "Beef", "Vegetarian"];
+  // Host-configured meal options only — no hardcoded fallback.
+  // Empty array = no meal selection shown or required.
+  const mealOptions = normalizeMealOptions(invitation?.mealOptions);
 
   useEffect(() => {
     if (!token) {
@@ -599,6 +658,17 @@ const RSVP = () => {
 
         setInvitee(inviteeData);
 
+        // Pre-fill name/email from the invitee record so the guest only edits
+        // what changed. guestName is one string: first word → First Name,
+        // the rest → Last Name. Anything the guest already typed is kept.
+        const nameParts = (inviteeData.guestName || "").trim().split(/\s+/).filter(Boolean);
+        setForm((prev) => ({
+          ...prev,
+          firstName: prev.firstName || nameParts[0] || "",
+          lastName: prev.lastName || nameParts.slice(1).join(" "),
+          email: prev.email || (typeof inviteeData.email === "string" ? inviteeData.email : ""),
+        }));
+
         if (inviteeData.weddingId) {
           const invRef = doc(db, "invitations", inviteeData.weddingId);
           const invSnap = await getDoc(invRef);
@@ -624,22 +694,51 @@ const RSVP = () => {
     });
   };
 
-  const validateStep = () => {
+  const clearError = (key) => {
+    setErrors((prev) => {
+      if (!(key in prev)) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  };
+
+  // A selected meal only counts if it is still one of the host's options.
+  const isValidMealId = (id) => Boolean(id) && mealOptions.some((m) => m.id === id);
+
+  // Errors for a single step (0 = attendance, 1 = your info, 2 = plus ones)
+  const getStepErrors = (stepIndex) => {
     const errs = {};
 
-    if (step === 0 && !form.attendance) {
+    if (stepIndex === 0 && !form.attendance) {
       errs.attendance = "Please select an option.";
     }
 
-    if (step === 1) {
+    if (stepIndex === 1) {
       if (!form.firstName.trim()) errs.firstName = "First name is required.";
       if (!form.lastName.trim()) errs.lastName = "Last name is required.";
       if (!form.email.trim()) errs.email = "Email is required.";
       else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
         errs.email = "Enter a valid email.";
       }
+      if (isAttending && mealOptions.length > 0 && !isValidMealId(form.mealId)) {
+        errs.mealId = "Please select your meal.";
+      }
     }
 
+    if (stepIndex === 2 && isAttending && mealOptions.length > 0) {
+      form.plusOnes.slice(0, form.plusOneCount).forEach((p, i) => {
+        if (!isValidMealId(p.mealId)) {
+          errs[`plusOne_${i}_meal`] = "Please select a meal for this guest.";
+        }
+      });
+    }
+
+    return errs;
+  };
+
+  const validateStep = () => {
+    const errs = getStepErrors(step);
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -654,18 +753,55 @@ const RSVP = () => {
   };
 
   const handleSubmit = async () => {
+    // Re-check every step before writing (the last step has no "Continue").
+    for (const s of [0, 1, 2]) {
+      const errs = getStepErrors(s);
+      if (Object.keys(errs).length > 0) {
+        setErrors(errs);
+        setStep(s);
+        return;
+      }
+    }
+
     setSubmitting(true);
     setSubmitError("");
 
+    // Name/email are synced back to the invitee for both accept and decline.
+    const guestName = `${form.firstName.trim()} ${form.lastName.trim()}`.trim();
+    const identity = { guestName, email: form.email.trim() };
+
+    // Declining never sends meal / plus-one details, even if the form still
+    // holds values from before the guest switched to "decline".
+    const payload = isAttending
+      ? {
+          ...identity,
+          attending: true,
+          dietaryRestrictions: form.dietaryNotes.trim(),
+          mealId: mealOptions.length > 0 ? form.mealId : "",
+          meal: mealOptions.length > 0 ? form.meal : "",
+          guestCount: form.plusOneCount + 1,
+          plusOnes: form.plusOnes.slice(0, form.plusOneCount).map((p) => ({
+            name: p.name.trim(),
+            mealId: mealOptions.length > 0 ? p.mealId : "",
+            meal: mealOptions.length > 0 ? p.meal : "",
+            dietaryRestrictions: p.dietaryRestrictions.trim(),
+          })),
+        }
+      : {
+          ...identity,
+          attending: false,
+          dietaryRestrictions: "",
+          mealId: "",
+          meal: "",
+          guestCount: 0,
+          plusOnes: [],
+        };
+
     try {
-      const result = await submitRSVP(token, {
-        attending: isAttending,
-        dietaryRestrictions: form.dietaryNotes,
-        guestCount: form.plusOneCount + 1,
-        plusOnes: form.plusOnes,
-      });
+      const result = await submitRSVP(token, payload);
 
       if (result.success) {
+        setSubmittedFirstName(form.firstName.trim()); // name shown on confirmation
         setSubmitted(true);
       } else {
         setSubmitError(result.error || "Submission failed. Please try again.");
@@ -739,7 +875,7 @@ const RSVP = () => {
             {submitted ? (
               <ConfirmationScreen
                 isAttending={isAttending}
-                name={form.firstName}
+                name={submittedFirstName}
                 invitation={invitation}
                 coupleNames={coupleNames}
               />
@@ -760,6 +896,7 @@ const RSVP = () => {
                     onChange={updateForm}
                     errors={errors}
                     isAttending={isAttending}
+                    mealOptions={mealOptions}
                   />
                 )}
 
@@ -771,6 +908,8 @@ const RSVP = () => {
                         onChange={updateForm}
                         maxPlusOnes={invitee?.plusOneLimit ?? 0}
                         mealOptions={mealOptions}
+                        errors={errors}
+                        onClearError={clearError}
                       />
                     ) : (
                       <div className="animate-fade-up space-y-6">

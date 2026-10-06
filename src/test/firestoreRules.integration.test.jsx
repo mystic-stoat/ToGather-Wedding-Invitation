@@ -821,7 +821,91 @@ describe('invitee RSVP security', () => {
   });
 
 
-  it('rejects a guest from changing guestName', async () => {
+  // A guest may correct their own name/email, but ONLY as part of the
+  // one-time RSVP submission (tokenUsed false -> true) and with valid values.
+  const rsvpBase = {
+    attending: true,
+    guestCount: 1,
+    dietaryRestrictions: '',
+    plusOnes: [],
+    rsvpStatus: 'Accepted',
+    tokenUsed: true,
+  };
+
+  it('allows a guest to update guestName and email during their RSVP', async () => {
+    await seedInvitees();
+
+    const anon = testEnv.unauthenticatedContext();
+
+    await assertSucceeds(
+      updateDoc(
+        doc(anon.firestore(), 'invitee/invitee-alice'),
+        {
+          ...rsvpBase,
+          guestName: 'Johnny Doe',
+          email: 'johnny@example.com',
+          respondedAt: new Date(),
+        }
+      )
+    );
+  });
+
+
+  it('rejects a guest RSVP that sets an empty guestName', async () => {
+    await seedInvitees();
+
+    const anon = testEnv.unauthenticatedContext();
+
+    await assertFails(
+      updateDoc(
+        doc(anon.firestore(), 'invitee/invitee-alice'),
+        {
+          ...rsvpBase,
+          guestName: '',
+          respondedAt: new Date(),
+        }
+      )
+    );
+  });
+
+
+  it('rejects a guest RSVP that sets a non-string guestName', async () => {
+    await seedInvitees();
+
+    const anon = testEnv.unauthenticatedContext();
+
+    await assertFails(
+      updateDoc(
+        doc(anon.firestore(), 'invitee/invitee-alice'),
+        {
+          ...rsvpBase,
+          guestName: 12345,
+          respondedAt: new Date(),
+        }
+      )
+    );
+  });
+
+
+  it('rejects a guest RSVP that sets an invalid email', async () => {
+    await seedInvitees();
+
+    const anon = testEnv.unauthenticatedContext();
+
+    await assertFails(
+      updateDoc(
+        doc(anon.firestore(), 'invitee/invitee-alice'),
+        {
+          ...rsvpBase,
+          email: 'not-an-email',
+          respondedAt: new Date(),
+        }
+      )
+    );
+  });
+
+
+  it('rejects a guest changing guestName/email outside an RSVP (no tokenUsed flip)', async () => {
     await seedInvitees();
 
     const anon = testEnv.unauthenticatedContext();
@@ -831,21 +915,24 @@ describe('invitee RSVP security', () => {
         doc(anon.firestore(), 'invitee/invitee-alice'),
         {
           guestName: 'HACKED NAME',
-          attending: true,
-          guestCount: 1,
-          dietaryRestrictions: '',
-          plusOnes: [],
-          rsvpStatus: 'Accepted',
-          tokenUsed: true,
-          respondedAt: new Date(),
+          email: 'attacker@example.com',
         }
       )
     );
   });
 
 
-  it('rejects a guest from changing email', async () => {
-    await seedInvitees();
+  it('rejects a guest changing guestName/email after the token was used', async () => {
+    await seed(async (context) => {
+      await setDoc(
+        doc(context.firestore(), 'invitations/wedding-alice'),
+        invitationAlice
+      );
+      await setDoc(
+        doc(context.firestore(), 'invitee/invitee-alice'),
+        { ...inviteeAlice, tokenUsed: true, rsvpStatus: 'Accepted', attending: true }
+      );
+    });
 
     const anon = testEnv.unauthenticatedContext();
 
@@ -853,12 +940,8 @@ describe('invitee RSVP security', () => {
       updateDoc(
         doc(anon.firestore(), 'invitee/invitee-alice'),
         {
+          guestName: 'HACKED NAME',
           email: 'attacker@example.com',
-          attending: true,
-          guestCount: 1,
-          dietaryRestrictions: '',
-          plusOnes: [],
-          rsvpStatus: 'Accepted',
           tokenUsed: true,
           respondedAt: new Date(),
         }
@@ -951,6 +1034,292 @@ describe('invitee RSVP security', () => {
         doc(anon.firestore(), 'invitee/invitee-alice'),
         {
           guestName: 'Hacked',
+        }
+      )
+    );
+  });
+});
+
+
+/*
+ * ============================================================
+ * RSVP MEAL / DIETARY FIELDS
+ * ============================================================
+ *
+ * Main guest:  mealId + meal (name snapshot) + dietaryRestrictions
+ * Plus-ones:   [{ name, mealId, meal, dietaryRestrictions }]
+ */
+
+describe('invitee RSVP meal fields', () => {
+
+  it('allows an RSVP with a main-guest meal and full plus-one details', async () => {
+    await seedInvitees();
+
+    const anon = testEnv.unauthenticatedContext();
+
+    await assertSucceeds(
+      updateDoc(
+        doc(anon.firestore(), 'invitee/invitee-alice'),
+        {
+          attending: true,
+          guestCount: 2,
+          dietaryRestrictions: 'Peanut allergy',
+          mealId: 'meal-steak',
+          meal: 'Steak',
+          plusOnes: [
+            {
+              name: 'Jane Doe',
+              mealId: 'meal-pasta',
+              meal: 'Vegan Pasta',
+              dietaryRestrictions: 'Gluten-free',
+            },
+          ],
+          rsvpStatus: 'Accepted',
+          tokenUsed: true,
+          respondedAt: new Date(),
+        }
+      )
+    );
+  });
+
+
+  it('allows an RSVP with empty meal fields (wedding has no meal options)', async () => {
+    await seedInvitees();
+
+    const anon = testEnv.unauthenticatedContext();
+
+    await assertSucceeds(
+      updateDoc(
+        doc(anon.firestore(), 'invitee/invitee-alice'),
+        {
+          attending: true,
+          guestCount: 1,
+          dietaryRestrictions: '',
+          mealId: '',
+          meal: '',
+          plusOnes: [],
+          rsvpStatus: 'Accepted',
+          tokenUsed: true,
+          respondedAt: new Date(),
+        }
+      )
+    );
+  });
+
+
+  it('allows a declined RSVP with guestCount 0, no meal and no plus-ones', async () => {
+    await seedInvitees();
+
+    const anon = testEnv.unauthenticatedContext();
+
+    await assertSucceeds(
+      updateDoc(
+        doc(anon.firestore(), 'invitee/invitee-alice'),
+        {
+          attending: false,
+          guestCount: 0,
+          dietaryRestrictions: '',
+          mealId: '',
+          meal: '',
+          plusOnes: [],
+          rsvpStatus: 'Declined',
+          tokenUsed: true,
+          respondedAt: new Date(),
+        }
+      )
+    );
+  });
+
+
+  it('rejects an RSVP where mealId is not a string', async () => {
+    await seedInvitees();
+
+    const anon = testEnv.unauthenticatedContext();
+
+    await assertFails(
+      updateDoc(
+        doc(anon.firestore(), 'invitee/invitee-alice'),
+        {
+          attending: true,
+          guestCount: 1,
+          dietaryRestrictions: '',
+          mealId: 42,
+          meal: 'Steak',
+          plusOnes: [],
+          rsvpStatus: 'Accepted',
+          tokenUsed: true,
+          respondedAt: new Date(),
+        }
+      )
+    );
+  });
+
+
+  it('rejects an RSVP where meal is not a string', async () => {
+    await seedInvitees();
+
+    const anon = testEnv.unauthenticatedContext();
+
+    await assertFails(
+      updateDoc(
+        doc(anon.firestore(), 'invitee/invitee-alice'),
+        {
+          attending: true,
+          guestCount: 1,
+          dietaryRestrictions: '',
+          mealId: 'meal-steak',
+          meal: { name: 'Steak' },
+          plusOnes: [],
+          rsvpStatus: 'Accepted',
+          tokenUsed: true,
+          respondedAt: new Date(),
+        }
+      )
+    );
+  });
+
+
+  it('rejects a guest RSVP that changes childrenPolicyOverride', async () => {
+    await seedInvitees();
+
+    const anon = testEnv.unauthenticatedContext();
+
+    await assertFails(
+      updateDoc(
+        doc(anon.firestore(), 'invitee/invitee-alice'),
+        {
+          attending: true,
+          guestCount: 1,
+          dietaryRestrictions: '',
+          mealId: '',
+          meal: '',
+          plusOnes: [],
+          rsvpStatus: 'Accepted',
+          tokenUsed: true,
+          respondedAt: new Date(),
+          childrenPolicyOverride: 'allowed',
+        }
+      )
+    );
+  });
+
+
+  it('rejects reusing a used token even with valid meal fields', async () => {
+    await seed(async (context) => {
+      await setDoc(
+        doc(context.firestore(), 'invitations/wedding-alice'),
+        invitationAlice
+      );
+      await setDoc(
+        doc(context.firestore(), 'invitee/invitee-alice'),
+        { ...inviteeAlice, tokenUsed: true, rsvpStatus: 'Accepted', attending: true }
+      );
+    });
+
+    const anon = testEnv.unauthenticatedContext();
+
+    await assertFails(
+      updateDoc(
+        doc(anon.firestore(), 'invitee/invitee-alice'),
+        {
+          mealId: 'meal-steak',
+          meal: 'Steak',
+          tokenUsed: true,
+          respondedAt: new Date(),
+        }
+      )
+    );
+  });
+});
+
+
+/*
+ * ============================================================
+ * CHILDREN POLICY + MEAL OPTIONS (host-managed)
+ * ============================================================
+ */
+
+describe('children policy and meal options', () => {
+
+  it('allows the wedding owner to set childrenPolicy and mealOptions', async () => {
+    await seedInvitees();
+
+    const alice = testEnv.authenticatedContext('alice-uid');
+
+    await assertSucceeds(
+      updateDoc(
+        doc(alice.firestore(), 'invitations/wedding-alice'),
+        {
+          childrenPolicy: 'adults_only',
+          mealOptions: [
+            { id: 'meal-steak', name: 'Steak', description: 'Sirloin with mashed potatoes' },
+          ],
+        }
+      )
+    );
+  });
+
+
+  it('rejects another user from changing childrenPolicy', async () => {
+    await seedInvitees();
+
+    const bob = testEnv.authenticatedContext('bob-uid');
+
+    await assertFails(
+      updateDoc(
+        doc(bob.firestore(), 'invitations/wedding-alice'),
+        {
+          childrenPolicy: 'allowed',
+        }
+      )
+    );
+  });
+
+
+  it('allows the wedding host to create a guest with childrenPolicyOverride', async () => {
+    await seedInvitees();
+
+    const alice = testEnv.authenticatedContext('alice-uid');
+
+    await assertSucceeds(
+      setDoc(
+        doc(alice.firestore(), 'invitee/invitee-new'),
+        {
+          ...inviteeAlice,
+          token: 'new-token',
+          childrenPolicyOverride: 'allowed',
+        }
+      )
+    );
+  });
+
+
+  it('allows the wedding host to update a guest childrenPolicyOverride', async () => {
+    await seedInvitees();
+
+    const alice = testEnv.authenticatedContext('alice-uid');
+
+    await assertSucceeds(
+      updateDoc(
+        doc(alice.firestore(), 'invitee/invitee-alice'),
+        {
+          childrenPolicyOverride: 'adults_only',
+        }
+      )
+    );
+  });
+
+
+  it('rejects another wedding host from changing a guest childrenPolicyOverride', async () => {
+    await seedInvitees();
+
+    const bob = testEnv.authenticatedContext('bob-uid');
+
+    await assertFails(
+      updateDoc(
+        doc(bob.firestore(), 'invitee/invitee-alice'),
+        {
+          childrenPolicyOverride: 'allowed',
         }
       )
     );

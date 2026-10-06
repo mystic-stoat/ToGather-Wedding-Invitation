@@ -28,7 +28,7 @@ import {
   Heart, Lock, Palette, Type, Music, Sparkles, LayoutDashboard,
   BookOpen, Calendar, Image, MapPin, BookHeart, CheckSquare,
   BookMarked, ArrowLeft, Save, Globe, Upload, ChevronRight,
-  Eye, Volume2, Info, Loader2,
+  Eye, Volume2, Info, Loader2, Plus, Trash2, Utensils,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,6 +36,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthContext";
 import { getInvitationByUser, saveInvitation } from "@/lib/firestore";
 import GoogleMapEmbed, { buildMapQuery, mapLinkUrl } from "@/components/GoogleMapEmbed";
+import {
+  normalizeMealOptions,
+  cleanMealOptionsForSave,
+  createMealOption,
+} from "@/lib/rsvpOptions";
 
 // ── Stitch-inspired color palette for the invitation canvas ───────────────────
 // This describes the actual wedding invitation artifact rendered in
@@ -398,6 +403,106 @@ const GreetingsPanel = ({ settings, onChange }) => (
     </div>
   </div>
 );
+
+// ── Center Panel: RSVP — host-configured meal options ────────────────────────
+// Stored on the invitation doc as mealOptions: [{ id, name, description }].
+// Zero options is valid: guests then aren't asked to choose a meal.
+// Rows with an empty name are dropped when the invitation is saved.
+const RsvpPanel = ({ settings, onChange }) => {
+  const options = settings.mealOptions || [];
+
+  const updateOption = (id, field, value) =>
+    onChange("mealOptions", options.map(o => (o.id === id ? { ...o, [field]: value } : o)));
+
+  const addOption = () => onChange("mealOptions", [...options, createMealOption()]);
+
+  const removeOption = (id) => onChange("mealOptions", options.filter(o => o.id !== id));
+
+  const fieldStyle = {
+    borderColor: BUILDER_UI.outline,
+    backgroundColor: BUILDER_UI.surfaceContainer,
+    color: BUILDER_UI.onSurface,
+  };
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h3 className="text-xs font-bold tracking-widest uppercase mb-1"
+          style={{ color: BUILDER_UI.onSurfaceVar }}>
+          Meal Options
+        </h3>
+        <p className="text-sm" style={{ color: BUILDER_UI.onSurfaceVar }}>
+          Guests who accept will choose one of these meals for themselves and each
+          plus-one. Leave the list empty if you aren't offering a meal choice.
+          Dietary restrictions and allergies are always collected separately.
+        </p>
+      </div>
+
+      {options.length === 0 ? (
+        <div className="flex flex-col items-center justify-center text-center p-8 rounded-lg border-2 border-dashed"
+          style={{ borderColor: BUILDER_UI.outline, backgroundColor: BUILDER_UI.surfaceHigh }}>
+          <Utensils size={24} className="mb-2" style={{ color: BUILDER_UI.onSurfaceVar }} />
+          <p className="text-sm font-bold" style={{ color: BUILDER_UI.onSurface }}>No meal options</p>
+          <p className="text-xs mt-1" style={{ color: BUILDER_UI.onSurfaceVar }}>
+            Guests won't be asked to choose a meal.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {options.map((opt, i) => (
+            <div key={opt.id} className="p-4 rounded-lg border space-y-3"
+              style={{ borderColor: BUILDER_UI.outline, backgroundColor: BUILDER_UI.surface }}>
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-bold tracking-widest uppercase"
+                  style={{ color: BUILDER_UI.onSurfaceVar }}>
+                  Meal {i + 1}
+                </p>
+                <button type="button" onClick={() => removeOption(opt.id)}
+                  className="flex items-center gap-1 text-xs font-medium transition-opacity hover:opacity-70"
+                  style={{ color: BUILDER_UI.onSurfaceVar }}
+                  aria-label={`Remove meal ${i + 1}`}>
+                  <Trash2 size={13} /> Remove
+                </button>
+              </div>
+              <Input
+                value={opt.name}
+                onChange={e => updateOption(opt.id, "name", e.target.value)}
+                placeholder="Meal name"
+                maxLength={60}
+                className="h-11 rounded-lg border-0 border-b-2"
+                style={fieldStyle}
+              />
+              {!opt.name.trim() && (
+                <p className="text-xs" style={{ color: BUILDER_UI.onSurfaceVar }}>
+                  A meal without a name won't be saved.
+                </p>
+              )}
+              <Input
+                value={opt.description}
+                onChange={e => updateOption(opt.id, "description", e.target.value)}
+                placeholder="Description (optional)"
+                maxLength={140}
+                className="h-11 rounded-lg border-0 border-b-2"
+                style={fieldStyle}
+              />
+            </div>
+          ))}
+        </div>
+      )}
+
+      <Button type="button" variant="outline" onClick={addOption}
+        className="w-full rounded-lg gap-2"
+        style={{ borderColor: BUILDER_UI.outline, color: BUILDER_UI.primary }}>
+        <Plus size={15} /> Add meal option
+      </Button>
+
+      <p className="text-xs" style={{ color: BUILDER_UI.onSurfaceVar }}>
+        Changes are saved when you click Save. Guests who already responded keep the
+        meal name they chose, even if you rename or remove an option later.
+      </p>
+    </div>
+  );
+};
 
 // ── Spotify link helper ───────────────────────────────────────────────────────
 // Parses a Spotify "share" link (e.g. https://open.spotify.com/track/ID?si=...)
@@ -865,7 +970,13 @@ const CreateInvitation = () => {
     isPublished:      false,
     inviteDeadline:   "",
     closureTitle:     "",
+    mealOptions:      [], // [{ id, name, description }] — filled from Firestore on load
   });
+
+  // True only once the saved invitation has been read successfully (or we
+  // confirmed there isn't one yet). Until then mealOptions is NOT written on
+  // save, so a failed load can never overwrite the host's saved meals with [].
+  const [mealOptionsLoaded, setMealOptionsLoaded] = useState(false);
 
   // ── Load existing invitation data on mount ─────────────────────────────────
   useEffect(() => {
@@ -891,8 +1002,11 @@ const CreateInvitation = () => {
             musicSpotifyUrl:       inv.musicSpotifyUrl       || prev.musicSpotifyUrl,
             musicShowOnInvitation: inv.musicShowOnInvitation ?? prev.musicShowOnInvitation,
             isPublished:     inv.isPublished     || false,
+            // Older invitations have no mealOptions → [] (no meal choice)
+            mealOptions:     normalizeMealOptions(inv.mealOptions),
           }));
         }
+        setMealOptionsLoaded(true);
       } catch (err) {
         console.error("Load invitation error:", err);
       } finally {
@@ -941,9 +1055,19 @@ const CreateInvitation = () => {
         venueAddress: invitation?.venueAddress || "",
       };
 
+      // Meal options: trim, drop unnamed rows. Skip the field entirely if the
+      // saved invitation never loaded, so stored meals can't be wiped.
+      const cleanedMealOptions = cleanMealOptionsForSave(settings.mealOptions);
+      if (mealOptionsLoaded) {
+        dataToSave.mealOptions = cleanedMealOptions;
+      } else {
+        delete dataToSave.mealOptions;
+      }
+
       const id = await saveInvitation(user.uid, dataToSave, weddingId);
       if (!weddingId) setWeddingId(id);
       if (publish) setSettings(prev => ({ ...prev, isPublished: true }));
+      if (mealOptionsLoaded) setSettings(prev => ({ ...prev, mealOptions: cleanedMealOptions }));
 
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
@@ -964,6 +1088,7 @@ const CreateInvitation = () => {
       case "music":     return <MusicPanel     settings={settings} onChange={handleChange} />;
       case "layout":    return <LayoutPanel    settings={settings} onChange={handleChange} />;
       case "greetings": return <GreetingsPanel settings={settings} onChange={handleChange} />;
+      case "rsvp":      return <RsvpPanel      settings={settings} onChange={handleChange} />;
       case "date":      return <DatePanel      invitation={invitation} />;
       default:
         return (

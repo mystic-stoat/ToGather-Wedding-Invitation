@@ -6,8 +6,11 @@
 //     - Invitation preview card with Preview + Edit buttons
 //     - RSVP Progress donut chart showing real percentage
 //     - Recent RSVPs list with avatar initials and time ago
-//     - Full guest list table with add, delete, copy RSVP link
+//     - Read-only guest overview table (search + copy RSVP link)
 //     - Logout button in the sidebar
+//
+//   Dashboard is overview-only. Adding, deleting and managing guests lives on
+//   the dedicated Guest List page (/guest-list).
 //
 // DATA FLOW:
 //   1. Load invitation from `invitations` collection (weddingId, couple names)
@@ -22,8 +25,8 @@ import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts";
 import {
   LayoutDashboard, Heart, Users, Gift, MapPin,
   CalendarCheck, Mail, Smartphone, ChevronRight,
-  Share2, Pencil, Eye, Bell, UserPlus, Loader2,
-  Trash2, Search, LogOut, UserRound,
+  Share2, Pencil, Eye, Bell, Loader2,
+  Search, LogOut, UserRound,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,9 +34,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import {
   getInvitationByUser,
   getInvitees,
-  addInvitee,
-  deleteInvitee,
 } from "@/lib/firestore";
+import { getMealLabel, getAttendanceStats } from "@/lib/rsvpOptions";
 import Logo from "@/assets/logo.svg";
 import Sidebar from "@/components/Sidebar"
 
@@ -79,60 +81,6 @@ const statusBadge = (status) => {
   return map[status] || "bg-muted text-muted-foreground";
 };
 
-// ── Add Guest Modal ───────────────────────────────────────────────────────────
-const AddGuestModal = ({ onAdd, onClose, saving }) => {
-  const [name, setName]                 = useState("");
-  const [plusOneLimit, setPlusOneLimit] = useState(0);
-  const [error, setError]               = useState("");
-
-  const handleSubmit = () => {
-    if (!name.trim()) { setError("Guest name is required."); return; }
-    onAdd(name.trim(), Number(plusOneLimit));
-  };
-
-  return (
-    <div className="fixed inset-0 bg-foreground/20 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-card rounded-2xl border border-border/50 shadow-xl p-6 w-full max-w-sm space-y-5">
-        <h3 className="font-heading text-lg font-semibold text-foreground italic">Add a Guest</h3>
-
-        <div className="space-y-1.5">
-          <label className="text-sm font-medium text-muted-foreground">Guest Name *</label>
-          <Input placeholder="Full name" value={name} autoFocus
-            onChange={e => { setName(e.target.value); setError(""); }}
-            className="h-11 border-border/60 rounded-xl" />
-          {error && <p className="text-xs text-destructive">{error}</p>}
-        </div>
-
-        <div className="space-y-1.5">
-          <label className="text-sm font-medium text-muted-foreground">Plus One Limit</label>
-          <div className="flex gap-2">
-            {[0,1,2,3].map(n => (
-              <button key={n} onClick={() => setPlusOneLimit(n)}
-                className={`flex-1 h-10 rounded-xl border-2 text-sm font-semibold transition-all ${
-                  plusOneLimit === n
-                    ? "border-primary bg-primary text-primary-foreground"
-                    : "border-border/60 bg-card text-foreground hover:border-primary/40"
-                }`}>
-                {n === 0 ? "None" : `+${n}`}
-              </button>
-            ))}
-          </div>
-          <p className="text-xs text-muted-foreground">Max extra guests this person can bring.</p>
-        </div>
-
-        <div className="flex gap-3">
-          <Button variant="outline" className="flex-1 rounded-xl" onClick={onClose}>Cancel</Button>
-          <Button variant="default" className="flex-1 rounded-xl" onClick={handleSubmit} disabled={saving}>
-            {saving
-              ? <span className="flex items-center gap-2"><Loader2 size={14} className="animate-spin" />Adding...</span>
-              : "Add Guest"}
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
 // ── Main Dashboard ────────────────────────────────────────────────────────────
 const Dashboard = () => {
 
@@ -145,9 +93,6 @@ const Dashboard = () => {
   const [guests, setGuests]               = useState([]);
   const [loading, setLoading]             = useState(true);
   const [search, setSearch]               = useState("");
-  const [showAddModal, setShowAddModal]   = useState(false);
-  const [addingSaving, setAddingSaving]   = useState(false);
-  const [deletingId, setDeletingId]       = useState(null);
 
   // ── Load invitation + guests on mount ──────────────────────────────────────
   useEffect(() => {
@@ -171,38 +116,6 @@ const Dashboard = () => {
     }
   };
 
-  // ── Add a guest ────────────────────────────────────────────────────────────
-  const handleAddGuest = async (name, plusOneLimit) => {
-    if (!invitation?.weddingId) return;
-    setAddingSaving(true);
-    try {
-      await addInvitee(invitation.weddingId, name, plusOneLimit);
-      const updated = await getInvitees(invitation.weddingId);
-      setGuests(updated);
-      setShowAddModal(false);
-    } catch (err) {
-      console.error("Add guest error:", err);
-      alert("Add guest failed: " + err.message);
-    } finally {
-      setAddingSaving(false);
-    }
-  };
-
-  // ── Delete a guest ─────────────────────────────────────────────────────────
-  const handleDeleteGuest = async (inviteeId) => {
-    if (!window.confirm("Remove this guest?")) return;
-    setDeletingId(inviteeId);
-    try {
-      await deleteInvitee(inviteeId);
-      // Remove from local state immediately — no need to re-fetch
-      setGuests(prev => prev.filter(g => g.inviteeId !== inviteeId));
-    } catch (err) {
-      console.error("Delete error:", err);
-    } finally {
-      setDeletingId(null);
-    }
-  };
-
   // ── Logout ─────────────────────────────────────────────────────────────────
   const handleLogout = async () => {
     await logout();
@@ -216,7 +129,9 @@ const Dashboard = () => {
   const accepted = guests.filter(g => g.rsvpStatus === "Accepted").length;
   const declined = guests.filter(g => g.rsvpStatus === "Declined").length;
   const pending  = guests.filter(g => g.rsvpStatus === "Pending").length;
-  // Percentage of guests who have responded (accepted or declined)
+  // Real headcount: accepted guests + plus-ones they actually submitted
+  const { attending } = getAttendanceStats(guests);
+  // Percentage of invitations that have responded (accepted or declined)
   const progress = total > 0 ? Math.round(((accepted + declined) / total) * 100) : 0;
 
   // Donut chart data — matches the statusBadge colors above
@@ -270,15 +185,6 @@ const Dashboard = () => {
       {/* Sidebar — visible on desktop only */}
       <Sidebar invitation={invitation} onLogout={handleLogout} />
 
-      {/* Add Guest Modal */}
-      {showAddModal && (
-        <AddGuestModal
-          onAdd={handleAddGuest}
-          onClose={() => setShowAddModal(false)}
-          saving={addingSaving}
-        />
-      )}
-
       {/* Main content area */}
       <main className="flex-1 min-h-screen overflow-y-auto">
 
@@ -319,10 +225,10 @@ const Dashboard = () => {
           {/* ── Two column: Invitation preview + RSVP progress ── */}
           <div className="grid lg:grid-cols-2 gap-6 mb-8">
 
-            {/* Your Invitation */}
+            {/* My Invitation */}
             <div className="bg-card rounded-2xl border border-border/50 shadow-sm p-5">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-base font-semibold text-foreground">Your Invitation</h2>
+                <h2 className="text-base font-semibold text-foreground">My Invitation</h2>
                 <button
                   onClick={() => {
                     if (coupleNames) {
@@ -436,7 +342,11 @@ const Dashboard = () => {
                   </div>
                   <div className="flex items-center gap-2 pt-1.5 border-t border-border/40">
                     <span className="font-medium text-foreground">{total}</span>
-                    <span className="text-muted-foreground">Total Guests</span>
+                    <span className="text-muted-foreground">Invitations</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-foreground">{attending}</span>
+                    <span className="text-muted-foreground">Attending (incl. plus-ones)</span>
                   </div>
                 </div>
               </div>
@@ -450,11 +360,10 @@ const Dashboard = () => {
                   className="flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-muted/40 transition-colors text-sm text-foreground">
                   <Pencil size={14} className="text-muted-foreground" /> Edit Wedding Details
                 </Link>
-                <button
-                  onClick={() => document.getElementById("guest-list-section")?.scrollIntoView({ behavior: "smooth" })}
-                  className="w-full flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-muted/40 transition-colors text-sm text-foreground text-left">
+                <Link to="/guest-list"
+                  className="flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-muted/40 transition-colors text-sm text-foreground">
                   <UserRound size={14} className="text-muted-foreground" /> Edit Guest List
-                </button>
+                </Link>
               </div>
             </div>
           </div>
@@ -496,17 +405,13 @@ const Dashboard = () => {
                     onChange={e => setSearch(e.target.value)}
                     className="pl-9 h-10 bg-card border-border/60 rounded-xl w-full sm:w-60" />
                 </div>
-                <Button variant="outline" size="sm"
-                  className="rounded-xl gap-2 border-border/60 whitespace-nowrap"
-                  onClick={() => {
-                    if (!invitation?.weddingId) {
-                      alert("Please fill in your wedding details first.");
-                      return;
-                    }
-                    setShowAddModal(true);
-                  }}>
-                  <UserPlus size={15} /> Add Guest
-                </Button>
+                {/* Guest management lives on the Guest List page */}
+                <Link to="/guest-list">
+                  <Button variant="outline" size="sm"
+                    className="rounded-xl gap-2 border-border/60 whitespace-nowrap">
+                    <UserRound size={15} /> Manage Guests
+                  </Button>
+                </Link>
               </div>
             </div>
 
@@ -518,7 +423,9 @@ const Dashboard = () => {
                   {search ? "No guests match your search" : "No guests yet"}
                 </p>
                 <p className="text-sm text-muted-foreground">
-                  {search ? "Try a different search term" : `Click "Add Guest" to start building your list`}
+                  {search ? "Try a different search term" : (
+                    <>Add guests from the <Link to="/guest-list" className="text-primary underline hover:no-underline">Guest List</Link> page.</>
+                  )}
                 </p>
               </div>
             ) : (
@@ -526,7 +433,7 @@ const Dashboard = () => {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-border/60">
-                      {["Name", "RSVP Status", "Meal / Dietary", "Plus One", "RSVP Link", ""].map(h => (
+                      {["Name", "RSVP Status", "Meal / Dietary", "Plus One", "RSVP Link"].map(h => (
                         <th key={h}
                           className="text-left px-5 py-3.5 text-muted-foreground font-medium text-xs uppercase tracking-wider">
                           {h}
@@ -553,8 +460,20 @@ const Dashboard = () => {
                             {g.rsvpStatus}
                           </span>
                         </td>
-                        {/* Dietary */}
-                        <td className="px-5 py-4 text-muted-foreground">{g.dietaryRestrictions || "—"}</td>
+                        {/* Meal + Dietary / Allergies — kept as separate lines */}
+                        <td className="px-5 py-4 text-muted-foreground">
+                          {(() => {
+                            const meal = getMealLabel(g, invitation?.mealOptions);
+                            const dietary = (g.dietaryRestrictions || "").trim();
+                            if (!meal && !dietary) return "—";
+                            return (
+                              <div className="space-y-0.5 text-xs leading-snug">
+                                {meal && <p><span className="text-muted-foreground/70">Meal: </span><span className={`text-foreground ${g.mealId ? "" : "capitalize"}`}>{meal}</span></p>}
+                                {dietary && <p><span className="text-muted-foreground/70">Dietary / Allergies: </span><span className="text-foreground">{dietary}</span></p>}
+                              </div>
+                            );
+                          })()}
+                        </td>
                         {/* Plus one — show Yes/No like the Figma wireframe */}
                         <td className="px-5 py-4 text-muted-foreground">
                           {g.plusOneLimit > 0 ? (
@@ -573,18 +492,6 @@ const Dashboard = () => {
                             className="text-xs text-primary hover:underline">
                             Copy link
                           </button>
-                        </td>
-                        {/* Delete */}
-                        <td className="px-5 py-4">
-                          {deletingId === g.inviteeId ? (
-                            <Loader2 size={14} className="animate-spin text-muted-foreground" />
-                          ) : (
-                            <button onClick={() => handleDeleteGuest(g.inviteeId)}
-                              className="text-muted-foreground hover:text-destructive transition-colors"
-                              title="Remove guest">
-                              <Trash2 size={14} />
-                            </button>
-                          )}
                         </td>
                       </tr>
                     ))}

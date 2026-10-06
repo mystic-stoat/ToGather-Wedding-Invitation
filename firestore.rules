@@ -137,9 +137,13 @@ service cloud.firestore {
              .diff(resource.data)
              .affectedKeys()
              .hasOnly([
+               'guestName',
+               'email',
                'attending',
                'guestCount',
                'dietaryRestrictions',
+               'mealId',
+               'meal',
                'plusOnes',
                'rsvpStatus',
                'tokenUsed',
@@ -152,7 +156,26 @@ service cloud.firestore {
         && request.resource.data.attending is bool
         && request.resource.data.guestCount is number
         && request.resource.data.dietaryRestrictions is string
+        // Main-guest meal (option id + name snapshot). Optional so older
+        // invitee docs / submissions without a meal remain valid.
+        && request.resource.data.get('mealId', '') is string
+        && request.resource.data.get('meal', '') is string
         && request.resource.data.plusOnes is list
+        // Name / email the guest confirmed on the RSVP form. Only checked when
+        // the guest actually changes them; a changed name must be non-empty
+        // and a changed email must look like an email address.
+        && (
+             !request.resource.data.diff(resource.data).affectedKeys().hasAny(['guestName'])
+             || (request.resource.data.guestName is string
+                 && request.resource.data.guestName.size() > 0
+                 && request.resource.data.guestName.size() <= 200)
+           )
+        && (
+             !request.resource.data.diff(resource.data).affectedKeys().hasAny(['email'])
+             || (request.resource.data.email is string
+                 && request.resource.data.email.size() <= 254
+                 && request.resource.data.email.matches('^[^@ ]+@[^@ ]+[.][^@ ]+$'))
+           )
         && request.resource.data.rsvpStatus is string
         && request.resource.data.rsvpStatus in ['Accepted', 'Declined']
         && request.resource.data.respondedAt is timestamp;
