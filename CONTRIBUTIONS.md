@@ -32,6 +32,15 @@ Christopher Nguyen:
 * Added CSV guest list import and validation
 * Created wireframes and prototypes for the Spotify music, CSV guest import, and AI Wedding Planner features
 * Updated the application UI to match the approved Figma color palette, standardized input backgrounds, updated sidebar styling, and improved Invitation Builder UI consistency.
+* Added meal selection options to the Invitation Builder and RSVP flow
+* Added dietary restrictions for guests and plus-ones
+* Added Kids Allowed / Adults Only wedding settings with individual guest overrides
+* Updated RSVP to save guest name and email changes
+* Updated guest attendance totals to include submitted plus-ones
+* Added and updated RSVP and Firestore security tests
+* Edit dashboard "Your Invitation to My Invitation"
+* Remove add guest on dashboard and change it to a shortcut to guestlist.
+* Created and edited wireframe/Phorotype to dashboard, RSVP, guestlist add, and guestlist.
 * Added Travel \& Stay to the Invitation Builder
 * Added support for hotel, restaurant, airport, and other recommendations
 * Added Google Maps links and descriptions for recommended places

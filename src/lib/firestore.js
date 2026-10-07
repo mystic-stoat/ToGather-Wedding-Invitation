@@ -187,7 +187,8 @@ export const addInvitee = async (
   plusOneLimit = 0, // default: no plus ones allowed
   email = "",       // optional — shown in the guest list table
   group = "",        // optional — Family, Friends, Coworkers, etc.
-  emailStatus = "pending"
+  emailStatus = "pending",
+  childrenPolicyOverride = "inherit" // "inherit" (use wedding setting) | "allowed" | "adults_only"
 ) => {
   // crypto.randomUUID() generates a unique token like "a3f2c1d4-..."
   // This token is embedded in the guest's personal RSVP link
@@ -200,12 +201,13 @@ export const addInvitee = async (
     group,             // stored for filtering guests by group
     emailStatus,
     plusOneLimit,
+    childrenPolicyOverride, // per-guest override of the wedding's childrenPolicy
     token,
     tokenUsed: false,  // becomes true after they submit their RSVP
     rsvpStatus: "Pending", // starts Pending until they respond
     attending: null,   // null until they RSVP (true = accepted, false = declined)
     dietaryRestrictions: "",
-    plusOnes: [],      // filled in when guest submits RSVP with plus one details
+    plusOnes: [],      // filled in when guest submits RSVP: [{ name, mealId, meal, dietaryRestrictions }]
     addedAt: serverTimestamp(),
   });
   return newDoc.id; // return the new inviteeId
@@ -310,13 +312,29 @@ export const submitRSVP = async (token, response) => {
     // Step 4: Update the invitee doc so the dashboard and guest list reflect the response.
     // Also sets tokenUsed = true so the link cannot be used again (prevents duplicates).
     // plusOnes is stored on the invitee doc too so the guest list page can show them.
+    // Declined RSVPs never carry party/meal details, even if the form still
+    // holds values from before the guest switched to "decline".
+    const attending = response.attending === true;
+
+    // Name / email the guest confirmed on the RSVP form. Written onto the SAME
+    // invitee doc (no new invitee is created). Only sent when non-empty so a
+    // blank value can never wipe the host's stored name/email.
+    const identityUpdates = {};
+    const submittedName = (response.guestName || "").trim();
+    const submittedEmail = (response.email || "").trim();
+    if (submittedName) identityUpdates.guestName = submittedName;
+    if (submittedEmail) identityUpdates.email = submittedEmail;
+
     await updateInvitee(invitee.inviteeId, {
+      ...identityUpdates,
       //rsvpId:              rsvpDoc.id,                              // link to their rsvp doc
-      attending:           response.attending,
-      guestCount:          response.guestCount, //added from the rsvp table
-      dietaryRestrictions: response.dietaryRestrictions,
-      plusOnes:            response.plusOnes || [],                 // plus one names + meals
-      rsvpStatus:          response.attending ? "Accepted" : "Declined", // shown in guest list
+      attending:           attending,
+      guestCount:          attending ? response.guestCount : 0, //added from the rsvp table
+      dietaryRestrictions: attending ? (response.dietaryRestrictions || "") : "",
+      mealId:              attending ? (response.mealId || "") : "", // main guest meal option id ("" = none)
+      meal:                attending ? (response.meal || "") : "",   // main guest meal name snapshot
+      plusOnes:            attending ? (response.plusOnes || []) : [], // [{ name, mealId, meal, dietaryRestrictions }]
+      rsvpStatus:          attending ? "Accepted" : "Declined", // shown in guest list
       tokenUsed:           true,                                    // prevents duplicate RSVPs
       respondedAt:         serverTimestamp(),                       // used for "X hours ago" in dashboard
     });

@@ -33,6 +33,14 @@ import { getInvitationByUser, saveInvitation } from "@/lib/firestore";
 import Sidebar from "@/components/Sidebar";
 import GoogleMapEmbed, { buildMapQuery } from "@/components/GoogleMapEmbed";
 import PlaceAutocompleteInput from "@/components/PlaceAutocompleteInput";
+import { CHILDREN_POLICY, getWeddingChildrenPolicy } from "@/lib/rsvpOptions";
+
+// Wedding-level children policy choices. Individual guests can override this
+// in Guest List → Add Guest.
+const CHILDREN_POLICY_CHOICES = [
+  { value: CHILDREN_POLICY.ALLOWED,     label: "Kids Allowed", helper: "Children are welcome at the wedding." },
+  { value: CHILDREN_POLICY.ADULTS_ONLY, label: "Adults Only",  helper: "The celebration is for adults only." },
+];
 
 // ── Reusable labeled form field wrapper ───────────────────────────────────────
 const FormField = ({ label, children, error, helper }) => (
@@ -66,6 +74,7 @@ const EMPTY = {
   receptionLng: null,
   weddingDate: "",
   inviteDeadline: "",
+  childrenPolicy: CHILDREN_POLICY.ALLOWED, // "allowed" | "adults_only"
 };
 
 const WeddingDetails = () => {
@@ -123,6 +132,8 @@ const WeddingDetails = () => {
             receptionLng: invitation.receptionLng ?? null,
             weddingDate: invitation.weddingDate ?? "",
             inviteDeadline: invitation.inviteDeadline ?? "",
+            // Older weddings have no childrenPolicy → treated as "allowed"
+            childrenPolicy: getWeddingChildrenPolicy(invitation),
           });
         }
         // If invitation is null they're a new user — form stays as EMPTY defaults
@@ -459,6 +470,47 @@ const WeddingDetails = () => {
                 showLink
                 title="Reception map"
               />
+            </section>
+
+            {/* ── Children ── */}
+            <section className="space-y-4">
+              <div>
+                <h2 className="font-heading text-xl font-semibold text-foreground">Children</h2>
+                <p className="text-sm text-muted-foreground mt-1">Are children invited to the wedding?</p>
+              </div>
+
+              <div role="radiogroup" aria-label="Children policy" className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {CHILDREN_POLICY_CHOICES.map(choice => {
+                  const selected = form.childrenPolicy === choice.value;
+                  return (
+                    <button
+                      key={choice.value}
+                      type="button"
+                      role="radio"
+                      aria-checked={selected}
+                      onClick={() => set("childrenPolicy", choice.value)}
+                      className={`flex items-start gap-3 rounded-xl border-2 px-4 py-3 text-left transition-all ${
+                        selected
+                          ? "border-primary bg-primary/5"
+                          : "border-border/60 bg-popover hover:border-primary/40"
+                      }`}
+                    >
+                      <span className={`mt-0.5 flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full border-2 ${
+                        selected ? "border-primary" : "border-border"
+                      }`}>
+                        {selected && <span className="h-2 w-2 rounded-full bg-primary" />}
+                      </span>
+                      <span>
+                        <span className="block text-sm font-semibold text-foreground">{choice.label}</span>
+                        <span className="block text-xs text-muted-foreground mt-0.5">{choice.helper}</span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                You can make exceptions for individual guests when adding them in Guest List.
+              </p>
             </section>
               <div className="flex items-center gap-3">
                 {saveButton}

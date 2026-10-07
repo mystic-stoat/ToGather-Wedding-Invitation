@@ -33,6 +33,16 @@ import {
   deleteInvitee,
 } from "@/lib/firestore";
 import Sidebar from "@/components/Sidebar"
+import {
+  CHILDREN_OVERRIDE,
+  CHILDREN_POLICY_LABELS,
+  getWeddingChildrenPolicy,
+  getGuestChildrenOverride,
+  getEffectiveChildrenPolicy,
+  getMealLabel,
+  normalizePlusOnes,
+  getAttendanceStats,
+} from "@/lib/rsvpOptions";
 
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -194,23 +204,32 @@ const validateCsvGuests = (csvText) => {
 };
 
 // ── Add Guest Modal ───────────────────────────────────────────────────────────
-const AddGuestModal = ({ onAdd, onClose, saving }) => {
+const AddGuestModal = ({ onAdd, onClose, saving, weddingChildrenPolicy }) => {
   const [name, setName]                 = useState("");
   const [email, setEmail]               = useState("");
   const [group, setGroup]               = useState("Family");
   const [plusOneLimit, setPlusOneLimit] = useState(0);
+  const [childrenOverride, setChildrenOverride] = useState(CHILDREN_OVERRIDE.INHERIT);
   const [error, setError]               = useState("");
 
   const handleSubmit = () => {
     if (!name.trim()) { setError("Guest name is required."); return; }
-    onAdd(name.trim(), email.trim(), group, Number(plusOneLimit));
+    onAdd(name.trim(), email.trim(), group, Number(plusOneLimit), childrenOverride);
   };
 
   const groups = ["Family", "Friends", "Coworkers", "Other"];
 
+  // "Use Wedding Setting" shows what the guest will currently inherit
+  const childrenChoices = [
+    { value: CHILDREN_OVERRIDE.INHERIT,     label: "Use Wedding Setting",
+      hint: CHILDREN_POLICY_LABELS[weddingChildrenPolicy] },
+    { value: CHILDREN_OVERRIDE.ALLOWED,     label: "Kids Allowed" },
+    { value: CHILDREN_OVERRIDE.ADULTS_ONLY, label: "Adults Only" },
+  ];
+
   return (
     <div className="fixed inset-0 bg-foreground/20 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-card rounded-2xl border border-border/50 shadow-xl p-6 w-full max-w-sm space-y-5">
+      <div className="bg-card rounded-2xl border border-border/50 shadow-xl p-6 w-full max-w-sm space-y-5 max-h-[90vh] overflow-y-auto">
         <h3 className="font-heading text-lg font-semibold text-foreground italic">Add a Guest</h3>
 
         {/* Guest name */}
@@ -265,6 +284,38 @@ const AddGuestModal = ({ onAdd, onClose, saving }) => {
             ))}
           </div>
           <p className="text-xs text-muted-foreground">Max extra guests this person can bring.</p>
+        </div>
+
+        {/* Children policy override */}
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium text-muted-foreground">Children</label>
+          <div role="radiogroup" aria-label="Children" className="space-y-2">
+            {childrenChoices.map(c => {
+              const selected = childrenOverride === c.value;
+              return (
+                <button key={c.value} type="button" role="radio" aria-checked={selected}
+                  onClick={() => setChildrenOverride(c.value)}
+                  className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl border-2 text-sm font-medium text-left transition-all ${
+                    selected
+                      ? "border-primary bg-primary/5 text-foreground"
+                      : "border-border/60 bg-card text-foreground hover:border-primary/40"
+                  }`}>
+                  <span className="flex items-center gap-2">
+                    <span className={`flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full border-2 ${
+                      selected ? "border-primary" : "border-border"
+                    }`}>
+                      {selected && <span className="h-2 w-2 rounded-full bg-primary" />}
+                    </span>
+                    {c.label}
+                  </span>
+                  {c.hint && <span className="text-xs text-muted-foreground font-normal">Currently: {c.hint}</span>}
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            "Use Wedding Setting" follows the policy in Wedding Details, including later changes.
+          </p>
         </div>
 
         <div className="flex gap-3">
@@ -470,16 +521,42 @@ const ImportCsvModal = ({ onImport, onClose, importing }) => {
 
 // ── Guest Row ─────────────────────────────────────────────────────────────────
 // Each guest row — click to expand and see plus one details
-const GuestRow = ({ guest, onDelete, deleting, onCopyLink }) => {
+// Meal + Dietary/Allergies shown as two labelled lines (keeps the table narrow).
+// Older plus-one meals like "chicken" have no mealId, so they get capitalized.
+const MealDietaryLines = ({ entity, mealOptions }) => {
+  const meal = getMealLabel(entity, mealOptions);
+  const dietary = (entity?.dietaryRestrictions || "").trim();
+  // Nothing recorded yet (e.g. pending RSVP) → single dash, like before
+  if (!meal && !dietary) return <span className="text-xs text-muted-foreground">—</span>;
+  return (
+    <div className="space-y-0.5 text-xs leading-snug">
+      <p>
+        <span className="text-muted-foreground/70">Meal: </span>
+        <span className={`text-foreground ${meal && !entity?.mealId ? "capitalize" : ""}`}>{meal || "—"}</span>
+      </p>
+      <p>
+        <span className="text-muted-foreground/70">Dietary / Allergies: </span>
+        <span className="text-foreground">{dietary || "—"}</span>
+      </p>
+    </div>
+  );
+};
+
+const GuestRow = ({ guest, onDelete, deleting, onCopyLink, invitation }) => {
   // expanded shows the plus one details below the row
   const [expanded, setExpanded] = useState(false);
 
-  // Parse plus ones — stored as JSON string or array in Firestore
-  const plusOnes = Array.isArray(guest.plusOnes)
-    ? guest.plusOnes
-    : [];
+  // Plus ones — older records may only have { name, meal }; normalize fills
+  // in mealId / dietaryRestrictions so every entry has the same shape
+  const plusOnes = normalizePlusOnes(guest.plusOnes);
 
   const hasPlusOnes = plusOnes.length > 0;
+
+  const mealOptions = invitation?.mealOptions;
+
+  // Effective children policy + whether it comes from a guest override
+  const childrenPolicy = getEffectiveChildrenPolicy(invitation, guest);
+  const hasChildrenOverride = getGuestChildrenOverride(guest) !== CHILDREN_OVERRIDE.INHERIT;
 
   return (
     <>
@@ -496,7 +573,17 @@ const GuestRow = ({ guest, onDelete, deleting, onCopyLink }) => {
             <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${avatarColor(guest.guestName)}`}>
               {getInitials(guest.guestName)}
             </div>
-            <p className="font-medium text-foreground text-sm">{guest.guestName}</p>
+            <div>
+              <p className="font-medium text-foreground text-sm">{guest.guestName}</p>
+              {/* Effective children policy — compact, under the name */}
+              <p
+                className="text-[11px] text-muted-foreground mt-0.5"
+                title={hasChildrenOverride ? "Set for this guest" : "Uses the wedding setting"}
+              >
+                {CHILDREN_POLICY_LABELS[childrenPolicy]}
+                {hasChildrenOverride && <span className="text-primary font-medium"> · guest exception</span>}
+              </p>
+            </div>
           </div>
         </td>
 
@@ -538,9 +625,9 @@ const GuestRow = ({ guest, onDelete, deleting, onCopyLink }) => {
           </span>
         </td>
 
-        {/* Meal / Dietary */}
-        <td className="px-5 py-4 text-sm text-muted-foreground max-w-[180px]">
-          {guest.dietaryRestrictions || "—"}
+        {/* Meal / Dietary — shown as two separate labelled lines */}
+        <td className="px-5 py-4 text-sm text-muted-foreground max-w-[220px]">
+          <MealDietaryLines entity={guest} mealOptions={mealOptions} />
         </td>
 
         {/* Actions */}
@@ -579,15 +666,13 @@ const GuestRow = ({ guest, onDelete, deleting, onCopyLink }) => {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                 {plusOnes.map((po, i) => (
                   <div key={i}
-                    className="flex items-center gap-3 bg-card rounded-xl px-3 py-2 border border-border/40">
-                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${avatarColor(po.name || "Guest")}`}>
+                    className="flex items-start gap-3 bg-card rounded-xl px-3 py-2 border border-border/40">
+                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5 ${avatarColor(po.name || "Guest")}`}>
                       {getInitials(po.name || "G")}
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <p className="text-sm font-medium text-foreground">{po.name || "Guest"}</p>
-                      {po.meal && (
-                        <p className="text-xs text-muted-foreground capitalize">{po.meal}</p>
-                      )}
+                      <MealDietaryLines entity={po} mealOptions={mealOptions} />
                     </div>
                   </div>
                 ))}
@@ -641,12 +726,17 @@ const GuestList = () => {
   };
 
   // ── Add a guest ────────────────────────────────────────────────────────────
-  const handleAddGuest = async (name, email, group, plusOneLimit) => {
+  const handleAddGuest = async (name, email, group, plusOneLimit, childrenPolicyOverride) => {
     if (!invitation?.weddingId) return;
     setAddingSaving(true);
     try {
-      // addInvitee creates the Firestore doc and generates a unique RSVP token
-      await addInvitee(invitation.weddingId, name, plusOneLimit, email, group);
+      // addInvitee creates the Firestore doc and generates a unique RSVP token.
+      // CSV import (below) omits the last argument, so imported guests get
+      // addInvitee's default childrenPolicyOverride: "inherit".
+      await addInvitee(
+        invitation.weddingId, name, plusOneLimit, email, group,
+        "pending", childrenPolicyOverride
+      );
       const updated = await getInvitees(invitation.weddingId);
       setGuests(updated);
       setShowAddModal(false);
@@ -710,10 +800,14 @@ const GuestList = () => {
   };
 
   // ── Computed stats ─────────────────────────────────────────────────────────
+  // total / accepted / declined / pending count INVITATION records (one row
+  // each). `attending` is the real headcount: accepted guests plus the
+  // plus-ones they actually submitted (never the plusOneLimit maximum).
   const total    = guests.length;
   const accepted = guests.filter(g => g.rsvpStatus === "Accepted").length;
   const declined = guests.filter(g => g.rsvpStatus === "Declined").length;
   const pending  = guests.filter(g => g.rsvpStatus === "Pending").length;
+  const { attending, acceptedPlusOnes } = getAttendanceStats(guests);
 
   // ── Filter guests by search + status ──────────────────────────────────────
   const filtered = guests.filter(g => {
@@ -749,6 +843,7 @@ const GuestList = () => {
           onAdd={handleAddGuest}
           onClose={() => setShowAddModal(false)}
           saving={addingSaving}
+          weddingChildrenPolicy={getWeddingChildrenPolicy(invitation)}
         />
       )}
 
@@ -784,7 +879,7 @@ const GuestList = () => {
               <h1 className="font-heading text-3xl font-semibold text-foreground">Guest List</h1>
               {/* Subtitle showing total count */}
               <p className="text-sm text-muted-foreground mt-1">
-                {total} {total === 1 ? "guest" : "guests"} · Manage and track RSVPs
+                {total} {total === 1 ? "invitation" : "invitations"} · {attending} attending · Manage and track RSVPs
               </p>
             </div>
 
@@ -818,16 +913,22 @@ const GuestList = () => {
           </div>
 
           {/* Stats bar — quick summary above the table */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">
             {[
-              { label: "Total",    value: total,    color: "text-foreground",   bg: "bg-card" },
-              { label: "Accepted", value: accepted, color: "text-primary",      bg: "bg-primary/8" },
-              { label: "Declined", value: declined, color: "text-destructive",  bg: "bg-destructive/8" },
-              { label: "Pending",  value: pending,  color: "text-amber-600",    bg: "bg-amber-50" },
+              { label: "Invitations", value: total,    color: "text-foreground",   bg: "bg-card" },
+              { label: "Accepted",    value: accepted, color: "text-primary",      bg: "bg-primary/8" },
+              { label: "Declined",    value: declined, color: "text-destructive",  bg: "bg-destructive/8" },
+              { label: "Pending",     value: pending,  color: "text-amber-600",    bg: "bg-amber-50" },
+              // Real headcount: accepted guests + plus-ones they submitted
+              { label: "Attending",   value: attending, color: "text-foreground",  bg: "bg-card",
+                hint: `incl. ${acceptedPlusOnes} plus-one${acceptedPlusOnes === 1 ? "" : "s"}` },
             ].map(s => (
               <div key={s.label} className={`${s.bg} rounded-xl border border-border/40 px-4 py-3`}>
                 <p className={`font-heading text-2xl font-bold ${s.color}`}>{s.value}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">{s.label}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {s.label}
+                  {s.hint && <span className="text-muted-foreground/70"> · {s.hint}</span>}
+                </p>
               </div>
             ))}
           </div>
@@ -893,6 +994,7 @@ const GuestList = () => {
                       key={g.inviteeId}
                       guest={g}
                       onDelete={handleDeleteGuest}
+                      invitation={invitation}
                       deleting={deletingId === g.inviteeId}
                       onCopyLink={handleCopyLink}
                     />
@@ -903,7 +1005,7 @@ const GuestList = () => {
               {/* Table footer showing count */}
               <div className="px-5 py-3 border-t border-border/40 bg-muted/10">
                 <p className="text-xs text-muted-foreground">
-                  Showing {filtered.length} of {total} guests
+                  Showing {filtered.length} of {total} invitations
                   {statusFilter !== "All" && ` · Filtered by: ${statusFilter}`}
                 </p>
               </div>
