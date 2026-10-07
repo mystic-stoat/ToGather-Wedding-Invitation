@@ -23,12 +23,12 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   Heart, Lock, Palette, Type, Music, Sparkles, LayoutDashboard,
   BookOpen, Calendar, Image, MapPin, BookHeart, CheckSquare,
   BookMarked, ArrowLeft, Save, Globe, Upload, ChevronRight,
-  Eye, Volume2, Info, Loader2,
+  Eye, Volume2, Info, Loader2, Hotel, Plus, Trash2, ExternalLink,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,6 +36,18 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthContext";
 import { getInvitationByUser, saveInvitation } from "@/lib/firestore";
 import GoogleMapEmbed, { buildMapQuery, mapLinkUrl } from "@/components/GoogleMapEmbed";
+import {
+  TRAVEL_CATEGORIES,
+  TRAVEL_MESSAGE_MAX,
+  getTravelCategoryLabel,
+  createTravelItem,
+  normalizeTravelItems,
+  validateTravelItems,
+  cleanTravelItemsForSave,
+  getVisibleTravelItems,
+  getTravelShowOnInvitation,
+  shouldShowTravelSection,
+} from "@/lib/travelStay";
 
 // ── Stitch-inspired color palette for the invitation canvas ───────────────────
 // This describes the actual wedding invitation artifact rendered in
@@ -82,12 +94,12 @@ const SECTIONS = [
   { id: "color",     label: "Color",     icon: Palette },
   { id: "font",      label: "Font",      icon: Type },
   { id: "music",     label: "Music",     icon: Music },
-  { id: "animation", label: "Animation", icon: Sparkles },
   { id: "layout",    label: "Layout",    icon: LayoutDashboard },
   { id: "greetings", label: "Greetings", icon: BookOpen },
   { id: "date",      label: "Date",      icon: Calendar },
   { id: "gallery",   label: "Gallery",   icon: Image },
   { id: "venue",     label: "Venue",     icon: MapPin },
+  { id: "travel",    label: "Travel & Stay", icon: Hotel },
   { id: "story",     label: "Story",     icon: BookHeart },
   { id: "rsvp",      label: "RSVP",      icon: CheckSquare },
   { id: "guestbook", label: "Guestbook", icon: BookMarked },
@@ -599,6 +611,239 @@ const MusicPanel = ({ settings, onChange }) => {
   );
 };
 
+// ── Center Panel: Travel & Stay ───────────────────────────────────────────────
+// Host enters places manually (like Music's pasted Spotify link): category,
+// name, a pasted Google Maps link and a description. Saved on the invitation
+// doc as travelItems / travelMessage / travelShowOnInvitation on Save/Publish.
+// `errors` = { [itemId]: { name?, mapUrl? } } from the parent's validation.
+const TravelPanel = ({ settings, onChange, errors, setErrors }) => {
+  const items = settings.travelItems || [];
+  const showOnInvitation = getTravelShowOnInvitation(settings);
+
+  const clearItemError = (id, field) =>
+    setErrors(prev => {
+      if (!prev[id]?.[field]) return prev;
+      const { [field]: _removed, ...rest } = prev[id];
+      const next = { ...prev };
+      if (Object.keys(rest).length) next[id] = rest; else delete next[id];
+      return next;
+    });
+
+  const updateItem = (id, field, value) => {
+    onChange("travelItems", items.map(it => (it.id === id ? { ...it, [field]: value } : it)));
+    clearItemError(id, field);
+  };
+
+  // Check a single place's link as soon as the host leaves the field
+  const checkItemLink = (item) => {
+    const itemErrors = validateTravelItems([item])[item.id];
+    if (itemErrors?.mapUrl) {
+      setErrors(prev => ({ ...prev, [item.id]: { ...(prev[item.id] || {}), mapUrl: itemErrors.mapUrl } }));
+    }
+  };
+
+  const addItem = () => onChange("travelItems", [...items, createTravelItem()]);
+
+  const removeItem = (id) => {
+    onChange("travelItems", items.filter(it => it.id !== id));
+    setErrors(prev => {
+      if (!prev[id]) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+  };
+
+  const fieldStyle = { borderColor: BUILDER_UI.outline, backgroundColor: BUILDER_UI.surfaceContainer };
+  const labelCls = "text-xs font-bold tracking-widest uppercase mb-2 block";
+  const errorText = (msg) => msg && (
+    <p className="text-xs mt-1.5" style={{ color: "#b3261e" }}>{msg}</p>
+  );
+
+  return (
+    <div className="space-y-8">
+      {/* Visibility toggle — same control as Music's "Show music on invitation" */}
+      <div>
+        <h3 className="text-xs font-bold tracking-widest uppercase mb-4"
+          style={{ color: BUILDER_UI.onSurfaceVar }}>
+          Visibility
+        </h3>
+        <div className="p-4 rounded-lg flex items-center justify-between"
+          style={{ backgroundColor: BUILDER_UI.surfaceContainer }}>
+          <div>
+            <p className="text-sm font-bold" style={{ color: BUILDER_UI.onSurface }}>
+              Show Travel &amp; Stay on invitation
+            </p>
+            <p className="text-xs" style={{ color: BUILDER_UI.onSurfaceVar }}>
+              Appears once at least one place has a name.
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={showOnInvitation}
+            aria-label="Show Travel & Stay on invitation"
+            onClick={() => onChange("travelShowOnInvitation", !showOnInvitation)}
+            className="w-12 h-6 rounded-full transition-colors relative flex-shrink-0"
+            style={{ backgroundColor: showOnInvitation ? BUILDER_UI.primary : BUILDER_UI.surfaceHigh }}>
+            <div className="w-5 h-5 bg-white rounded-full absolute top-0.5 transition-transform"
+              style={{ transform: showOnInvitation ? "translateX(26px)" : "translateX(2px)" }} />
+          </button>
+        </div>
+      </div>
+
+      {/* Intro message */}
+      <div>
+        <h3 className="text-xs font-bold tracking-widest uppercase mb-4"
+          style={{ color: BUILDER_UI.onSurfaceVar }}>
+          Introductory Message <span className="normal-case tracking-normal font-normal">(optional)</span>
+        </h3>
+        <Textarea
+          value={settings.travelMessage || ""}
+          onChange={e => onChange("travelMessage", e.target.value.slice(0, TRAVEL_MESSAGE_MAX))}
+          placeholder="Here are a few places we recommend for out-of-town guests."
+          className="min-h-[100px] rounded-lg border-0 border-b-2 resize-none"
+          style={{ ...fieldStyle, color: BUILDER_UI.onSurface }}
+        />
+        <p className="text-xs mt-2 text-right" style={{ color: BUILDER_UI.onSurfaceVar }}>
+          {(settings.travelMessage || "").length}/{TRAVEL_MESSAGE_MAX}
+        </p>
+      </div>
+
+      {/* Places */}
+      <div>
+        <h3 className="text-xs font-bold tracking-widest uppercase mb-4"
+          style={{ color: BUILDER_UI.onSurfaceVar }}>
+          Places
+        </h3>
+
+        {items.length === 0 ? (
+          <div className="flex flex-col items-center justify-center text-center p-8 rounded-lg border-2 border-dashed mb-4"
+            style={{ borderColor: BUILDER_UI.outline, backgroundColor: BUILDER_UI.surfaceHigh }}>
+            <Hotel size={24} className="mb-2" style={{ color: BUILDER_UI.onSurfaceVar }} />
+            <p className="text-sm font-bold" style={{ color: BUILDER_UI.onSurface }}>No places yet</p>
+            <p className="text-xs mt-1" style={{ color: BUILDER_UI.onSurfaceVar }}>
+              Add hotels, restaurants, airports or anything else guests may need.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-4 mb-4">
+            {items.map((item, i) => {
+              const itemErrors = errors[item.id] || {};
+              return (
+                <div key={item.id} className="rounded-lg p-5 space-y-4"
+                  style={{ backgroundColor: BUILDER_UI.surfaceContainer, border: `1px solid ${BUILDER_UI.outline}` }}>
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-bold tracking-widest uppercase"
+                      style={{ color: BUILDER_UI.onSurfaceVar }}>
+                      Place {i + 1}
+                    </p>
+                    <button type="button" onClick={() => removeItem(item.id)}
+                      className="flex items-center gap-1 text-xs font-bold uppercase tracking-widest transition-opacity hover:opacity-70"
+                      style={{ color: BUILDER_UI.onSurfaceVar }}
+                      aria-label={`Remove place ${i + 1}`}>
+                      <Trash2 size={13} /> Remove
+                    </button>
+                  </div>
+
+                  {/* Category */}
+                  <div>
+                    <span className={labelCls} style={{ color: BUILDER_UI.onSurfaceVar }}>Category</span>
+                    <div className="flex flex-wrap gap-2" role="radiogroup" aria-label={`Place ${i + 1} category`}>
+                      {TRAVEL_CATEGORIES.map(cat => {
+                        const selected = item.category === cat.value;
+                        return (
+                          <button key={cat.value} type="button" role="radio" aria-checked={selected}
+                            onClick={() => updateItem(item.id, "category", cat.value)}
+                            className="px-4 py-2 rounded-lg border-2 text-xs font-bold transition-all"
+                            style={{
+                              backgroundColor: selected ? BUILDER_UI.selected : BUILDER_UI.surface,
+                              borderColor: selected ? BUILDER_UI.primary : "transparent",
+                              color: selected ? BUILDER_UI.primary : BUILDER_UI.onSurfaceVar,
+                            }}>
+                            {cat.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Name */}
+                  <div>
+                    <label htmlFor={`travel-name-${item.id}`} className={labelCls}
+                      style={{ color: BUILDER_UI.onSurfaceVar }}>
+                      Place Name
+                    </label>
+                    <Input
+                      id={`travel-name-${item.id}`}
+                      value={item.name}
+                      onChange={e => updateItem(item.id, "name", e.target.value)}
+                      placeholder="Hyatt Regency Dallas"
+                      maxLength={100}
+                      className="h-11 rounded-lg border-0 border-b-2"
+                      style={{ ...fieldStyle, ...(itemErrors.name ? { borderColor: "#b3261e" } : {}) }}
+                    />
+                    {errorText(itemErrors.name)}
+                  </div>
+
+                  {/* Google Maps link */}
+                  <div>
+                    <label htmlFor={`travel-link-${item.id}`} className={labelCls}
+                      style={{ color: BUILDER_UI.onSurfaceVar }}>
+                      Google Maps Link <span className="normal-case tracking-normal font-normal">(optional)</span>
+                    </label>
+                    <Input
+                      id={`travel-link-${item.id}`}
+                      type="url"
+                      value={item.mapUrl}
+                      onChange={e => updateItem(item.id, "mapUrl", e.target.value)}
+                      onBlur={() => checkItemLink(item)}
+                      placeholder="https://maps.app.goo.gl/..."
+                      className="h-11 rounded-lg border-0 border-b-2"
+                      style={{ ...fieldStyle, ...(itemErrors.mapUrl ? { borderColor: "#b3261e" } : {}) }}
+                    />
+                    {errorText(itemErrors.mapUrl) || (
+                      <p className="text-xs mt-1.5" style={{ color: BUILDER_UI.onSurfaceVar }}>
+                        In Google Maps, open the place, select Share, then copy and paste the link.
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Description */}
+                  <div>
+                    <label htmlFor={`travel-desc-${item.id}`} className={labelCls}
+                      style={{ color: BUILDER_UI.onSurfaceVar }}>
+                      Description <span className="normal-case tracking-normal font-normal">(optional)</span>
+                    </label>
+                    <Textarea
+                      id={`travel-desc-${item.id}`}
+                      value={item.description}
+                      onChange={e => updateItem(item.id, "description", e.target.value)}
+                      placeholder="This is the closest hotel to our venue and where we recommend staying."
+                      maxLength={300}
+                      className="min-h-[80px] rounded-lg border-0 border-b-2 resize-none"
+                      style={{ ...fieldStyle, color: BUILDER_UI.onSurface }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        <button type="button" onClick={addItem}
+          className="w-full flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-bold uppercase tracking-widest"
+          style={{ backgroundColor: BUILDER_UI.primary, color: "#FFFFFF" }}>
+          <Plus size={15} /> Add Place
+        </button>
+        <p className="text-xs mt-3" style={{ color: BUILDER_UI.onSurfaceVar }}>
+          Changes are saved when you click Save. Places with no details are removed on save.
+        </p>
+      </div>
+    </div>
+  );
+};
+
 // ── Center Panel: Date ────────────────────────────────────────────────────────
 const DatePanel = ({ invitation }) => (
   <div className="space-y-6">
@@ -790,6 +1035,52 @@ const PhonePreview = ({ invitation, settings }) => {
             )}
           </div>
 
+          {/* Travel & Stay — only when the toggle is on AND at least one place
+              has a name. Links are re-checked so only http(s) URLs render. */}
+          {shouldShowTravelSection(settings) && (
+            <div className="p-6" style={{ backgroundColor: "#ffffff" }}>
+              <h2 className="text-base mb-2 text-center"
+                style={{ fontFamily: headingFont, color: CANVAS.onSurface }}>
+                Travel &amp; Stay
+              </h2>
+              {settings.travelMessage?.trim() && (
+                <p className="text-[9px] leading-relaxed text-center mb-4" style={{ color: CANVAS.onSurfaceVar }}>
+                  {settings.travelMessage.trim()}
+                </p>
+              )}
+              <div className="space-y-3">
+                {getVisibleTravelItems(settings.travelItems).map(item => (
+                  <div key={item.id} className="rounded-xl p-3 text-left"
+                    style={{ backgroundColor: CANVAS.surface, border: `1px solid ${CANVAS.outline}` }}>
+                    <p className="text-[8px] font-bold uppercase tracking-widest mb-0.5"
+                      style={{ color: primaryColor }}>
+                      {getTravelCategoryLabel(item.category)}
+                    </p>
+                    <p className="text-[10px] font-bold" style={{ color: CANVAS.onSurface }}>
+                      {item.name}
+                    </p>
+                    {item.description && (
+                      <p className="text-[9px] leading-relaxed mt-1" style={{ color: CANVAS.onSurfaceVar }}>
+                        {item.description}
+                      </p>
+                    )}
+                    {item.mapUrl && (
+                      <a
+                        href={item.mapUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-2 inline-flex items-center gap-1 text-[9px] font-bold"
+                        style={{ color: primaryColor }}
+                      >
+                        View on Google Maps <ExternalLink size={9} />
+                      </a>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* RSVP section */}
           <div className="p-6 text-center" style={{ backgroundColor: "#ffffff" }}>
             <h2 className="text-base mb-4"
@@ -846,7 +1137,13 @@ const CreateInvitation = () => {
   const [loading, setLoading]           = useState(true);
   const [saving, setSaving]             = useState(false);
   const [saved, setSaved]               = useState(false);
-  const [activeSection, setActiveSection] = useState("layout");
+  // ?section=travel (e.g. from the dashboard sidebar) opens that section
+  // directly; anything unknown falls back to the default "layout" section.
+  const [searchParams] = useSearchParams();
+  const requestedSection = searchParams.get("section");
+  const [activeSection, setActiveSection] = useState(
+    SECTIONS.some(s => s.id === requestedSection) ? requestedSection : "layout"
+  );
 
   // Settings state — these are the invitation customization options
   // They are saved back to the `invitations` Firestore doc on Save/Publish
@@ -865,7 +1162,19 @@ const CreateInvitation = () => {
     isPublished:      false,
     inviteDeadline:   "",
     closureTitle:     "",
+    // Travel & Stay — filled from Firestore on load
+    travelItems:            [], // [{ id, category, name, mapUrl, description }]
+    travelMessage:          "",
+    travelShowOnInvitation: true,
   });
+
+  // Per-place validation errors for Travel & Stay: { [itemId]: { name?, mapUrl? } }
+  const [travelErrors, setTravelErrors] = useState({});
+
+  // True only once the saved invitation was read successfully (or we confirmed
+  // there isn't one yet). Until then the travel fields are NOT written on save,
+  // so a failed load can never overwrite saved places with empty defaults.
+  const [travelLoaded, setTravelLoaded] = useState(false);
 
   // ── Load existing invitation data on mount ─────────────────────────────────
   useEffect(() => {
@@ -891,8 +1200,13 @@ const CreateInvitation = () => {
             musicSpotifyUrl:       inv.musicSpotifyUrl       || prev.musicSpotifyUrl,
             musicShowOnInvitation: inv.musicShowOnInvitation ?? prev.musicShowOnInvitation,
             isPublished:     inv.isPublished     || false,
+            // Older invitations have no travel fields → [], "", true
+            travelItems:            normalizeTravelItems(inv.travelItems),
+            travelMessage:          typeof inv.travelMessage === "string" ? inv.travelMessage : "",
+            travelShowOnInvitation: getTravelShowOnInvitation(inv),
           }));
         }
+        setTravelLoaded(true);
       } catch (err) {
         console.error("Load invitation error:", err);
       } finally {
@@ -928,6 +1242,17 @@ const CreateInvitation = () => {
   // ── Save to Firestore ──────────────────────────────────────────────────────
   const handleSave = async (publish = false) => {
     if (!user) return;
+
+    // Travel & Stay: block the save if a place is missing its name or has an
+    // unsafe link, and jump to that section so the host can fix it.
+    const travelValidation = validateTravelItems(settings.travelItems);
+    if (Object.keys(travelValidation).length > 0) {
+      setTravelErrors(travelValidation);
+      setActiveSection("travel");
+      alert("Please fix the highlighted Travel & Stay places before saving.");
+      return;
+    }
+
     setSaving(true);
     try {
       const dataToSave = {
@@ -941,7 +1266,21 @@ const CreateInvitation = () => {
         venueAddress: invitation?.venueAddress || "",
       };
 
+      // Travel & Stay: trimmed, empty places dropped. Skipped entirely if the
+      // saved invitation never loaded, so stored places can't be wiped.
+      const cleanedTravelItems = cleanTravelItemsForSave(settings.travelItems);
+      if (travelLoaded) {
+        dataToSave.travelItems = cleanedTravelItems;
+        dataToSave.travelMessage = (settings.travelMessage || "").trim();
+        dataToSave.travelShowOnInvitation = getTravelShowOnInvitation(settings);
+      } else {
+        delete dataToSave.travelItems;
+        delete dataToSave.travelMessage;
+        delete dataToSave.travelShowOnInvitation;
+      }
+
       const id = await saveInvitation(user.uid, dataToSave, weddingId);
+      if (travelLoaded) setSettings(prev => ({ ...prev, travelItems: cleanedTravelItems }));
       if (!weddingId) setWeddingId(id);
       if (publish) setSettings(prev => ({ ...prev, isPublished: true }));
 
@@ -965,6 +1304,8 @@ const CreateInvitation = () => {
       case "layout":    return <LayoutPanel    settings={settings} onChange={handleChange} />;
       case "greetings": return <GreetingsPanel settings={settings} onChange={handleChange} />;
       case "date":      return <DatePanel      invitation={invitation} />;
+      case "travel":    return <TravelPanel    settings={settings} onChange={handleChange}
+                                 errors={travelErrors} setErrors={setTravelErrors} />;
       default:
         return (
           <div className="flex flex-col items-center justify-center h-64 text-center">
