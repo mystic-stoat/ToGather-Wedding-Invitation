@@ -28,5 +28,13 @@
         - usually I start "auth,firestore,functions"
     - you also probably want to load and save emulator data so use:
         - "--import=./emulator-data --export-on-exit=./emulator-data"
+- this is now a command "npm run start:emulators"
+
+- additionally you can run the whole project using emulators:
+    - go to .env: file and set "VITE_RUN_EMULATOR_MODE" to true
+    - run emulators: npm run start emulators
+    - then: npm run dev
+    - this will run mocked local services for testing purposes
+    
     
 - firebase firestore rules are set in "./firestore.rules"

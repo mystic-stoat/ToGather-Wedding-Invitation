@@ -18,8 +18,11 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { initializeApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { getAuth, connectAuthEmulator } from "firebase/auth";
+import { getFirestore, connectFirestoreEmulator } from "firebase/firestore";
+import { getStorage, connectStorageEmulator } from "firebase/storage";
+import { getFunctions, connectFunctionsEmulator } from "firebase/functions";
+
 
 // Your Firebase project credentials
 // These are safe to include in frontend code — Firebase security rules
@@ -36,8 +39,18 @@ const firebaseConfig = {
 // Initialize the Firebase app (connects to your Firebase project)
 const app = initializeApp(firebaseConfig);
 
-// Firestore database — used in firestore.js for all reads/writes
-export const db = getFirestore(app);
+// Firebase services connections
+const db = getFirestore(app);
+const firebaseAuth = getAuth(app);
+const storage = getStorage(app);
+const functions = getFunctions(app);
 
-// Firebase Authentication — used in AuthContext.jsx for login/signup/logout
-export const firebaseAuth = getAuth(app);
+if ( import.meta.env.VITE_RUN_EMULATOR_MODE === "true") {
+  connectAuthEmulator(firebaseAuth, "http://localhost:9099");
+  connectFirestoreEmulator(db, "localhost", 8080);
+  connectStorageEmulator(storage, "localhost", 9199);
+  connectFunctionsEmulator(functions, "localhost", 5001);
+}
+
+export { app, firebaseAuth, db, storage, functions };
+
