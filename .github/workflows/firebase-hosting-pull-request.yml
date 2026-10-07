@@ -3,6 +3,8 @@
 
 name: Deploy to Firebase Hosting on PR
 on: pull_request
+env:
+  VITE_GOOGLE_MAPS_API_KEY: ${{secrets.VITE_GOOGLE_MAPS_API_KEY}}
 permissions:
   checks: write
   contents: read
