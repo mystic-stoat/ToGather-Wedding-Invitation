@@ -41,8 +41,11 @@ Christopher Nguyen:
 * Edit dashboard "Your Invitation to My Invitation"
 * Remove add guest on dashboard and change it to a shortcut to guestlist.
 * Created and edited wireframe/Phorotype to dashboard, RSVP, guestlist add, and guestlist.
-
-&#x20; 
+* Added Travel \& Stay to the Invitation Builder
+* Added support for hotel, restaurant, airport, and other recommendations
+* Added Google Maps links and descriptions for recommended places
+* Added Travel \& Stay invitation preview
+* Added unit tests for Travel \& Stay
 
 Kris Pritchett:
 
