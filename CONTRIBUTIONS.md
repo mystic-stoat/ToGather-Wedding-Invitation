@@ -15,6 +15,7 @@ Colten Mikulastik:
 * Code Quailty: moved our Sidebar into component, to be called centrally
 * Wedding details: moved database entries and worked with formalizing google maps embed
 * AI-Chat Interface: integrated more into project, and worked with the position and layout of components
+* Full emulator Runtime for Testing configured: added configuration to allow running full app on local emulators
 
 Keiran Indraanei:
 

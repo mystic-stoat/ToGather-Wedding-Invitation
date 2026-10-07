@@ -1,6 +1,12 @@
 # ToGather Invitation WebApp
 This is code for the UNT Computer Science Capstone Spring-Fall 2026 Semester 
 
+## Documentation Structure: check out these markdown files!!!
+- TEST.MD: define testing procedures and tools
+- LLM.MD: define a broad structure of the project
+- ARCHITECTURE.md: defines architecture and design choices
+- CONTRIBUTIONS.md: define who worked on what parts of the project
+
 ## Goals
 The primary goal of this application is the management of wedding and design of wedding invitations.
 
