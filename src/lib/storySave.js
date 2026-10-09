@@ -1,7 +1,8 @@
 // src/lib/storySave.js
 // ─────────────────────────────────────────────────────────────────────────────
 // WHAT THIS FILE DOES:
-//   Runs the "Save" pipeline for photos (Hero Photo + Our Story):
+//   Runs the "Save" pipeline for photos (Hero Photo + Our Story + Wedding
+//   Party member photos):
 //
 //     1. Plan      — drop empty blocks and photos hidden by a layout change.
 //     2. Quota     — refuse BEFORE uploading if the wedding would go over the
@@ -11,17 +12,22 @@
 //                    If any upload fails, the photos uploaded in this attempt
 //                    are deleted again and NOTHING is written to Firestore.
 //     4. Commit    — one atomic Firestore batch: Story entries + heroImage +
-//                    mediaBytesUsed + mediaPendingDeletes. On failure, this
-//                    attempt's uploads are deleted again.
+//                    partyMembers (only when changed) + mediaBytesUsed +
+//                    mediaPendingDeletes. On failure, this attempt's uploads
+//                    are deleted again.
 //     5. Clean up  — only now delete replaced/removed files. Files that fail
 //                    to delete stay in mediaPendingDeletes (and keep counting
 //                    toward mediaBytesUsed) and are retried later.
 //
 //   mediaBytesUsed is RECOMPUTED from scratch on every save:
-//     referenced photos (hero + story) + files waiting in mediaPendingDeletes
+//     referenced photos (hero + story + party) + files waiting in mediaPendingDeletes
 //   so it never drifts with +/- arithmetic. See docs/STORY_AND_MEDIA.md.
 //
 //   All Firebase calls go through `deps` so tests can inject fakes.
+//
+//   Wedding Party is optional: callers that don't pass `partyMembers` (null)
+//   leave the stored members untouched, but their photos still count toward
+//   mediaBytesUsed via `savedPartyMembers`.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { WEDDING_MEDIA_QUOTA_BYTES, formatBytes } from "@/lib/mediaConfig";
@@ -29,11 +35,14 @@ import {
   isBlockEmpty, getVisibleSlots, getSlotCount, toEntryData, diffStoryEntries,
   collectReferencedPhotos, sumBytes, estimateMediaBytes, normalizeSavedPhoto,
 } from "@/lib/storyBlocks";
-import { uploadPhoto, deletePhoto, buildHeroPath, buildStoryPath } from "@/lib/mediaStorage";
+import { uploadPhoto, deletePhoto, buildHeroPath, buildStoryPath, buildPartyPath } from "@/lib/mediaStorage";
 import { commitMediaChanges, updateMediaBookkeeping } from "@/lib/storyStore";
+import { cleanPartyMembersForSave, toStoredPartyMember, collectPartyPhotos, partyPhotoBytes } from "@/lib/weddingParty";
 
 export const defaultDeps = {
   uploadPhoto, deletePhoto, buildHeroPath, buildStoryPath,
+  // Wrapped so the binding is only read when a party photo is uploaded.
+  buildPartyPath: (...args) => buildPartyPath(...args),
   commitMediaChanges, updateMediaBookkeeping,
 };
 
@@ -111,7 +120,10 @@ const runJobs = async (jobs, worker) => {
  *   weddingId, hero (local slot), savedHero (as stored), blocks (local),
  *   savedEntriesById ({ id: entryData }), pendingDeletes ([{path,bytes}]),
  *   savedMediaBytesUsed (number as stored), onProgress(fn), deps
- * @returns {Promise<{ hero, blocks, savedEntriesById, mediaBytesUsed, pendingDeletes, wrote }>}
+ *   partyMembers       local Wedding Party members, or null to leave them untouched
+ *   savedPartyMembers  members as stored (toStoredPartyMember shape)
+ * @returns {Promise<{ hero, blocks, savedEntriesById, partyMembers, mediaBytesUsed, pendingDeletes, wrote }>}
+ *   partyMembers = the stored members after the save
  * @throws MediaSaveError — local state is untouched; nothing new is referenced.
  */
 export const saveStoryMedia = async ({
@@ -122,6 +134,8 @@ export const saveStoryMedia = async ({
   savedEntriesById,
   pendingDeletes = [],
   savedMediaBytesUsed = 0,
+  partyMembers = null,
+  savedPartyMembers = [],
   quotaBytes = WEDDING_MEDIA_QUOTA_BYTES,
   onProgress = () => {},
   deps = defaultDeps,
@@ -139,9 +153,17 @@ export const saveStoryMedia = async ({
       }
     }
   }
+  // Wedding Party: blank members are dropped, the rest keep their order.
+  const keptParty = Array.isArray(partyMembers) ? cleanPartyMembersForSave(partyMembers) : null;
+  for (const m of keptParty || []) {
+    if (m.photo?.pending) {
+      jobs.push({ key: m.photo.localId, photo: m.photo, path: deps.buildPartyPath(weddingId, m.id, m.photo.contentType) });
+    }
+  }
 
   // ── 2. Quota (before any upload) ────────────────────────────────────────────
-  const projected = estimateMediaBytes(hero, keptBlocks, pendingDeletes);
+  const partyBytes = keptParty ? partyPhotoBytes(keptParty) : sumBytes(collectPartyPhotos(savedPartyMembers));
+  const projected = estimateMediaBytes(hero, keptBlocks, pendingDeletes) + partyBytes;
   if (projected > quotaBytes) {
     throw new MediaSaveError(
       `These photos would use ${formatBytes(projected)}, which is over your ${formatBytes(quotaBytes)} photo limit. ` +
@@ -175,7 +197,8 @@ export const saveStoryMedia = async ({
     if (leftovers.length) {
       // Track what we couldn't delete so it is counted and retried later.
       const queue = uniqueByPath([...pendingDeletes, ...leftovers]);
-      const referenced = sumBytes(collectReferencedPhotos(savedHero, Object.values(savedEntriesById)));
+      const referenced = sumBytes(collectReferencedPhotos(savedHero, Object.values(savedEntriesById)))
+        + sumBytes(collectPartyPhotos(savedPartyMembers));
       try {
         await deps.updateMediaBookkeeping(weddingId, {
           mediaBytesUsed: referenced + sumBytes(queue),
@@ -228,10 +251,17 @@ export const saveStoryMedia = async ({
   });
   const entries = finalBlocks.map((b, i) => toEntryData(b, i));
   const changes = diffStoryEntries(savedEntriesById, entries);
+  const finalParty = keptParty
+    ? keptParty.map(m => toStoredPartyMember(m, asSaved(m.photo)))
+    : savedPartyMembers;
+  const partyChanged = keptParty !== null && JSON.stringify(savedPartyMembers) !== JSON.stringify(finalParty);
 
-  const referenced = collectReferencedPhotos(finalHero, entries);
+  const referenced = [...collectReferencedPhotos(finalHero, entries), ...collectPartyPhotos(finalParty)];
   const referencedPaths = new Set(referenced.map(r => r.path));
-  const previouslyReferenced = collectReferencedPhotos(savedHero, Object.values(savedEntriesById));
+  const previouslyReferenced = [
+    ...collectReferencedPhotos(savedHero, Object.values(savedEntriesById)),
+    ...collectPartyPhotos(savedPartyMembers),
+  ];
   const dropped = previouslyReferenced.filter(p => !referencedPaths.has(p.path));
   const queue = uniqueByPath([...pendingDeletes, ...dropped]).filter(p => !referencedPaths.has(p.path));
   const referencedBytes = sumBytes(referenced);
@@ -239,15 +269,19 @@ export const saveStoryMedia = async ({
 
   const heroChanged = JSON.stringify(savedHero || null) !== JSON.stringify(finalHero || null);
   const anyEntryChange = changes.creates.length + changes.updates.length + changes.deletes.length > 0;
-  const mustWrite = anyEntryChange || heroChanged || dropped.length > 0 || mediaBytesUsed !== savedMediaBytesUsed;
+  const mustWrite = anyEntryChange || heroChanged || partyChanged || dropped.length > 0 ||
+    mediaBytesUsed !== savedMediaBytesUsed;
 
   if (mustWrite) {
+    const invitationFields = {
+      heroImage: finalHero || null,
+      mediaBytesUsed,
+      mediaPendingDeletes: queue,
+    };
+    // Only written when changed, so a Story-only save never rewrites members.
+    if (partyChanged) invitationFields.partyMembers = finalParty;
     try {
-      await deps.commitMediaChanges(weddingId, changes, {
-        heroImage: finalHero || null,
-        mediaBytesUsed,
-        mediaPendingDeletes: queue,
-      });
+      await deps.commitMediaChanges(weddingId, changes, invitationFields);
     } catch (err) {
       console.error("Saving Story/Hero failed:", err);
       await discardThisAttempt();
@@ -265,6 +299,7 @@ export const saveStoryMedia = async ({
     hero: finalHero || null,
     blocks: finalBlocks,
     savedEntriesById: Object.fromEntries(entries.map(e => [e.id, e])),
+    partyMembers: finalParty,
     mediaBytesUsed: after.mediaBytesUsed,
     pendingDeletes: after.pendingDeletes,
     wrote: mustWrite,

@@ -3,6 +3,7 @@
 // Photo files live at:
 //   weddings/{weddingId}/hero/{fileName}            — Hero Photo
 //   weddings/{weddingId}/story/{entryId}/{fileName} — Our Story photos
+//   weddings/{weddingId}/party/{memberId}/{fileName} — Wedding Party member photos
 //
 // - Only the wedding's owner (invitations/{weddingId}.userId) may upload or
 //   delete. Ownership is read from Firestore (cross-service rules). The first
@@ -57,6 +58,14 @@ service firebase.storage {
     }
 
     match /weddings/{weddingId}/story/{entryId}/{fileName} {
+      allow read:   if isOwner(weddingId) || isPublished(weddingId);
+      allow create: if resource == null && isOwner(weddingId) && isValidPhoto(fileName);
+      allow update: if false;
+      allow delete: if isOwner(weddingId);
+    }
+
+    // Wedding Party member photos — same rules as Our Story photos.
+    match /weddings/{weddingId}/party/{memberId}/{fileName} {
       allow read:   if isOwner(weddingId) || isPublished(weddingId);
       allow create: if resource == null && isOwner(weddingId) && isValidPhoto(fileName);
       allow update: if false;

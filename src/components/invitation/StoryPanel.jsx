@@ -226,7 +226,7 @@ const StoryPanel = ({
         <div className="flex justify-between text-xs mb-1.5" style={{ color: BUILDER_UI.onSurfaceVar }}>
           <span className="font-bold tracking-widest uppercase">Photo storage</span>
           <span style={{ color: overQuota ? ERROR_COLOR : undefined }}>
-            {formatBytes(mediaBytes)} of {formatBytes(WEDDING_MEDIA_QUOTA_BYTES)} (includes Hero Photo)
+            {formatBytes(mediaBytes)} of {formatBytes(WEDDING_MEDIA_QUOTA_BYTES)} (includes Hero Photo and Wedding Party photos)
           </span>
         </div>
         <div className="h-2 rounded-full overflow-hidden" style={{ backgroundColor: BUILDER_UI.surfaceHigh }}

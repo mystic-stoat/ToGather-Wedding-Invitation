@@ -12,7 +12,9 @@
 //   - This creates a clear separation between the "tool" and the "artifact"
 //
 // LAYOUT:
-//   Left sidebar  → section navigation (Color Theme, Music, Greetings, Venue, RSVP, etc.)
+//   Left sidebar  → section navigation in a fixed order: Greetings, Color Theme,
+//                   Date, Music, Our Story, Wedding Party, Venue, Travel & Stay,
+//                   RSVP, Registry (see SECTIONS)
 //                   (the former Privacy tab was removed — it never controlled
 //                   access; publishing is the header's Publish button)
 //   Center panel  → active section's controls/settings
@@ -25,6 +27,16 @@
 //   4. Hero Photo + Our Story photos are uploaded to Cloud Storage on Save
 //      (see src/lib/storySave.js and docs/STORY_AND_MEDIA.md). Story blocks
 //      live in invitations/{weddingId}/storyEntries, NOT in `settings`.
+//   5. Wedding Party members (and their photos) are saved by the same photo
+//      pipeline into invitations/{weddingId}.partyMembers — NOT via
+//      `settings`. Their private phone numbers/emails are saved separately to
+//      an owner-only doc (src/hooks/useWeddingPartyContacts.js). Only the
+//      section switches (partyShowOnInvitation / partyGroupBySide) are in
+//      `settings`. See src/lib/weddingParty.js.
+//   6. Registry (registries / registryMessage / registryShowOnInvitation on
+//      the invitation doc) SAVES IMMEDIATELY from its tab, exactly like the
+//      former dashboard Registry page (src/hooks/useRegistries.js). The main
+//      Save button never writes those fields, so it can't overwrite them.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState, useEffect } from "react";
@@ -32,7 +44,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   Heart, Palette, Music, Sparkles,
   BookOpen, Calendar, Image, MapPin, BookHeart, CheckSquare,
-  BookMarked, ArrowLeft, Save, ChevronRight,
+  Users, Gift, ArrowLeft, Save, ChevronRight,
   Eye, Volume2, Info, Loader2, Hotel, Plus, Trash2, Utensils, ExternalLink,
   AlertCircle, X,
 } from "lucide-react";
@@ -66,6 +78,7 @@ import {
   THEME_FIELDS,
   normalizeThemeSettings,
   resolveInvitationTheme,
+  buildGuestThemeStyle,
 } from "@/lib/invitationTheme";
 import { useGoogleFonts } from "@/hooks/useGoogleFonts";
 import HeroPhotoField from "@/components/invitation/HeroPhotoField";
@@ -90,6 +103,20 @@ import {
   getVenueDisplay,
 } from "@/lib/venueDisplay";
 import { getInviteDeadlineError } from "@/lib/rsvpDeadline";
+import WeddingPartyPanel from "@/components/invitation/WeddingPartyPanel";
+import WeddingPartySection from "@/components/invitation/WeddingPartySection";
+import { useWeddingPartyContacts } from "@/hooks/useWeddingPartyContacts";
+import {
+  DEFAULT_PARTY_SETTINGS,
+  PARTY_SETTING_FIELDS,
+  normalizePartySettings,
+  validatePartyMembers,
+  shouldShowPartySection,
+} from "@/lib/weddingParty";
+import RegistryPanel from "@/components/invitation/RegistryPanel";
+import RegistrySection from "@/components/registry/RegistrySection";
+import { useRegistries } from "@/hooks/useRegistries";
+import { hasRegistryContent } from "@/lib/registry";
 
 // ── Color tokens ──────────────────────────────────────────────────────────────
 // CANVAS (the invitation itself) and BUILDER_UI (the builder chrome) now live in
@@ -97,21 +124,26 @@ import { getInviteDeadlineError } from "@/lib/rsvpDeadline";
 // Our Story components can share them. Values are unchanged.
 
 // ── Section definitions — left sidebar nav ────────────────────────────────────
+// FIXED order (no drag-and-drop). The phone preview shows its content in the
+// same order (Color Theme has no section — it styles everything).
+// Q&A will be added after Registry in the future.
 const SECTIONS = [
-  { id: "theme",     label: "Color Theme", icon: Palette },
-  { id: "music",     label: "Music",     icon: Music },
-  { id: "greetings", label: "Greetings", icon: BookOpen },
-  { id: "date",      label: "Date",      icon: Calendar },
-  { id: "venue",     label: "Venue",     icon: MapPin },
+  { id: "greetings", label: "Greetings",     icon: BookOpen },
+  { id: "theme",     label: "Color Theme",   icon: Palette },
+  { id: "date",      label: "Date",          icon: Calendar },
+  { id: "music",     label: "Music",         icon: Music },
+  { id: "story",     label: "Our Story",     icon: BookHeart },
+  { id: "party",     label: "Wedding Party", icon: Users },
+  { id: "venue",     label: "Venue",         icon: MapPin },
   { id: "travel",    label: "Travel & Stay", icon: Hotel },
-  { id: "story",     label: "Story",     icon: BookHeart },
-  { id: "rsvp",      label: "RSVP",      icon: CheckSquare },
-  { id: "guestbook", label: "Guestbook", icon: BookMarked },
+  { id: "rsvp",      label: "RSVP",          icon: CheckSquare },
+  { id: "registry",  label: "Registry",      icon: Gift },
 ];
 
 // Older links to the former Color / Font tabs open the combined Color Theme tab.
 // The former Privacy tab's only working control (RSVP deadline) is now in RSVP.
-const SECTION_ALIASES = { color: "theme", font: "theme", privacy: "rsvp" };
+// The former Guestbook placeholder tab was replaced by Wedding Party.
+const SECTION_ALIASES = { color: "theme", font: "theme", privacy: "rsvp", guestbook: "party" };
 
 // Color theme + font pairing presets now live in src/lib/invitationTheme.js
 // (shared with the guest RSVP page) — values unchanged.
@@ -940,7 +972,10 @@ const VenuePanel = ({ invitation, settings, onChange }) => {
 // Colors and fonts come from the Color Theme settings (resolveInvitationTheme):
 // each section uses its own background or the main one. CANVAS is only used
 // for neutral photo placeholders, card borders and the preview's own overlay.
-const PhonePreview = ({ invitation, settings, hero, storyBlocks = [] }) => {
+const PhonePreview = ({
+  invitation, settings, hero, storyBlocks = [], partyMembers = [], registries = [], registryMessage = "",
+  registryShown = true,
+}) => {
   const theme        = resolveInvitationTheme(settings);
   const sec          = theme.sections;
   const heroUrl      = photoSrc(hero);
@@ -1029,19 +1064,16 @@ const PhonePreview = ({ invitation, settings, hero, storyBlocks = [] }) => {
             </p>
           </div>
 
-          {/* Our Story — after Greetings, before Wedding Day */}
-          {showStory && (
-            <StorySection
-              title={settings.storyTitle}
-              blocks={storyBlocks}
-              headingFont={theme.headingFont}
-              bodyFont={theme.bodyFont}
-              accentColor={theme.secondary}
-              backgroundColor={sec.story}
-              textColor={theme.headingText}
-              mutedColor={theme.bodyText}
-              showPlaceholders
-            />
+          {/* ── Content order matches the sidebar tabs (SECTIONS): Greetings
+              (header + hero + greetings), Date, Music, Our Story, Wedding
+              Party, Venue, Travel & Stay, RSVP, Registry — then the closing.
+              Color Theme has no section of its own; it styles everything. ── */}
+
+          {/* Wedding Day (Date tab) — right after Greetings; only when Calendar View and/or Countdown is on (Date tab).
+              The hero date above is always shown regardless of these settings. */}
+          {shouldShowWeddingDaySection(settings) && (
+            <WeddingDaySection invitation={invitation} settings={settings}
+              theme={theme} backgroundColor={sec.date} />
           )}
 
           {/* Music player — only shown once a real Spotify song is selected
@@ -1065,11 +1097,36 @@ const PhonePreview = ({ invitation, settings, hero, storyBlocks = [] }) => {
             </div>
           )}
 
-          {/* Wedding Day — only when Calendar View and/or Countdown is on (Date tab).
-              The hero date above is always shown regardless of these settings. */}
-          {shouldShowWeddingDaySection(settings) && (
-            <WeddingDaySection invitation={invitation} settings={settings}
-              theme={theme} backgroundColor={sec.date} />
+          {/* Our Story — after Music, before Wedding Party */}
+          {showStory && (
+            <StorySection
+              title={settings.storyTitle}
+              blocks={storyBlocks}
+              headingFont={theme.headingFont}
+              bodyFont={theme.bodyFont}
+              accentColor={theme.secondary}
+              backgroundColor={sec.story}
+              textColor={theme.headingText}
+              mutedColor={theme.bodyText}
+              showPlaceholders
+            />
+          )}
+
+          {/* Wedding Party — after Our Story. Only when the switch is on AND at
+              least one member has a name. Contact details appear only for
+              members whose "Show contact details" is on. */}
+          {shouldShowPartySection(settings, partyMembers) && (
+            <WeddingPartySection
+              members={partyMembers}
+              groupBySide={settings.partyGroupBySide === true}
+              headingFont={theme.headingFont}
+              bodyFont={theme.bodyFont}
+              backgroundColor={sec.party}
+              textColor={theme.headingText}
+              mutedColor={theme.bodyText}
+              accentColor={theme.secondary}
+              linkColor={theme.button}
+            />
           )}
 
           {/* Venue — name/address/link from Wedding Details; which parts show
@@ -1176,6 +1233,19 @@ const PhonePreview = ({ invitation, settings, hero, storyBlocks = [] }) => {
             </button>
           </div>
 
+          {/* Gift Registry — the SAME component the guest RSVP page renders,
+              wrapped in the same theme styling, so this is exactly what guests
+              see: the message plus only links with isVisible === true. Shows
+              nothing when "Show Registry on Invitation" is off, or when there's
+              no message and no visible link. */}
+          <div className="tg-invite-theme" data-section="registry"
+            style={{ ...buildGuestThemeStyle(settings), backgroundColor: theme.background }}>
+            <div className={registryShown && hasRegistryContent(registries, registryMessage) ? "p-4" : undefined}>
+              <RegistrySection registries={registries} registryMessage={registryMessage}
+                showOnInvitation={registryShown} compact />
+            </div>
+          </div>
+
           {/* Closure */}
           <div className="p-10 text-center" data-section="closure" style={{ backgroundColor: sec.closure }}>
             <h2 className="text-base mb-3"
@@ -1254,6 +1324,9 @@ const CreateInvitation = () => {
     ...DEFAULT_DATE_SETTINGS,
     // Venue tab: section / map / address / directions — all ON by default
     ...DEFAULT_VENUE_SETTINGS,
+    // Wedding Party tab: shown (once a member exists), one combined group
+    // (the members themselves live in useInvitationMedia)
+    ...DEFAULT_PARTY_SETTINGS,
   });
 
   // True only once the saved invitation has been read successfully (or we
@@ -1275,6 +1348,10 @@ const CreateInvitation = () => {
   const [dateSettingsLoaded, setDateSettingsLoaded] = useState(false);
   // Same guard for the Venue tab's display switches.
   const [venueSettingsLoaded, setVenueSettingsLoaded] = useState(false);
+  // Same guard for the Wedding Party section switches.
+  const [partySettingsLoaded, setPartySettingsLoaded] = useState(false);
+  // Per-member validation errors for Wedding Party: { [memberId]: { name?, role?, ... } }
+  const [partyErrors, setPartyErrors] = useState({});
   // RSVP deadline validation message (RSVP tab), same rule as Wedding Details
   const [deadlineError, setDeadlineError] = useState("");
 
@@ -1284,6 +1361,18 @@ const CreateInvitation = () => {
   // ── Hero Photo + Our Story state, loading and saving ───────────────────────
   // See src/hooks/useInvitationMedia.js — kept out of `settings` on purpose.
   const media = useInvitationMedia({ saving });
+
+  // ── Registry: same state/actions as the former Registry page; saves
+  //    immediately (src/hooks/useRegistries.js) ─────────────────────────────
+  const registry = useRegistries({ userId: user?.uid, weddingId });
+
+  // ── Wedding Party private contact details (loaded when the tab is opened) ──
+  const partyContacts = useWeddingPartyContacts({
+    weddingId,
+    invitationLoaded: media.partyLoaded,
+    active: activeSection === "party",
+    setMembers: media.setPartyMembers,
+  });
 
   // ── Load existing invitation data on mount ─────────────────────────────────
   useEffect(() => {
@@ -1321,19 +1410,25 @@ const CreateInvitation = () => {
             ...normalizeDateSettings(inv),
             // Older invitations have no venue settings → everything shown
             ...normalizeVenueSettings(inv),
+            // Older invitations have no wedding party settings → shown, combined
+            ...normalizePartySettings(inv),
           }));
         }
         // Hero Photo + Story entries (older invitations have neither)
         media.initFromInvitation(inv);
+        // Registry links + message from the same invitation doc (no extra read)
+        registry.initFromInvitation(inv);
         setMealOptionsLoaded(true);
         setTravelLoaded(true);
         setStorySettingsLoaded(true);
         setThemeLoaded(true);
         setDateSettingsLoaded(true);
         setVenueSettingsLoaded(true);
+        setPartySettingsLoaded(true);
       } catch (err) {
         console.error("Load invitation error:", err);
         media.markLoadFailed();
+        registry.markLoadFailed();
       } finally {
         setLoading(false);
       }
@@ -1364,6 +1459,16 @@ const CreateInvitation = () => {
       setTravelErrors(travelValidation);
       setActiveSection("travel");
       alert("Please fix the highlighted Travel & Stay places before saving.");
+      return;
+    }
+
+    // Wedding Party: every member that has any details needs a name and a
+    // role; phone/email must look valid. Blank members are simply dropped.
+    const partyValidation = media.partyLoaded ? validatePartyMembers(media.partyMembers) : {};
+    if (Object.keys(partyValidation).length > 0) {
+      setPartyErrors(partyValidation);
+      setActiveSection("party");
+      alert("Please fix the highlighted Wedding Party members before saving.");
       return;
     }
 
@@ -1448,6 +1553,20 @@ const CreateInvitation = () => {
         VENUE_SETTING_FIELDS.forEach(field => delete dataToSave[field]);
       }
 
+      // Wedding Party section switches — same guard. (Members are saved by
+      // media.save below, never through `settings`.)
+      if (partySettingsLoaded) {
+        Object.assign(dataToSave, normalizePartySettings(settings));
+      } else {
+        PARTY_SETTING_FIELDS.forEach(field => delete dataToSave[field]);
+      }
+
+      // Registry saves immediately from its own tab — never let the main Save
+      // write (or overwrite) those fields, even by accident.
+      delete dataToSave.registries;
+      delete dataToSave.registryMessage;
+      delete dataToSave.registryShowOnInvitation;
+
       const id = await saveInvitation(user.uid, dataToSave, weddingId);
       if (travelLoaded) setSettings(prev => ({ ...prev, travelItems: cleanedTravelItems }));
       if (!weddingId) setWeddingId(id);
@@ -1455,10 +1574,18 @@ const CreateInvitation = () => {
       if (mealOptionsLoaded) setSettings(prev => ({ ...prev, mealOptions: cleanedMealOptions }));
       if (storySettingsLoaded) setSettings(prev => ({ ...prev, storyTitle: dataToSave.storyTitle }));
 
-      // Photos + Story: uploads happen here, on Save.
+      // Photos + Story + Wedding Party members: uploads happen here, on Save.
       const mediaResult = await media.save(id);
       if (!mediaResult.ok) {
         setSaveNotice(mediaResult.notice);
+        return;
+      }
+
+      // Wedding Party private contact details (owner-only doc). Skipped unless
+      // they were loaded; only written when something changed.
+      const contactsResult = await partyContacts.save(id, mediaResult.partyMembers);
+      if (!contactsResult.ok) {
+        setSaveNotice(contactsResult.notice);
         return;
       }
 
@@ -1471,6 +1598,16 @@ const CreateInvitation = () => {
       setSaving(false);
     }
   };
+
+  // ── Clear one Wedding Party field error once the couple edits it ──────────
+  const clearPartyError = (id, field) =>
+    setPartyErrors(prev => {
+      if (!prev[id]?.[field]) return prev;
+      const { [field]: _removed, ...rest } = prev[id];
+      const next = { ...prev };
+      if (Object.keys(rest).length) next[id] = rest; else delete next[id];
+      return next;
+    });
 
   // ── Render the active section's center panel ───────────────────────────────
   const renderPanel = () => {
@@ -1492,6 +1629,14 @@ const CreateInvitation = () => {
       case "date":      return <DatePanel      invitation={invitation} settings={settings} onChange={handleChange} />;
       case "travel":    return <TravelPanel    settings={settings} onChange={handleChange}
                                  errors={travelErrors} setErrors={setTravelErrors} />;
+      case "party":     return <WeddingPartyPanel settings={settings} onSettingChange={handleChange}
+                                 members={media.partyMembers} setMembers={media.setPartyMembers}
+                                 loaded={media.partyLoaded}
+                                 errors={partyErrors} onClearError={clearPartyError}
+                                 contactsStatus={partyContacts.status} onRetryContacts={partyContacts.retry}
+                                 progressByKey={media.uploadProgress?.byKey}
+                                 disabled={saving} />;
+      case "registry":  return <RegistryPanel registry={registry} />;
       default:
         return (
           <div className="flex flex-col items-center justify-center h-64 text-center">
@@ -1614,8 +1759,9 @@ const CreateInvitation = () => {
                   style={{ color: BUILDER_UI.onSurface }}>
                   Invitation Builder
                 </p>
+                {/* Solid dark green: 6.0:1 on the sidebar (the faded gray was 1.75:1) */}
                 <p className="text-[9px] uppercase tracking-tight"
-                  style={{ color: `${BUILDER_UI.onSurfaceVar}70` }}>
+                  style={{ color: BUILDER_UI.primary }}>
                   {invitation?.groomName?.first && invitation?.brideName?.first
                     ? `${invitation.groomName.first} & ${invitation.brideName.first}`
                     : "Your Wedding"}
@@ -1624,23 +1770,27 @@ const CreateInvitation = () => {
             </div>
           </div>
 
-          {/* Section nav */}
-          <nav className="flex flex-col gap-0.5">
+          {/* Section nav — readable like the Dashboard sidebar:
+              inactive labels charcoal (11.7:1 on the sidebar), icons solid dark
+              green (6.0:1), a white hover; the active tab keeps the blush
+              background with dark green text (6.2:1). */}
+          <nav className="flex flex-col gap-0.5" aria-label="Invitation sections">
             {SECTIONS.map(sec => {
               const Icon    = sec.icon;
               const isActive = activeSection === sec.id;
               return (
                 <button key={sec.id}
                   onClick={() => setActiveSection(sec.id)}
-                  className="px-6 py-3 flex items-center gap-3 text-left transition-all text-xs font-bold tracking-widest uppercase focus:outline-none focus-visible:ring-2 focus-visible:ring-[#3F5F47] focus-visible:ring-offset-2 focus-visible:ring-offset-[#F0EAE5]"
+                  aria-current={isActive ? "page" : undefined}
+                  className={`px-6 py-3 flex items-center gap-3 text-left transition-all text-xs font-bold tracking-widest uppercase focus:outline-none focus-visible:ring-2 focus-visible:ring-[#3F5F47] focus-visible:ring-offset-2 focus-visible:ring-offset-[#F0EAE5]${isActive ? "" : " hover:bg-white"}`}
                   style={{
-                    backgroundColor: isActive ? BUILDER_UI.selected : "transparent",
-                    color: isActive ? BUILDER_UI.primary : `${BUILDER_UI.primary}50`,
+                    backgroundColor: isActive ? BUILDER_UI.selected : undefined,
+                    color: isActive ? BUILDER_UI.primary : BUILDER_UI.onSurface,
                     borderRadius: isActive ? "0 2rem 2rem 0" : undefined,
                     marginLeft: isActive ? "1rem" : undefined,
                     paddingLeft: isActive ? "1rem" : undefined,
                   }}>
-                  <Icon size={16} />
+                  <Icon size={16} className="flex-shrink-0" style={{ color: BUILDER_UI.primary }} />
                   {sec.label}
                   {isActive && <ChevronRight size={12} className="ml-auto" />}
                 </button>
@@ -1703,7 +1853,10 @@ const CreateInvitation = () => {
             position: "sticky",
             top: "4rem",
           }}>
-          <PhonePreview invitation={invitation} settings={settings} hero={media.hero} storyBlocks={media.storyBlocks} />
+          <PhonePreview invitation={invitation} settings={settings} hero={media.hero} storyBlocks={media.storyBlocks}
+            partyMembers={media.partyMembers}
+            registries={registry.registries} registryMessage={registry.message}
+            registryShown={registry.showOnInvitation} />
         </aside>
 
       </div>

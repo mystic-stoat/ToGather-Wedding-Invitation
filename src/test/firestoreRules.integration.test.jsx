@@ -1559,3 +1559,88 @@ describe('invitation color theme persistence', () => {
     await assertFails(updateDoc(doc(bob.firestore(), 'invitations/wedding-alice'), { colorBackground: '#000000' }));
   });
 });
+
+
+/*
+ * ============================================================
+ * WEDDING PARTY
+ * ============================================================
+ *   invitations/{weddingId}.partyMembers              — public member cards
+ *     (plain field on the invitation doc; existing owner-only update rule)
+ *   invitations/{weddingId}/private/weddingPartyContacts — owner-only
+ *     phone numbers / emails, never readable by guests
+ */
+describe('wedding party rules', () => {
+
+  const DRAFT = 'wedding-draft';
+  const LIVE = 'wedding-live';
+  const contactsPath = (weddingId) => `invitations/${weddingId}/private/weddingPartyContacts`;
+  const contactsDoc = (overrides = {}) => ({
+    contacts: { m1: { phone: '(214) 555-0123', email: 'jordan@example.com' } },
+    updatedAt: serverTimestamp(),
+    ...overrides,
+  });
+  const member = {
+    id: 'm1', name: 'Jordan Lee', role: 'bestMan', customRole: '', side: 'groom',
+    description: '', photo: null, isPointOfContact: true,
+    showContact: false, publicPhone: '', publicEmail: '',
+  };
+
+  beforeEach(async () => {
+    await seed(async (context) => {
+      const db = context.firestore();
+      await setDoc(doc(db, `invitations/${DRAFT}`), { userId: 'alice-uid', isPublished: false });
+      await setDoc(doc(db, `invitations/${LIVE}`), { userId: 'alice-uid', isPublished: true });
+      await setDoc(doc(db, contactsPath(LIVE)), { ...contactsDoc(), updatedAt: new Date() });
+    });
+  });
+
+  it('lets the owner save members and section settings on the invitation', async () => {
+    const alice = testEnv.authenticatedContext('alice-uid');
+    const ref = doc(alice.firestore(), `invitations/${DRAFT}`);
+    await assertSucceeds(updateDoc(ref, {
+      partyMembers: [member], partyShowOnInvitation: true, partyGroupBySide: false,
+    }));
+    const snap = await getDoc(ref);
+    expect(snap.data().partyMembers).toEqual([member]);
+  });
+
+  it('rejects another user changing the wedding party', async () => {
+    const bob = testEnv.authenticatedContext('bob-uid');
+    await assertFails(updateDoc(doc(bob.firestore(), `invitations/${DRAFT}`), { partyMembers: [] }));
+  });
+
+  it('lets the owner read and write private contact details', async () => {
+    const alice = testEnv.authenticatedContext('alice-uid');
+    await assertSucceeds(setDoc(doc(alice.firestore(), contactsPath(DRAFT)), contactsDoc()));
+    await assertSucceeds(getDoc(doc(alice.firestore(), contactsPath(DRAFT))));
+    await assertSucceeds(setDoc(doc(alice.firestore(), contactsPath(DRAFT)), contactsDoc({ contacts: {} })));
+  });
+
+  it('never lets guests or other users read contact details — even once published', async () => {
+    const anon = testEnv.unauthenticatedContext();
+    const bob = testEnv.authenticatedContext('bob-uid');
+    await assertFails(getDoc(doc(anon.firestore(), contactsPath(LIVE))));
+    await assertFails(getDoc(doc(bob.firestore(), contactsPath(LIVE))));
+    await assertFails(getDocs(collection(anon.firestore(), `invitations/${LIVE}/private`)));
+  });
+
+  it('rejects contact writes from other users and signed-out visitors', async () => {
+    const bob = testEnv.authenticatedContext('bob-uid');
+    const anon = testEnv.unauthenticatedContext();
+    await assertFails(setDoc(doc(bob.firestore(), contactsPath(DRAFT)), contactsDoc()));
+    await assertFails(setDoc(doc(anon.firestore(), contactsPath(DRAFT)), contactsDoc()));
+    await assertFails(deleteDoc(doc(bob.firestore(), contactsPath(LIVE))));
+  });
+
+  it('rejects malformed contact documents and unknown private doc ids', async () => {
+    const alice = testEnv.authenticatedContext('alice-uid');
+    const db = alice.firestore();
+    await assertFails(setDoc(doc(db, contactsPath(DRAFT)), contactsDoc({ extra: true })));
+    await assertFails(setDoc(doc(db, contactsPath(DRAFT)), contactsDoc({ contacts: 'not-a-map' })));
+    await assertFails(setDoc(doc(db, contactsPath(DRAFT)), { contacts: {}, updatedAt: new Date(0) }));
+    const tooMany = Object.fromEntries(Array.from({ length: 41 }, (_, i) => [`m${i}`, { phone: '', email: 'a@b.co' }]));
+    await assertFails(setDoc(doc(db, contactsPath(DRAFT)), contactsDoc({ contacts: tooMany })));
+    await assertFails(setDoc(doc(db, `invitations/${DRAFT}/private/somethingElse`), contactsDoc()));
+  });
+});

@@ -208,7 +208,7 @@ describe("Color Theme tab", () => {
     // One warning per distinct background: the main one and Story's soft tint
     const bodyWarnings = within(status).getAllByText(/Body text on the background/);
     expect(bodyWarnings.map(w => w.textContent)).toEqual([
-      expect.stringMatching(/Header, Greetings, Music, Wedding Day, Venue, Travel & Stay, RSVP, Closing/),
+      expect.stringMatching(/Header, Greetings, Wedding Day, Music, Wedding Party, Venue, Travel & Stay, RSVP, Closing/),
       expect.stringMatching(/Our Story/),
     ]);
 

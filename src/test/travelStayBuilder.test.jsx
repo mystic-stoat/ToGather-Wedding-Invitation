@@ -57,10 +57,12 @@ describe("Invitation Builder — Travel & Stay", () => {
     expect(await screen.findByText("Show Travel & Stay on invitation")).toBeTruthy();
     expect(screen.getByText("No places yet")).toBeTruthy();
 
-    const navLabels = screen.getAllByRole("button")
+    const navLabels = within(screen.getByRole("navigation", { name: "Invitation sections" }))
+      .getAllByRole("button")
       .map(b => b.textContent.trim())
-      .filter(t => ["Venue", "Travel & Stay", "Story"].includes(t));
-    expect(navLabels).toEqual(["Venue", "Travel & Stay", "Story"]);
+      .filter(t => ["Our Story", "Venue", "Travel & Stay", "RSVP"].includes(t));
+    // Fixed tab order: … Our Story, Wedding Party, Venue, Travel & Stay, RSVP …
+    expect(navLabels).toEqual(["Our Story", "Venue", "Travel & Stay", "RSVP"]);
   });
 
   it("falls back to the default section for an unknown ?section value", async () => {

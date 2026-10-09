@@ -1,0 +1,179 @@
+/* src/components/invitation/weddingPartySection.css
+ * Responsive styles for <WeddingPartySection>.
+ * Like storySection.css, it uses CSS container queries + container units
+ * (cqi) so the section scales with the space it is given — the ~270px phone
+ * mockup in the builder today and a full-width published page later —
+ * instead of the browser window.
+ *   narrow (phone)  → 2 cards per row
+ *   ≥ 480px         → 3 cards per row
+ *   ≥ 720px         → 4 cards per row
+ * Rows are centered, so an incomplete last row never looks lopsided.
+ */
+
+.tg-party {
+  container-type: inline-size;
+  width: 100%;
+  overflow: hidden;
+}
+
+.tg-party__inner {
+  max-width: 880px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(14px, 6cqi, 40px);
+}
+
+.tg-party__heading {
+  text-align: center;
+  font-size: clamp(16px, 6.5cqi, 36px);
+  line-height: 1.2;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.tg-party__divider {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5em;
+  margin-top: 0.5em;
+}
+.tg-party__divider span {
+  height: 1px;
+  width: clamp(24px, 10cqi, 64px);
+  background: currentColor;
+  opacity: 0.6;
+}
+
+.tg-party__group-label {
+  text-align: center;
+  font-size: clamp(9px, 3.2cqi, 14px);
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  margin: 0 0 clamp(8px, 3.5cqi, 20px);
+}
+
+/* ── Card grid ─────────────────────────────────────────────────────────── */
+.tg-party__grid {
+  --tg-party-gap: clamp(10px, 4cqi, 28px);
+  --tg-party-cols: 2;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--tg-party-gap);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.tg-party__card {
+  flex: 0 0 calc((100% - (var(--tg-party-cols) - 1) * var(--tg-party-gap)) / var(--tg-party-cols));
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+@container (min-width: 480px) {
+  .tg-party__grid { --tg-party-cols: 3; }
+}
+@container (min-width: 720px) {
+  .tg-party__grid { --tg-party-cols: 4; }
+}
+
+/* ── Photo / placeholder avatar ────────────────────────────────────────── */
+.tg-party__photo {
+  position: relative;
+  width: 78%;
+  max-width: 180px;
+  aspect-ratio: 1 / 1;
+  border-radius: 9999px;
+  overflow: hidden;
+  /* A ring (not a border) so the photo area keeps an exact 1:1 shape and the
+     crop matches the builder's square photo frame. */
+  box-shadow: 0 0 0 2px var(--tg-party-ring, currentColor);
+  margin: 2px 0 clamp(6px, 2.6cqi, 14px);
+}
+.tg-party__photo img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  display: block;
+}
+.tg-party__avatar {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: clamp(12px, 6cqi, 34px);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+/* ── Text ──────────────────────────────────────────────────────────────── */
+.tg-party__name {
+  font-size: clamp(11px, 4.4cqi, 22px);
+  line-height: 1.25;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.tg-party__role {
+  font-size: clamp(7px, 2.8cqi, 12px);
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  margin: 0.35em 0 0;
+  overflow-wrap: anywhere;
+}
+.tg-party__desc {
+  font-size: clamp(8px, 3.3cqi, 15px);
+  line-height: 1.5;
+  margin: 0.5em 0 0;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.tg-party__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  margin-top: 0.5em;
+  padding: 0.2em 0.7em;
+  border-radius: 9999px;
+  font-size: clamp(7px, 2.6cqi, 11px);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.tg-party__contact {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25em;
+  margin-top: 0.5em;
+  font-size: clamp(8px, 3cqi, 14px);
+  max-width: 100%;
+}
+.tg-party__contact a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35em;
+  max-width: 100%;
+  font-weight: 600;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.tg-party__contact a:hover,
+.tg-party__contact a:focus-visible {
+  text-decoration: underline;
+}
+.tg-party__contact svg {
+  flex-shrink: 0;
+}

@@ -58,7 +58,9 @@ export const loadAllStoryEntries = async (weddingId, { onPage, pageSize = STORY_
  * claims files that aren't referenced yet.)
  *
  * changes = { creates: entryData[], updates: entryData[], deletes: id[] }
- * invitationFields = { heroImage, mediaBytesUsed, mediaPendingDeletes }
+ * invitationFields = { heroImage, mediaBytesUsed, mediaPendingDeletes, partyMembers? }
+ *   (partyMembers = Wedding Party members, only present when they changed —
+ *    see src/lib/storySave.js)
  */
 export const commitMediaChanges = async (weddingId, changes, invitationFields) => {
   const ops = [

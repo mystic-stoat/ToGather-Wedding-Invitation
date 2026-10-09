@@ -138,3 +138,26 @@ describe('storage.rules — deleting', () => {
     await assertSucceeds(deleteObject(ref(testEnv.authenticatedContext('alice-uid').storage(STORAGE_BUCKET), path)));
   });
 });
+
+describe('storage.rules — Wedding Party photos', () => {
+  it('lets only the owner upload valid member photos', async () => {
+    const alice = testEnv.authenticatedContext('alice-uid');
+    await assertSucceeds(put(alice, `weddings/${DRAFT}/party/m1/abc-1.webp`));
+    await assertSucceeds(put(alice, `weddings/${DRAFT}/party/m2/abc-2.jpg`, img(), 'image/jpeg'));
+    await assertFails(put(testEnv.authenticatedContext('bob-uid'), `weddings/${DRAFT}/party/m1/x.webp`));
+    await assertFails(put(testEnv.unauthenticatedContext(), `weddings/${DRAFT}/party/m1/x.webp`));
+    await assertFails(put(alice, `weddings/${DRAFT}/party/m1/big.webp`, img(5 * MB + 1)));
+    await assertFails(put(alice, `weddings/${DRAFT}/party/m1/anim.webp`, img(), 'image/gif'));
+  });
+
+  it('keeps member photos private until published, and only the owner deletes', async () => {
+    const alice = testEnv.authenticatedContext('alice-uid');
+    await assertSucceeds(put(alice, `weddings/${DRAFT}/party/m1/p.webp`));
+    await assertSucceeds(put(alice, `weddings/${LIVE}/party/m1/p.webp`));
+    const anon = testEnv.unauthenticatedContext();
+    await assertFails(getBytes(ref(anon.storage(STORAGE_BUCKET), `weddings/${DRAFT}/party/m1/p.webp`)));
+    await assertSucceeds(getBytes(ref(anon.storage(STORAGE_BUCKET), `weddings/${LIVE}/party/m1/p.webp`)));
+    await assertFails(deleteObject(ref(testEnv.authenticatedContext('bob-uid').storage(STORAGE_BUCKET), `weddings/${DRAFT}/party/m1/p.webp`)));
+    await assertSucceeds(deleteObject(ref(alice.storage(STORAGE_BUCKET), `weddings/${DRAFT}/party/m1/p.webp`)));
+  });
+});

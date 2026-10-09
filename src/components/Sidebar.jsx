@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import {
-  LayoutDashboard, Heart, Users, Gift, MapPin,
+  LayoutDashboard, Heart, Users, MapPin,
   CalendarCheck, Mail, Smartphone, ChevronRight,
   LogOut
 } from "lucide-react";
@@ -55,7 +55,8 @@ const Sidebar = ({ invitation, onLogout }) => {
           <div className="space-y-0.5">
             <NavItem to="/wedding-details"    icon={Heart}        label="Wedding Details"   active={location.pathname === "/wedding-details"} />
             <NavItem to="/guest-list"         icon={Users}        label="Guest List"        active={location.pathname === "/guest-list"}/>
-            <NavItem to="/gift-registry"      icon={Gift}         label="Registry"          active={location.pathname === "/gift-registry"}/>
+            {/* Registry is managed in the Invitation Builder's Registry tab now
+                (/gift-registry redirects there). */}
             <NavItem to="/wedding-assistant"  icon={MapPin}       label="Wedding Assistant" active={location.pathname === "/wedding-assistant"}/>
           </div>
         </div>

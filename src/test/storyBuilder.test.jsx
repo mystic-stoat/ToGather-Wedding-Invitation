@@ -91,7 +91,9 @@ describe("navigation", () => {
     expect(nav).not.toContain("Font");
     // Privacy was removed (its RSVP deadline control moved to the RSVP tab)
     expect(nav).not.toContain("Privacy");
-    for (const label of ["Color Theme", "Music", "Greetings", "Date", "Venue", "Travel & Stay", "Story", "RSVP", "Guestbook"]) {
+    // Guestbook was replaced by Wedding Party
+    expect(nav).not.toContain("Guestbook");
+    for (const label of ["Color Theme", "Music", "Greetings", "Date", "Venue", "Travel & Stay", "Our Story", "RSVP", "Wedding Party"]) {
       expect(nav).toContain(label);
     }
   });

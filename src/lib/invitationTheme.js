@@ -90,13 +90,14 @@ export const fontStack = (name) => {
 };
 
 // ── Invitation sections that can have their own background ────────────────────
-// Order matches the phone preview, top to bottom.
+// Order matches the phone preview, top to bottom (= the builder's tab order).
 export const THEME_SECTIONS = [
   { id: "header",    label: "Header" },
   { id: "greetings", label: "Greetings" },
-  { id: "story",     label: "Our Story" },
-  { id: "music",     label: "Music" },
   { id: "date",      label: "Wedding Day" },
+  { id: "music",     label: "Music" },
+  { id: "story",     label: "Our Story" },
+  { id: "party",     label: "Wedding Party" },
   { id: "venue",     label: "Venue" },
   { id: "travel",    label: "Travel & Stay" },
   { id: "rsvp",      label: "RSVP" },

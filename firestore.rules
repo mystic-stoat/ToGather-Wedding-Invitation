@@ -148,6 +148,45 @@ service cloud.firestore {
         allow delete:
           if isWeddingHost(weddingId);
       }
+
+
+      /*
+       * ==========================================================
+       * PRIVATE (OWNER-ONLY) DATA
+       * ==========================================================
+       *
+       *   /invitations/{weddingId}/private/weddingPartyContacts
+       *     { contacts: { [memberId]: { phone, email } }, updatedAt }
+       *
+       * Wedding Party phone numbers and emails. The invitation document
+       * itself is publicly readable, so contact details live here and are
+       * only copied onto a member in invitations/{weddingId}.partyMembers
+       * when the couple turns "Show contact details" on for that member.
+       *   - Only the wedding owner can read or write — guests never can,
+       *     published or not.
+       *   - Only the known document id is allowed.
+       * Limits mirror src/lib/weddingParty.js (MAX_PARTY_MEMBERS = 40).
+       */
+      match /private/{docId} {
+
+        function validPartyContacts() {
+          let d = request.resource.data;
+          return d.keys().hasOnly(['contacts', 'updatedAt'])
+            && d.keys().hasAll(['contacts', 'updatedAt'])
+            && d.contacts is map
+            && d.contacts.size() <= 40
+            && d.updatedAt == request.time;
+        }
+
+        allow read, delete:
+          if docId == 'weddingPartyContacts'
+          && isWeddingHost(weddingId);
+
+        allow create, update:
+          if docId == 'weddingPartyContacts'
+          && isWeddingHost(weddingId)
+          && validPartyContacts();
+      }
     }
 
 

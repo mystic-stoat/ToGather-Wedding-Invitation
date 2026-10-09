@@ -4,8 +4,9 @@
 //   The ONLY place the app talks to Firebase Cloud Storage. Files live at:
 //     weddings/{weddingId}/hero/{fileId}.{ext}
 //     weddings/{weddingId}/story/{entryId}/{fileId}.{ext}
+//     weddings/{weddingId}/party/{memberId}/{fileId}.{ext}   (Wedding Party)
 //   Every upload gets a brand-new fileId, so a path is never reused or shared
-//   between the Hero Photo and Story — deleting one can't break another.
+//   between the Hero Photo, Story and Wedding Party — deleting one can't break another.
 //   storage.rules lets only the wedding's owner write here.
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -23,6 +24,9 @@ export const buildHeroPath = (weddingId, contentType, fileId = newFileId()) =>
 
 export const buildStoryPath = (weddingId, entryId, contentType, fileId = newFileId()) =>
   `weddings/${weddingId}/story/${entryId}/${fileId}.${extensionFor(contentType)}`;
+
+export const buildPartyPath = (weddingId, memberId, contentType, fileId = newFileId()) =>
+  `weddings/${weddingId}/party/${memberId}/${fileId}.${extensionFor(contentType)}`;
 
 /**
  * uploadPhoto
