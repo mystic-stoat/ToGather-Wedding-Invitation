@@ -52,6 +52,7 @@ import {
   hasCustomSectionBackground,
 } from "@/lib/invitationTheme";
 import { useGoogleFonts } from "@/hooks/useGoogleFonts";
+import { getVenueDisplay } from "@/lib/venueDisplay";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
@@ -130,6 +131,9 @@ const InvitationHeader = ({ invitation }) => {
   const brideFirst = invitation?.brideName?.first || "";
   const coupleNames =
     groomFirst && brideFirst ? `${groomFirst} & ${brideFirst}` : "Your Wedding";
+  // Venue tab switches from the builder (older invitations: everything shown).
+  // This page has no map or directions button, so only section/address apply.
+  const venueDisplay = getVenueDisplay(invitation || {});
 
   return (
     <div className="mb-10 animate-fade-up text-center">
@@ -158,10 +162,10 @@ const InvitationHeader = ({ invitation }) => {
         </p>
       )}
 
-      {invitation?.venueName && (
-        <p className="mt-1 text-sm text-muted-foreground">
+      {venueDisplay.section && invitation?.venueName && (
+        <p className="mt-1 text-sm text-muted-foreground" data-testid="invitation-venue">
           {invitation.venueName}
-          {invitation?.venueAddress && `, ${invitation.venueAddress}`}
+          {venueDisplay.address && invitation?.venueAddress && `, ${invitation.venueAddress}`}
         </p>
       )}
 
@@ -542,8 +546,8 @@ const ConfirmationScreen = ({ isAttending, name, invitation, coupleNames }) => (
             </p>
           )}
 
-          {invitation.venueName && (
-            <p className="text-muted-foreground">{invitation.venueName}</p>
+          {getVenueDisplay(invitation).section && invitation.venueName && (
+            <p className="text-muted-foreground" data-testid="confirmation-venue">{invitation.venueName}</p>
           )}
         </div>
       </div>

@@ -12,7 +12,9 @@
 //   - This creates a clear separation between the "tool" and the "artifact"
 //
 // LAYOUT:
-//   Left sidebar  → section navigation (Privacy, Color Theme, Music, Greetings, etc.)
+//   Left sidebar  → section navigation (Color Theme, Music, Greetings, Venue, RSVP, etc.)
+//                   (the former Privacy tab was removed — it never controlled
+//                   access; publishing is the header's Publish button)
 //   Center panel  → active section's controls/settings
 //   Right panel   → live phone mockup preview showing real wedding data
 //
@@ -28,9 +30,9 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
-  Heart, Lock, Palette, Music, Sparkles,
+  Heart, Palette, Music, Sparkles,
   BookOpen, Calendar, Image, MapPin, BookHeart, CheckSquare,
-  BookMarked, ArrowLeft, Save, Globe, ChevronRight,
+  BookMarked, ArrowLeft, Save, ChevronRight,
   Eye, Volume2, Info, Loader2, Hotel, Plus, Trash2, Utensils, ExternalLink,
   AlertCircle, X,
 } from "lucide-react";
@@ -81,6 +83,13 @@ import { DEFAULT_STORY_TITLE, normalizeStoryTitle } from "@/lib/storyBlocks";
 import { photoSrc } from "@/lib/imageProcessing";
 import { photoImageStyle } from "@/lib/photoAdjust";
 import { useInvitationMedia } from "@/hooks/useInvitationMedia";
+import {
+  DEFAULT_VENUE_SETTINGS,
+  VENUE_SETTING_FIELDS,
+  normalizeVenueSettings,
+  getVenueDisplay,
+} from "@/lib/venueDisplay";
+import { getInviteDeadlineError } from "@/lib/rsvpDeadline";
 
 // ── Color tokens ──────────────────────────────────────────────────────────────
 // CANVAS (the invitation itself) and BUILDER_UI (the builder chrome) now live in
@@ -89,7 +98,6 @@ import { useInvitationMedia } from "@/hooks/useInvitationMedia";
 
 // ── Section definitions — left sidebar nav ────────────────────────────────────
 const SECTIONS = [
-  { id: "privacy",   label: "Privacy",   icon: Lock },
   { id: "theme",     label: "Color Theme", icon: Palette },
   { id: "music",     label: "Music",     icon: Music },
   { id: "greetings", label: "Greetings", icon: BookOpen },
@@ -102,68 +110,11 @@ const SECTIONS = [
 ];
 
 // Older links to the former Color / Font tabs open the combined Color Theme tab.
-const SECTION_ALIASES = { color: "theme", font: "theme" };
+// The former Privacy tab's only working control (RSVP deadline) is now in RSVP.
+const SECTION_ALIASES = { color: "theme", font: "theme", privacy: "rsvp" };
 
 // Color theme + font pairing presets now live in src/lib/invitationTheme.js
 // (shared with the guest RSVP page) — values unchanged.
-
-// ── Center Panel: Privacy ─────────────────────────────────────────────────────
-const PrivacyPanel = ({ settings, onChange }) => (
-  <div className="space-y-8">
-    <div>
-      <h3 className="text-xs font-bold tracking-widest uppercase mb-1"
-        style={{ color: BUILDER_UI.onSurfaceVar }}>
-        Visibility
-      </h3>
-      <p className="text-sm mb-6" style={{ color: BUILDER_UI.onSurfaceVar }}>
-        Control who can access your invitation link.
-      </p>
-      <div className="grid grid-cols-2 gap-4">
-        {["Public", "Private"].map(opt => (
-          <button key={opt}
-            onClick={() => onChange("privacy", opt.toLowerCase())}
-            className="p-6 rounded-lg border-2 text-left transition-all"
-            style={{
-              backgroundColor: settings.privacy === opt.toLowerCase()
-                ? BUILDER_UI.selected : BUILDER_UI.surfaceContainer,
-              borderColor: settings.privacy === opt.toLowerCase()
-                ? BUILDER_UI.primary : "transparent",
-              color: BUILDER_UI.onSurface,
-            }}>
-            <div className="flex items-center gap-3 mb-3">
-              {opt === "Public"
-                ? <Globe size={20} style={{ color: BUILDER_UI.primary }} />
-                : <Lock size={20} style={{ color: BUILDER_UI.primary }} />}
-            </div>
-            <p className="font-bold text-sm">{opt}</p>
-            <p className="text-xs mt-1" style={{ color: BUILDER_UI.onSurfaceVar }}>
-              {opt === "Public"
-                ? "Anyone with the link can view"
-                : "Only invited guests can view"}
-            </p>
-          </button>
-        ))}
-      </div>
-    </div>
-
-    <div>
-      <h3 className="text-xs font-bold tracking-widest uppercase mb-4"
-        style={{ color: BUILDER_UI.onSurfaceVar }}>
-        RSVP Deadline
-      </h3>
-      <Input
-        type="date"
-        value={settings.inviteDeadline || ""}
-        onChange={e => onChange("inviteDeadline", e.target.value)}
-        className="h-12 rounded-lg border-0 border-b-2"
-        style={{ borderColor: BUILDER_UI.outline, backgroundColor: BUILDER_UI.surfaceContainer }}
-      />
-      <p className="text-xs mt-2" style={{ color: BUILDER_UI.onSurfaceVar }}>
-        Guests cannot RSVP after this date.
-      </p>
-    </div>
-  </div>
-);
 
 // ── Center Panel: Greetings ───────────────────────────────────────────────────
 // Title + welcome message + Hero Photo (moved here from the removed Layout tab).
@@ -211,11 +162,14 @@ const GreetingsPanel = ({ settings, onChange, hero, onHeroChange, heroProgress, 
   </div>
 );
 
-// ── Center Panel: RSVP — host-configured meal options ────────────────────────
-// Stored on the invitation doc as mealOptions: [{ id, name, description }].
+// ── Center Panel: RSVP — deadline + host-configured meal options ─────────────
+// RSVP deadline: the SAME `inviteDeadline` field Wedding Details edits (one
+// value, shared validation in src/lib/rsvpDeadline.js). Moved here from the
+// removed Privacy tab.
+// Meal options: stored on the invitation doc as mealOptions: [{ id, name, description }].
 // Zero options is valid: guests then aren't asked to choose a meal.
 // Rows with an empty name are dropped when the invitation is saved.
-const RsvpPanel = ({ settings, onChange }) => {
+const RsvpPanel = ({ invitation, settings, onChange, deadlineError, onDeadlineErrorClear }) => {
   const options = settings.mealOptions || [];
 
   const updateOption = (id, field, value) =>
@@ -233,6 +187,38 @@ const RsvpPanel = ({ settings, onChange }) => {
 
   return (
     <div className="space-y-6">
+      <div>
+        <h3 className="text-xs font-bold tracking-widest uppercase mb-4"
+          style={{ color: BUILDER_UI.onSurfaceVar }}>
+          RSVP Deadline
+        </h3>
+        <Input
+          type="date"
+          aria-label="RSVP deadline"
+          aria-invalid={deadlineError ? true : undefined}
+          value={settings.inviteDeadline || ""}
+          max={invitation?.weddingDate || undefined}
+          onChange={e => { onChange("inviteDeadline", e.target.value); onDeadlineErrorClear?.(); }}
+          className="h-12 rounded-lg border-0 border-b-2"
+          style={{
+            borderColor: deadlineError ? ERROR_COLOR : BUILDER_UI.outline,
+            backgroundColor: BUILDER_UI.surfaceContainer,
+          }}
+        />
+        {deadlineError ? (
+          <p className="text-xs mt-2" role="alert" style={{ color: ERROR_COLOR }}>{deadlineError}</p>
+        ) : (
+          <p className="text-xs mt-2" style={{ color: BUILDER_UI.onSurfaceVar }}>
+            Guests cannot RSVP after this date. This is the same deadline as on your{" "}
+            <Link to="/wedding-details" className="underline font-semibold"
+              style={{ color: BUILDER_UI.primary }}>
+              Wedding Details
+            </Link>{" "}
+            page — changing it here updates it there when you save.
+          </p>
+        )}
+      </div>
+
       <div>
         <h3 className="text-xs font-bold tracking-widest uppercase mb-1"
           style={{ color: BUILDER_UI.onSurfaceVar }}>
@@ -819,6 +805,134 @@ const DatePanel = ({ invitation, settings, onChange }) => {
   );
 };
 
+// ── Center Panel: Venue ───────────────────────────────────────────────────────
+// The venue name, address and Google Maps link come from Wedding Details and
+// are shown read-only here (no duplicate inputs). The switches only control
+// how the venue appears on the invitation; they are saved as
+// venueShowOnInvitation / venueShowMap / venueShowAddress / venueShowDirections
+// (all ON by default so older invitations look the same — src/lib/venueDisplay.js).
+const VENUE_OPTIONS = [
+  { field: "venueShowMap",        label: "Map",            desc: "Show a map of the venue" },
+  { field: "venueShowAddress",    label: "Address",        desc: "Show the venue's address" },
+  { field: "venueShowDirections", label: "Get Directions", desc: "Show a button that opens Google Maps" },
+];
+
+const SettingSwitch = ({ label, desc, on, disabled = false, onToggle }) => (
+  <div className="flex items-center justify-between p-4 rounded-lg mb-2"
+    style={{ backgroundColor: BUILDER_UI.surfaceContainer, opacity: disabled ? 0.5 : 1 }}>
+    <div>
+      <p className="text-sm font-bold" style={{ color: BUILDER_UI.onSurface }}>{label}</p>
+      <p className="text-xs" style={{ color: BUILDER_UI.onSurfaceVar }}>{desc}</p>
+    </div>
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      aria-label={`Show ${label}`}
+      disabled={disabled}
+      onClick={onToggle}
+      className="w-12 h-6 rounded-full transition-colors relative flex-shrink-0 disabled:cursor-not-allowed"
+      style={{ backgroundColor: on ? BUILDER_UI.primary : BUILDER_UI.surfaceHigh }}>
+      <div className="w-5 h-5 bg-white rounded-full absolute top-0.5 transition-transform"
+        style={{ transform: on ? "translateX(26px)" : "translateX(2px)" }} />
+    </button>
+  </div>
+);
+
+const VenuePanel = ({ invitation, settings, onChange }) => {
+  const venue = normalizeVenueSettings(settings);
+  const name    = invitation?.venueName?.trim() || "";
+  const address = invitation?.venueAddress?.trim() || "";
+  const mapsUrl = invitation?.venueURL?.trim() || "";
+  const hasVenue = Boolean(name || address);
+
+  const detailRow = (label, value) => (
+    <div>
+      <p className="text-[10px] font-bold tracking-widest uppercase" style={{ color: BUILDER_UI.onSurfaceVar }}>
+        {label}
+      </p>
+      <p className="text-sm break-words" style={{ color: value ? BUILDER_UI.onSurface : BUILDER_UI.onSurfaceVar }}>
+        {value || "Not set"}
+      </p>
+    </div>
+  );
+
+  return (
+    <div className="space-y-6">
+      <div className="p-5 rounded-lg" style={{ backgroundColor: BUILDER_UI.surfaceContainer }}>
+        <div className="flex items-center gap-2 mb-2">
+          <Info size={16} style={{ color: BUILDER_UI.primary }} />
+          <p className="text-xs font-bold tracking-widest uppercase"
+            style={{ color: BUILDER_UI.onSurfaceVar }}>
+            From Wedding Details
+          </p>
+        </div>
+        <p className="text-sm mb-4" style={{ color: BUILDER_UI.onSurface }}>
+          Your venue is pulled from your Wedding Details page.
+          To change it, go to{" "}
+          <Link to="/wedding-details" className="underline font-semibold"
+            style={{ color: BUILDER_UI.primary }}>
+            Wedding Details
+          </Link>.
+        </p>
+        <div className="space-y-3" data-testid="venue-details">
+          {detailRow("Venue", name)}
+          {detailRow("Address", address)}
+          <div>
+            <p className="text-[10px] font-bold tracking-widest uppercase" style={{ color: BUILDER_UI.onSurfaceVar }}>
+              Google Maps
+            </p>
+            {mapsUrl ? (
+              <a href={mapsUrl} target="_blank" rel="noopener noreferrer"
+                className="text-sm inline-flex items-center gap-1 underline break-all"
+                style={{ color: BUILDER_UI.primary }}>
+                Open in Google Maps <ExternalLink size={12} />
+              </a>
+            ) : (
+              <p className="text-sm" style={{ color: BUILDER_UI.onSurfaceVar }}>
+                {hasVenue ? "Directions will search Google Maps for the address." : "Not set"}
+              </p>
+            )}
+          </div>
+        </div>
+        {!hasVenue && (
+          <p className="text-xs mt-3 flex items-center gap-1.5" role="status" style={{ color: ERROR_COLOR }}>
+            <AlertCircle size={13} className="flex-shrink-0" />
+            No venue set yet. The Venue section will show a placeholder until you add one.
+          </p>
+        )}
+      </div>
+
+      <div>
+        <h3 className="text-xs font-bold tracking-widest uppercase mb-1"
+          style={{ color: BUILDER_UI.onSurfaceVar }}>
+          Display Options
+        </h3>
+        <p className="text-sm mb-4" style={{ color: BUILDER_UI.onSurfaceVar }}>
+          Choose which venue details guests see on your invitation.
+        </p>
+        <SettingSwitch
+          label="Venue Section"
+          desc="Show your venue on the invitation"
+          on={venue.venueShowOnInvitation}
+          onToggle={() => onChange("venueShowOnInvitation", !venue.venueShowOnInvitation)}
+        />
+        <div className="pl-4">
+          {VENUE_OPTIONS.map(opt => (
+            <SettingSwitch key={opt.field}
+              label={opt.label}
+              desc={opt.desc}
+              on={venue[opt.field]}
+              disabled={!venue.venueShowOnInvitation}
+              onToggle={() => onChange(opt.field, !venue[opt.field])}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ── Phone Preview ─────────────────────────────────────────────────────────────
 // Renders a live phone mockup showing the invitation with current settings.
 // `hero` and `storyBlocks` are the builder's local (possibly unsaved) state, so
@@ -841,6 +955,8 @@ const PhonePreview = ({ invitation, settings, hero, storyBlocks = [] }) => {
   const groomFirst = invitation?.groomName?.first || "Groom";
   const brideFirst = invitation?.brideName?.first || "Bride";
   const venueQuery = buildMapQuery(invitation?.venueName, invitation?.venueAddress);
+  // Venue tab switches (all ON for older invitations)
+  const venueDisplay = getVenueDisplay(settings);
 
   const formattedDate = invitation?.weddingDate
     ? new Date(invitation.weddingDate + "T00:00:00").toLocaleDateString("en-US", {
@@ -875,7 +991,7 @@ const PhonePreview = ({ invitation, settings, hero, storyBlocks = [] }) => {
             <p className="text-[9px] uppercase tracking-widest"
               style={{ color: theme.bodyText }}>
               {formattedDate}
-              {invitation?.venueName && ` · ${invitation.venueName}`}
+              {venueDisplay.section && invitation?.venueName && ` · ${invitation.venueName}`}
             </p>
           </div>
 
@@ -956,39 +1072,46 @@ const PhonePreview = ({ invitation, settings, hero, storyBlocks = [] }) => {
               theme={theme} backgroundColor={sec.date} />
           )}
 
-          {/* Venue */}
-          <div className="p-6 text-center" data-section="venue" style={{ backgroundColor: sec.venue }}>
-            <h2 className="text-base mb-4"
-              style={{ fontFamily: theme.headingFont, color: theme.headingText }}>
-              Wedding Venue
-            </h2>
-            <div className="mb-3">
-              <GoogleMapEmbed query={venueQuery} heightClass="h-28" interactive={false}
-                title="Venue map preview" />
+          {/* Venue — name/address/link from Wedding Details; which parts show
+              is controlled by the Venue tab (src/lib/venueDisplay.js) */}
+          {venueDisplay.section && (
+            <div className="p-6 text-center" data-section="venue" style={{ backgroundColor: sec.venue }}>
+              <h2 className="text-base mb-4"
+                style={{ fontFamily: theme.headingFont, color: theme.headingText }}>
+                Wedding Venue
+              </h2>
+              {venueDisplay.map && (
+                <div className="mb-3" data-testid="venue-map">
+                  <GoogleMapEmbed query={venueQuery} heightClass="h-28" interactive={false}
+                    title="Venue map preview" />
+                </div>
+              )}
+              <p className="text-[10px] font-bold" style={{ color: theme.headingText }}>
+                {invitation?.venueName || "Venue Name"}
+              </p>
+              {venueDisplay.address && (
+                <p className="text-[9px]" data-testid="venue-address" style={{ color: theme.bodyText }}>
+                  {invitation?.venueAddress || "Venue Address"}
+                </p>
+              )}
+              {venueDisplay.directions && (venueQuery ? (
+                <a
+                  href={invitation?.venueURL || mapLinkUrl(venueQuery)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block w-full mt-3 py-2 rounded-full text-white text-[9px] font-bold"
+                  style={btnStyle}
+                >
+                  Get directions
+                </a>
+              ) : (
+                <button className="w-full mt-3 py-2 rounded-full text-white text-[9px] font-bold"
+                  style={btnStyle}>
+                  Get directions
+                </button>
+              ))}
             </div>
-            <p className="text-[10px] font-bold" style={{ color: theme.headingText }}>
-              {invitation?.venueName || "Venue Name"}
-            </p>
-            <p className="text-[9px]" style={{ color: theme.bodyText }}>
-              {invitation?.venueAddress || "Venue Address"}
-            </p>
-            {venueQuery ? (
-              <a
-                href={invitation?.venueURL || mapLinkUrl(venueQuery)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block w-full mt-3 py-2 rounded-full text-white text-[9px] font-bold"
-                style={btnStyle}
-              >
-                Get directions
-              </a>
-            ) : (
-              <button className="w-full mt-3 py-2 rounded-full text-white text-[9px] font-bold"
-                style={btnStyle}>
-                Get directions
-              </button>
-            )}
-          </div>
+          )}
 
           {/* Travel & Stay — only when the toggle is on AND at least one place
               has a name. Links are re-checked so only http(s) URLs render. */}
@@ -1043,8 +1166,8 @@ const PhonePreview = ({ invitation, settings, hero, storyBlocks = [] }) => {
               RSVP
             </h2>
             <p className="text-[9px] mb-4" style={{ color: theme.bodyText }}>
-              {invitation?.inviteDeadline
-                ? `Kindly reply by ${new Date(invitation.inviteDeadline + "T00:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric" })}`
+              {settings.inviteDeadline
+                ? `Kindly reply by ${new Date(settings.inviteDeadline + "T00:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric" })}`
                 : "Kindly reply at your earliest convenience"}
             </p>
             <button className="w-full py-2 rounded-full text-white text-[9px] font-bold"
@@ -1105,7 +1228,6 @@ const CreateInvitation = () => {
   // Settings state — these are the invitation customization options
   // They are saved back to the `invitations` Firestore doc on Save/Publish
   const [settings, setSettings] = useState({
-    privacy:          "private",
     // Color Theme: colorPalette1/2 (primary/secondary), font1/2 (heading/body)
     // plus background, button, accent, text colors and section backgrounds.
     // Garden + Classic until the saved invitation loads.
@@ -1130,6 +1252,8 @@ const CreateInvitation = () => {
     storyShowOnInvitation:  true,
     // Date tab: Calendar View / Countdown — both OFF by default
     ...DEFAULT_DATE_SETTINGS,
+    // Venue tab: section / map / address / directions — all ON by default
+    ...DEFAULT_VENUE_SETTINGS,
   });
 
   // True only once the saved invitation has been read successfully (or we
@@ -1149,6 +1273,10 @@ const CreateInvitation = () => {
   const [themeLoaded, setThemeLoaded] = useState(false);
   // Same guard for the Date tab's Calendar View / Countdown switches.
   const [dateSettingsLoaded, setDateSettingsLoaded] = useState(false);
+  // Same guard for the Venue tab's display switches.
+  const [venueSettingsLoaded, setVenueSettingsLoaded] = useState(false);
+  // RSVP deadline validation message (RSVP tab), same rule as Wedding Details
+  const [deadlineError, setDeadlineError] = useState("");
 
   // Notice shown when photos/Story couldn't be saved (local edits are kept)
   const [saveNotice, setSaveNotice] = useState(null); // { kind: "error" | "warning", text }
@@ -1169,7 +1297,6 @@ const CreateInvitation = () => {
           // Pre-fill settings from saved invitation
           setSettings(prev => ({
             ...prev,
-            privacy:         inv.isPublished ? "public" : "private",
             // Color Theme — older invitations only have colorPalette1/2 and
             // font1/2 (or nothing); every missing setting gets a default.
             ...normalizeThemeSettings(inv),
@@ -1192,6 +1319,8 @@ const CreateInvitation = () => {
             storyShowOnInvitation: inv.storyShowOnInvitation !== false,
             // Older invitations have no date settings → both OFF
             ...normalizeDateSettings(inv),
+            // Older invitations have no venue settings → everything shown
+            ...normalizeVenueSettings(inv),
           }));
         }
         // Hero Photo + Story entries (older invitations have neither)
@@ -1201,6 +1330,7 @@ const CreateInvitation = () => {
         setStorySettingsLoaded(true);
         setThemeLoaded(true);
         setDateSettingsLoaded(true);
+        setVenueSettingsLoaded(true);
       } catch (err) {
         console.error("Load invitation error:", err);
         media.markLoadFailed();
@@ -1234,6 +1364,20 @@ const CreateInvitation = () => {
       setTravelErrors(travelValidation);
       setActiveSection("travel");
       alert("Please fix the highlighted Travel & Stay places before saving.");
+      return;
+    }
+
+    // RSVP deadline: same rule as Wedding Details (on or before the wedding
+    // date). A deadline that was already saved can't be cleared here (Wedding
+    // Details requires one); invitations that never had one still save.
+    const deadlineProblem = getInviteDeadlineError(
+      settings.inviteDeadline, invitation?.weddingDate,
+      { required: Boolean(invitation?.inviteDeadline) },
+    );
+    if (deadlineProblem) {
+      setDeadlineError(deadlineProblem);
+      setActiveSection("rsvp");
+      alert("Please fix the RSVP deadline before saving.");
       return;
     }
 
@@ -1297,6 +1441,13 @@ const CreateInvitation = () => {
         DATE_SETTING_FIELDS.forEach(field => delete dataToSave[field]);
       }
 
+      // Venue tab switches — strict booleans, same "only after a successful load" guard.
+      if (venueSettingsLoaded) {
+        Object.assign(dataToSave, normalizeVenueSettings(settings));
+      } else {
+        VENUE_SETTING_FIELDS.forEach(field => delete dataToSave[field]);
+      }
+
       const id = await saveInvitation(user.uid, dataToSave, weddingId);
       if (travelLoaded) setSettings(prev => ({ ...prev, travelItems: cleanedTravelItems }));
       if (!weddingId) setWeddingId(id);
@@ -1324,7 +1475,6 @@ const CreateInvitation = () => {
   // ── Render the active section's center panel ───────────────────────────────
   const renderPanel = () => {
     switch (activeSection) {
-      case "privacy":   return <PrivacyPanel   settings={settings} onChange={handleChange} />;
       case "theme":     return <ColorThemePanel settings={settings} onChange={handleChange} onApply={handleApply} />;
       case "music":     return <MusicPanel     settings={settings} onChange={handleChange} />;
       case "greetings": return <GreetingsPanel settings={settings} onChange={handleChange}
@@ -1336,7 +1486,9 @@ const CreateInvitation = () => {
                                  onRetryLoad={media.retryLoad}
                                  mediaBytes={media.mediaBytes} progressByKey={media.uploadProgress?.byKey}
                                  disabled={saving} />;
-      case "rsvp":      return <RsvpPanel      settings={settings} onChange={handleChange} />;
+      case "rsvp":      return <RsvpPanel      invitation={invitation} settings={settings} onChange={handleChange}
+                                 deadlineError={deadlineError} onDeadlineErrorClear={() => setDeadlineError("")} />;
+      case "venue":     return <VenuePanel     invitation={invitation} settings={settings} onChange={handleChange} />;
       case "date":      return <DatePanel      invitation={invitation} settings={settings} onChange={handleChange} />;
       case "travel":    return <TravelPanel    settings={settings} onChange={handleChange}
                                  errors={travelErrors} setErrors={setTravelErrors} />;
@@ -1370,11 +1522,11 @@ const CreateInvitation = () => {
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen flex flex-col overflow-hidden"
+    <div className="h-screen flex flex-col overflow-hidden"
       style={{ backgroundColor: BUILDER_UI.surface, fontFamily: BUILDER_FONT }}>
 
       {/* ── Top App Bar — ToGather style ── */}
-      <header className="w-full sticky top-0 z-50 flex justify-between items-center px-8 h-16 border-b"
+      <header className="w-full flex-shrink-0 sticky top-0 z-50 flex justify-between items-center px-8 h-16 border-b"
         style={{ backgroundColor: BUILDER_UI.surface, borderColor: BUILDER_UI.outline }}>
         <div className="flex items-center gap-6">
           {/* Back to dashboard */}
@@ -1438,7 +1590,7 @@ const CreateInvitation = () => {
       </header>
 
       {/* ── Main Layout: Sidebar + Panel + Preview ── */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 min-h-0 overflow-hidden">
 
         {/* Left sidebar — section navigation */}
         <aside className="w-64 flex-shrink-0 flex flex-col py-6 overflow-y-auto border-r"
@@ -1559,4 +1711,4 @@ const CreateInvitation = () => {
   );
 };
 
-export default CreateInvitation;
+export default CreateInvitation;

@@ -1,15 +1,19 @@
 // Integration tests for storage.rules (Hero Photo + Our Story photos).
 // Requires the Firestore AND Storage emulators (storage rules read the
-// invitation owner from Firestore):
-//   npm run start:emulators      (in one terminal)
+// invitation owner from Firestore). They are started automatically on separate
+// ports by firebase.test.json — never the development emulators:
 //   npm run test:integration:storage
 import fs from 'fs';
+import { requireIsolatedEmulators } from './isolatedEmulators';
 import { doc, setDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getBytes, deleteObject, listAll } from 'firebase/storage';
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
 import { beforeAll, beforeEach, afterAll, describe, it } from 'vitest';
 
-const PROJECT_ID = 'togather-64b0b';
+// Isolated test emulators only — this throws before any test, clearFirestore()
+// or bucket clean-up runs if they aren't in use.
+const EMULATORS = requireIsolatedEmulators(['firestore', 'storage']);
+const PROJECT_ID = EMULATORS.projectId;
 const STORAGE_BUCKET = 'togather-64b0b.firebasestorage.app';
 const DRAFT = 'wedding-draft';
 const LIVE = 'wedding-live';
@@ -34,8 +38,8 @@ const clearTestBucket = () =>
 beforeAll(async () => {
   testEnv = await initializeTestEnvironment({
     projectId: PROJECT_ID,
-    firestore: { rules: fs.readFileSync('firestore.rules', 'utf8'), host: '127.0.0.1', port: 8080 },
-    storage: { rules: fs.readFileSync('storage.rules', 'utf8'), host: '127.0.0.1', port: 9199 },
+    firestore: { rules: fs.readFileSync('firestore.rules', 'utf8'), ...EMULATORS.firestore },
+    storage: { rules: fs.readFileSync('storage.rules', 'utf8'), ...EMULATORS.storage },
   });
 }, 30000);
 

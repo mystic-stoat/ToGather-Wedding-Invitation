@@ -89,7 +89,9 @@ describe("navigation", () => {
     // Color + Font were combined into one "Color Theme" tab
     expect(nav).not.toContain("Color");
     expect(nav).not.toContain("Font");
-    for (const label of ["Privacy", "Color Theme", "Music", "Greetings", "Date", "Venue", "Travel & Stay", "Story", "RSVP", "Guestbook"]) {
+    // Privacy was removed (its RSVP deadline control moved to the RSVP tab)
+    expect(nav).not.toContain("Privacy");
+    for (const label of ["Color Theme", "Music", "Greetings", "Date", "Venue", "Travel & Stay", "Story", "RSVP", "Guestbook"]) {
       expect(nav).toContain(label);
     }
   });

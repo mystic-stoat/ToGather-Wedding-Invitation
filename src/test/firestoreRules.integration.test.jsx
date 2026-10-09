@@ -2,6 +2,7 @@
 //Testing new tests
 
 import fs from 'fs';
+import { requireIsolatedEmulators } from './isolatedEmulators';
 
 import {
   doc,
@@ -35,7 +36,10 @@ import {
 } from 'vitest';
 
 
-const PROJECT_ID = 'togather-64b0b';
+// Isolated test emulators only (npm run test:integration:firestore) — this
+// throws before any test or clearFirestore() runs if they aren't in use.
+const EMULATORS = requireIsolatedEmulators(['firestore']);
+const PROJECT_ID = EMULATORS.projectId;
 
 
 let testEnv;
@@ -47,8 +51,8 @@ beforeAll(async () => {
       projectId: PROJECT_ID,
       firestore: {
         rules: fs.readFileSync('firestore.rules', 'utf8'),
-        host: '127.0.0.1',
-        port: 8080,
+        host: EMULATORS.firestore.host,
+        port: EMULATORS.firestore.port,
       },
     });
 

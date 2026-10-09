@@ -48,6 +48,15 @@ Christopher Nguyen:
 * Added Google Maps links and descriptions for recommended places
 * Added Travel \& Stay invitation preview
 * Added unit tests for Travel \& Stay
+* Color and UI: Updated the application's colors and styling to better match the sponsor's requested design.
+* Our Story: Worked on the Our Story section of the Invitation Builder.
+* Venue: Implemented venue information and visibility settings with live preview.
+* RSVP: Moved the RSVP deadline into the RSVP tab and synchronized it with Wedding Details.
+* Guest RSVP: Updated the guest-facing page to respect venue visibility settings.
+* Privacy: Removed the Privacy tab while preserving existing security functionality.
+* Testing: Added automated tests and isolated test emulators to prevent development data from being erased.
+
+
 
 Kris Pritchett:
 

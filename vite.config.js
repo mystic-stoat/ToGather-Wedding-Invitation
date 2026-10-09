@@ -45,6 +45,10 @@ export default defineConfig({
           globals: true,
           include: ['**/Login.integration.test.jsx'],
           setupFiles: ['./src/test/setup.integration.js'],
+          // Never let src/lib/firebase.js connect to the DEVELOPMENT emulator ports
+          // (VITE_RUN_EMULATOR_MODE in .env); integration tests connect to the
+          // isolated firebase.test.json emulators themselves.
+          env: { VITE_RUN_EMULATOR_MODE: 'false' },
         },
       },
       {
@@ -55,6 +59,10 @@ export default defineConfig({
           globals: true,
           include: ['**/firestoreRules.integration.test.jsx'],
           setupFiles: ['./src/test/setup.integration.js'],
+          // Never let src/lib/firebase.js connect to the DEVELOPMENT emulator ports
+          // (VITE_RUN_EMULATOR_MODE in .env); integration tests connect to the
+          // isolated firebase.test.json emulators themselves.
+          env: { VITE_RUN_EMULATOR_MODE: 'false' },
         },
       },
       {
@@ -65,6 +73,10 @@ export default defineConfig({
           globals: true,
           include: ['**/storageRules.integration.test.jsx'],
           setupFiles: ['./src/test/setup.integration.js'],
+          // Never let src/lib/firebase.js connect to the DEVELOPMENT emulator ports
+          // (VITE_RUN_EMULATOR_MODE in .env); integration tests connect to the
+          // isolated firebase.test.json emulators themselves.
+          env: { VITE_RUN_EMULATOR_MODE: 'false' },
         },
       },
       {
@@ -75,6 +87,10 @@ export default defineConfig({
           globals: true,
           include: ['**/*.test.jsx'],
           setupFiles: ['./src/test/setup.integration.js'],
+          // Never let src/lib/firebase.js connect to the DEVELOPMENT emulator ports
+          // (VITE_RUN_EMULATOR_MODE in .env); integration tests connect to the
+          // isolated firebase.test.json emulators themselves.
+          env: { VITE_RUN_EMULATOR_MODE: 'false' },
         },
       },
     ]
