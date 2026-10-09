@@ -9,9 +9,9 @@
 import ImageSlot from "@/components/invitation/ImageSlot";
 import { BUILDER_UI } from "@/components/invitation/builderTheme";
 
-// Shape of the hero area in the invitation preview: 268 × 192 px
-// (phone screen width × h-48). Keep in sync if that area changes.
-export const HERO_FRAME_ASPECT = "67 / 48";
+// Shape of the hero area in the invitation preview: 268 × 384 px
+// (phone screen width × h-96). Keep in sync if that area changes.
+export const HERO_FRAME_ASPECT = "67 / 96";
 
 const HeroPhotoField = ({ photo, onChange, progress, disabled }) => (
   <div>
@@ -23,7 +23,9 @@ const HeroPhotoField = ({ photo, onChange, progress, disabled }) => (
       The large photo at the top of your invitation. Use Adjust to drag it into
       place and zoom — the frame below matches the invitation exactly.
     </p>
-    <div className="max-w-md">
+    {/* Narrower than before so the taller frame (same shape as the
+        invitation) still fits comfortably in the panel. */}
+    <div className="max-w-[280px]">
       <ImageSlot
         photo={photo}
         onChange={onChange}

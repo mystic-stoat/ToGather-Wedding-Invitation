@@ -1058,8 +1058,10 @@ const PhonePreview = ({
           </div>
 
           {/* Hero image — fills the frame using the couple's position/zoom
-              (same style as the editor); placeholder until one is added */}
-          <div className="relative w-full h-48 flex items-center justify-center overflow-hidden"
+              (same style as the editor); placeholder until one is added.
+              h-96 (384px) = twice the former h-48 — keep HERO_FRAME_ASPECT in
+              HeroPhotoField.jsx in sync. */}
+          <div className="relative w-full h-96 flex items-center justify-center overflow-hidden"
             style={{ backgroundColor: CANVAS.surfaceHigh }}>
             {heroUrl ? (
               <img src={heroUrl} alt="Hero" decoding="async" draggable={false}
@@ -1758,17 +1760,6 @@ const CreateInvitation = () => {
           <span className="font-heading text-xl font-semibold" style={{ color: BUILDER_UI.primary }}>
             ToGather
           </span>
-
-          {/* Section tabs */}
-          <nav className="hidden md:flex gap-6">
-            {["Preview", "Share", "Settings"].map(tab => (
-              <a key={tab} href="#"
-                className="font-heading italic text-lg tracking-tight transition-colors"
-                style={{ color: tab === "Settings" ? BUILDER_UI.primary : `${BUILDER_UI.primary}60` }}>
-                {tab}
-              </a>
-            ))}
-          </nav>
         </div>
 
         <div className="flex items-center gap-3">
