@@ -86,7 +86,10 @@ describe("navigation", () => {
     const nav = screen.getAllByRole("button").map(b => b.textContent.trim());
     expect(nav).not.toContain("Layout");
     expect(nav).not.toContain("Gallery");
-    for (const label of ["Privacy", "Color", "Font", "Music", "Greetings", "Date", "Venue", "Travel & Stay", "Story", "RSVP", "Guestbook"]) {
+    // Color + Font were combined into one "Color Theme" tab
+    expect(nav).not.toContain("Color");
+    expect(nav).not.toContain("Font");
+    for (const label of ["Privacy", "Color Theme", "Music", "Greetings", "Date", "Venue", "Travel & Stay", "Story", "RSVP", "Guestbook"]) {
       expect(nav).toContain(label);
     }
   });

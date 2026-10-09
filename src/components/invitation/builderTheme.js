@@ -44,5 +44,12 @@ export const BUILDER_UI = {
   outline:          "#E7DED4", // borders/dividers
 };
 
+/**
+ * Font for the builder's own interface. Fixed on purpose: the invitation's
+ * heading/body fonts (Color Theme tab) must never change the builder chrome.
+ * DM Sans is what the builder showed before with the default font pairing.
+ */
+export const BUILDER_FONT = '"DM Sans", system-ui, -apple-system, sans-serif';
+
 /** Error text color already used across the builder. */
 export const ERROR_COLOR = "#b3261e";

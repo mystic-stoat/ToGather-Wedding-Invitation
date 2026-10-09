@@ -115,11 +115,12 @@ const StoryBlock = ({ block, index, showPlaceholders, ...style }) => {
  *   blocks           local or saved blocks, in order
  *   headingFont / bodyFont
  *   accentColor      invitation color used to tint the background
+ *   backgroundColor  optional — overrides the tint (custom / main background)
  *   textColor / mutedColor
  *   showPlaceholders builder preview: show empty photo slots so the layout is visible
  */
 const StorySection = ({
-  title, blocks = [], headingFont, bodyFont, accentColor,
+  title, blocks = [], headingFont, bodyFont, accentColor, backgroundColor,
   textColor = "#1a1c19", mutedColor = "#46483c", showPlaceholders = false,
 }) => {
   const visible = blocks.filter(b => showPlaceholders || blockHasVisibleContent(b));
@@ -128,7 +129,7 @@ const StorySection = ({
 
   return (
     <section className="tg-story" aria-label={normalizeStoryTitle(title)}
-      style={{ backgroundColor: tintColor(accentColor), fontFamily: bodyFont, padding: "1.75rem 1rem" }}>
+      style={{ backgroundColor: backgroundColor || tintColor(accentColor), fontFamily: bodyFont, padding: "1.75rem 1rem" }}>
       <div className="tg-story__inner">
         <h2 className="tg-story__heading" style={{ fontFamily: headingFont, color: textColor }}>
           {normalizeStoryTitle(title)}

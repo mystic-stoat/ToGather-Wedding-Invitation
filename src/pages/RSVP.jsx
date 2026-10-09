@@ -15,6 +15,14 @@
 //   - Invalid token
 //   - Token already used
 //   - Firestore errors on submit
+//
+// INVITATION THEME:
+//   The invitation's Color Theme (colors, fonts, header/RSVP backgrounds — see
+//   src/lib/invitationTheme.js) is applied to the invitation area only: the
+//   header, RSVP card and gift registry. It re-points the app's Tailwind color
+//   tokens for that subtree, so the ToGather badge, footer and the loading /
+//   error screens keep the app's own look. Older invitations without theme
+//   fields get the defaults (their saved primary/secondary/fonts are kept).
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState, useEffect } from "react";
@@ -38,6 +46,12 @@ import {
 } from "lucide-react";
 import { submitRSVP } from "@/lib/firestore";
 import { normalizeMealOptions } from "@/lib/rsvpOptions";
+import {
+  resolveInvitationTheme,
+  buildGuestThemeStyle,
+  hasCustomSectionBackground,
+} from "@/lib/invitationTheme";
+import { useGoogleFonts } from "@/hooks/useGoogleFonts";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
@@ -822,6 +836,15 @@ const RSVP = () => {
   const visibleSteps = TOTAL_STEPS;
   const visualStep = step;
 
+  // Invitation theme — only once the invitation itself has loaded.
+  const theme = invitation ? resolveInvitationTheme(invitation) : null;
+  const themeStyle = invitation ? buildGuestThemeStyle(invitation) : undefined;
+  useGoogleFonts(theme ? [theme.font1, theme.font2] : []);
+  // The header only gets its own panel when the couple gave it a background.
+  const headerPanelStyle = theme && hasCustomSectionBackground(theme, "header")
+    ? { backgroundColor: theme.sections.header }
+    : undefined;
+
   if (pageLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
@@ -856,8 +879,10 @@ const RSVP = () => {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-background">
-      <div className="h-1 bg-gradient-to-r from-primary via-accent-light to-primary" />
+    <div className="flex min-h-screen flex-col bg-background"
+      style={theme ? { backgroundColor: theme.background } : undefined}>
+      <div className="h-1 bg-gradient-to-r from-primary via-accent-light to-primary"
+        style={theme ? { backgroundImage: `linear-gradient(to right, ${theme.button}, ${theme.accent}, ${theme.button})` } : undefined} />
 
       <main className="flex flex-1 items-start justify-center px-4 py-12 sm:py-16">
         <div className="w-full max-w-lg">
@@ -869,7 +894,12 @@ const RSVP = () => {
             </div>
           </div>
 
-          <InvitationHeader invitation={invitation} />
+          {/* Themed invitation area: header, RSVP card, registry */}
+          <div className="tg-invite-theme" data-testid="invitation-theme" style={themeStyle}>
+          <div className={headerPanelStyle ? "mb-6 rounded-3xl px-4 pt-8 pb-1" : undefined}
+            data-testid="invitation-header" style={headerPanelStyle}>
+            <InvitationHeader invitation={invitation} />
+          </div>
 
           <div className="rounded-3xl border border-border/50 bg-card p-6 shadow-xl shadow-foreground/[0.04] sm:p-8">
             {submitted ? (
@@ -1014,6 +1044,7 @@ const RSVP = () => {
             registries={invitation?.registries}
             registryMessage={invitation?.registryMessage}
           />
+          </div>
 
           <p className="mt-6 text-center text-xs text-muted-foreground">
             Powered by{" "}

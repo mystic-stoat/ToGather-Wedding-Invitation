@@ -15,6 +15,12 @@ import {
 } from 'firebase/firestore';
 
 import {
+  normalizeThemeSettings,
+  applyColorPreset,
+  applyFontPair,
+} from '@/lib/invitationTheme';
+
+import {
   initializeTestEnvironment,
   assertFails,
   assertSucceeds,
@@ -1489,5 +1495,63 @@ describe('storyEntries rules', () => {
     const anon = testEnv.unauthenticatedContext();
     await assertSucceeds(getDoc(doc(anon.firestore(), entryPath(LIVE, 'e1'))));
     await assertSucceeds(getDocs(collection(anon.firestore(), `invitations/${LIVE}/storyEntries`)));
+  });
+});
+
+
+/*
+ * ============================================================
+ * INVITATION COLOR THEME — save / load round trip
+ * ============================================================
+ * The Color Theme fields are plain fields on invitations/{weddingId}; the
+ * existing owner-only update rule and public read rule cover them.
+ */
+describe('invitation color theme persistence', () => {
+
+  beforeEach(async () => {
+    await seed(async (context) => {
+      await setDoc(doc(context.firestore(), 'invitations/wedding-alice'), invitationAlice);
+    });
+  });
+
+  const savedTheme = () => normalizeThemeSettings({
+    ...applyColorPreset('Navy'),
+    ...applyFontPair('Timeless'),
+    colorButton: '#7a1f3d',
+    sectionBackgrounds: { story: 'main', rsvp: '#ffffff' },
+  });
+
+  it('lets the owner save the theme and a guest read back the same settings', async () => {
+    const alice = testEnv.authenticatedContext('alice-uid');
+    const theme = savedTheme();
+    await assertSucceeds(updateDoc(doc(alice.firestore(), 'invitations/wedding-alice'), theme));
+
+    const anon = testEnv.unauthenticatedContext();
+    const snap = await assertSucceeds(getDoc(doc(anon.firestore(), 'invitations/wedding-alice')));
+    expect(normalizeThemeSettings(snap.data())).toEqual(theme);
+    // Unrelated fields are untouched
+    expect(snap.data().location).toBe('Dallas');
+  });
+
+  it('replaces section overrides, so a removed override stays removed', async () => {
+    const alice = testEnv.authenticatedContext('alice-uid');
+    const ref = doc(alice.firestore(), 'invitations/wedding-alice');
+    await updateDoc(ref, savedTheme());
+    await updateDoc(ref, { sectionBackgrounds: { rsvp: '#ffffff' } });
+    const snap = await getDoc(ref);
+    expect(snap.data().sectionBackgrounds).toEqual({ rsvp: '#ffffff' });
+  });
+
+  it('gives an invitation saved before the Color Theme tab its defaults', async () => {
+    const anon = testEnv.unauthenticatedContext();
+    const snap = await getDoc(doc(anon.firestore(), 'invitations/wedding-alice'));
+    expect(normalizeThemeSettings(snap.data())).toMatchObject({
+      themePreset: 'Garden', colorBackground: '#fafaf5', font1: 'Playfair Display', sectionBackgrounds: {},
+    });
+  });
+
+  it("rejects another user changing the theme", async () => {
+    const bob = testEnv.authenticatedContext('bob-uid');
+    await assertFails(updateDoc(doc(bob.firestore(), 'invitations/wedding-alice'), { colorBackground: '#000000' }));
   });
 });

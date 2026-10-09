@@ -12,7 +12,7 @@
 //   - This creates a clear separation between the "tool" and the "artifact"
 //
 // LAYOUT:
-//   Left sidebar  → section navigation (Privacy, Color, Font, Music, Greetings, etc.)
+//   Left sidebar  → section navigation (Privacy, Color Theme, Music, Greetings, etc.)
 //   Center panel  → active section's controls/settings
 //   Right panel   → live phone mockup preview showing real wedding data
 //
@@ -28,7 +28,7 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
-  Heart, Lock, Palette, Type, Music, Sparkles,
+  Heart, Lock, Palette, Music, Sparkles,
   BookOpen, Calendar, Image, MapPin, BookHeart, CheckSquare,
   BookMarked, ArrowLeft, Save, Globe, ChevronRight,
   Eye, Volume2, Info, Loader2, Hotel, Plus, Trash2, Utensils, ExternalLink,
@@ -57,7 +57,15 @@ import {
   getTravelShowOnInvitation,
   shouldShowTravelSection,
 } from "@/lib/travelStay";
-import { CANVAS, BUILDER_UI, ERROR_COLOR } from "@/components/invitation/builderTheme";
+import { CANVAS, BUILDER_UI, BUILDER_FONT, ERROR_COLOR } from "@/components/invitation/builderTheme";
+import ColorThemePanel from "@/components/invitation/ColorThemePanel";
+import {
+  DEFAULT_THEME_SETTINGS,
+  THEME_FIELDS,
+  normalizeThemeSettings,
+  resolveInvitationTheme,
+} from "@/lib/invitationTheme";
+import { useGoogleFonts } from "@/hooks/useGoogleFonts";
 import HeroPhotoField from "@/components/invitation/HeroPhotoField";
 import StoryPanel from "@/components/invitation/StoryPanel";
 import StorySection from "@/components/invitation/StorySection";
@@ -74,8 +82,7 @@ import { useInvitationMedia } from "@/hooks/useInvitationMedia";
 // ── Section definitions — left sidebar nav ────────────────────────────────────
 const SECTIONS = [
   { id: "privacy",   label: "Privacy",   icon: Lock },
-  { id: "color",     label: "Color",     icon: Palette },
-  { id: "font",      label: "Font",      icon: Type },
+  { id: "theme",     label: "Color Theme", icon: Palette },
   { id: "music",     label: "Music",     icon: Music },
   { id: "greetings", label: "Greetings", icon: BookOpen },
   { id: "date",      label: "Date",      icon: Calendar },
@@ -86,24 +93,11 @@ const SECTIONS = [
   { id: "guestbook", label: "Guestbook", icon: BookMarked },
 ];
 
-// ── Color theme presets ───────────────────────────────────────────────────────
-const COLOR_THEMES = [
-  { name: "Garden",   primary: "#56642b", secondary: "#8a9a5b", bg: "#fafaf5" },
-  { name: "Rose",     primary: "#9b3a5a", secondary: "#c97a95", bg: "#fdf5f7" },
-  { name: "Navy",     primary: "#1e3a5f", secondary: "#4a7aa8", bg: "#f5f7fa" },
-  { name: "Blush",    primary: "#c97a7a", secondary: "#e5aeae", bg: "#fdf8f8" },
-  { name: "Sage",     primary: "#4a7a65", secondary: "#7aaa95", bg: "#f5faf7" },
-  { name: "Burgundy", primary: "#6b2737", secondary: "#9b5a65", bg: "#faf5f6" },
-];
+// Older links to the former Color / Font tabs open the combined Color Theme tab.
+const SECTION_ALIASES = { color: "theme", font: "theme" };
 
-// ── Font pairing presets ──────────────────────────────────────────────────────
-const FONT_PAIRS = [
-  { name: "Classic",    heading: "Playfair Display", body: "DM Sans" },
-  { name: "Editorial",  heading: "Noto Serif",       body: "Manrope" },
-  { name: "Modern",     heading: "Cormorant Garamond", body: "Lato" },
-  { name: "Romantic",   heading: "Great Vibes",      body: "Nunito" },
-  { name: "Timeless",   heading: "Libre Baskerville", body: "Source Sans 3" },
-];
+// Color theme + font pairing presets now live in src/lib/invitationTheme.js
+// (shared with the guest RSVP page) — values unchanged.
 
 // ── Center Panel: Privacy ─────────────────────────────────────────────────────
 const PrivacyPanel = ({ settings, onChange }) => (
@@ -159,135 +153,6 @@ const PrivacyPanel = ({ settings, onChange }) => (
       <p className="text-xs mt-2" style={{ color: BUILDER_UI.onSurfaceVar }}>
         Guests cannot RSVP after this date.
       </p>
-    </div>
-  </div>
-);
-
-// ── Center Panel: Color ───────────────────────────────────────────────────────
-const ColorPanel = ({ settings, onChange }) => (
-  <div className="space-y-8">
-    <div>
-      <h3 className="text-xs font-bold tracking-widest uppercase mb-4"
-        style={{ color: BUILDER_UI.onSurfaceVar }}>
-        Theme Presets
-      </h3>
-      <div className="grid grid-cols-3 gap-3">
-        {COLOR_THEMES.map(theme => (
-          <button key={theme.name}
-            onClick={() => {
-              onChange("colorPalette1", theme.primary);
-              onChange("colorPalette2", theme.secondary);
-            }}
-            className="p-4 rounded-lg border-2 transition-all text-center"
-            style={{
-              // theme.bg / theme.primary / theme.secondary are the actual
-              // invitation preset colors (COLOR_THEMES) — never recolored.
-              backgroundColor: theme.bg,
-              borderColor: settings.colorPalette1 === theme.primary
-                ? BUILDER_UI.primary : BUILDER_UI.outline,
-            }}>
-            <div className="flex justify-center gap-1.5 mb-2">
-              <div className="w-5 h-5 rounded-full"
-                style={{ backgroundColor: theme.primary }} />
-              <div className="w-5 h-5 rounded-full"
-                style={{ backgroundColor: theme.secondary }} />
-            </div>
-            <p className="text-xs font-bold" style={{ color: BUILDER_UI.onSurface }}>
-              {theme.name}
-            </p>
-          </button>
-        ))}
-      </div>
-    </div>
-
-    <div>
-      <h3 className="text-xs font-bold tracking-widest uppercase mb-4"
-        style={{ color: BUILDER_UI.onSurfaceVar }}>
-        Custom Colors
-      </h3>
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="text-xs font-bold tracking-widest uppercase mb-2 block"
-            style={{ color: BUILDER_UI.onSurfaceVar }}>
-            Primary
-          </label>
-          <div className="flex items-center gap-3">
-            {/* Swatch + text input reflect the user's chosen invitation color —
-                only the surrounding wrapper/border uses the builder palette */}
-            <input type="color" value={settings.colorPalette1 || "#56642b"}
-              onChange={e => onChange("colorPalette1", e.target.value)}
-              className="w-12 h-12 rounded-lg cursor-pointer border-0 p-1"
-              style={{ backgroundColor: BUILDER_UI.surfaceContainer }} />
-            <Input value={settings.colorPalette1 || "#56642b"}
-              onChange={e => onChange("colorPalette1", e.target.value)}
-              className="h-11 rounded-lg border-0 border-b-2 font-mono text-sm"
-              style={{ borderColor: BUILDER_UI.outline, backgroundColor: BUILDER_UI.surfaceContainer }} />
-          </div>
-        </div>
-        <div>
-          <label className="text-xs font-bold tracking-widest uppercase mb-2 block"
-            style={{ color: BUILDER_UI.onSurfaceVar }}>
-            Secondary
-          </label>
-          <div className="flex items-center gap-3">
-            <input type="color" value={settings.colorPalette2 || "#8a9a5b"}
-              onChange={e => onChange("colorPalette2", e.target.value)}
-              className="w-12 h-12 rounded-lg cursor-pointer border-0 p-1"
-              style={{ backgroundColor: BUILDER_UI.surfaceContainer }} />
-            <Input value={settings.colorPalette2 || "#8a9a5b"}
-              onChange={e => onChange("colorPalette2", e.target.value)}
-              className="h-11 rounded-lg border-0 border-b-2 font-mono text-sm"
-              style={{ borderColor: BUILDER_UI.outline, backgroundColor: BUILDER_UI.surfaceContainer }} />
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-);
-
-// ── Center Panel: Font ────────────────────────────────────────────────────────
-const FontPanel = ({ settings, onChange }) => (
-  <div className="space-y-8">
-    <div>
-      <h3 className="text-xs font-bold tracking-widest uppercase mb-4"
-        style={{ color: BUILDER_UI.onSurfaceVar }}>
-        Font Pairings
-      </h3>
-      <div className="space-y-3">
-        {FONT_PAIRS.map(pair => (
-          <button key={pair.name}
-            onClick={() => {
-              onChange("font1", pair.heading);
-              onChange("font2", pair.body);
-            }}
-            className="w-full p-5 rounded-lg border-2 text-left transition-all"
-            style={{
-              backgroundColor: settings.font1 === pair.heading
-                ? BUILDER_UI.selected : BUILDER_UI.surfaceContainer,
-              borderColor: settings.font1 === pair.heading
-                ? BUILDER_UI.primary : "transparent",
-            }}>
-            <div className="flex justify-between items-center mb-2">
-              <p className="text-xs font-bold tracking-widest uppercase"
-                style={{ color: BUILDER_UI.onSurfaceVar }}>
-                {pair.name}
-              </p>
-              {settings.font1 === pair.heading && (
-                <div className="w-5 h-5 rounded-full flex items-center justify-center"
-                  style={{ backgroundColor: BUILDER_UI.primary }}>
-                  <div className="w-2 h-2 rounded-full bg-white" />
-                </div>
-              )}
-            </div>
-            <p className="text-xl mb-1" style={{ fontFamily: pair.heading, color: BUILDER_UI.onSurface }}>
-              Sarah & Michael
-            </p>
-            <p className="text-xs" style={{ fontFamily: pair.body, color: BUILDER_UI.onSurfaceVar }}>
-              {pair.heading} / {pair.body}
-            </p>
-          </button>
-        ))}
-      </div>
     </div>
   </div>
 );
@@ -920,13 +785,20 @@ const DatePanel = ({ invitation }) => (
 // Renders a live phone mockup showing the invitation with current settings.
 // `hero` and `storyBlocks` are the builder's local (possibly unsaved) state, so
 // photo and Story edits show up here before they are saved.
+// Colors and fonts come from the Color Theme settings (resolveInvitationTheme):
+// each section uses its own background or the main one. CANVAS is only used
+// for neutral photo placeholders, card borders and the preview's own overlay.
 const PhonePreview = ({ invitation, settings, hero, storyBlocks = [] }) => {
-  const primaryColor = settings.colorPalette1 || CANVAS.primary;
-  const headingFont  = settings.font1 || "Playfair Display";
+  const theme        = resolveInvitationTheme(settings);
+  const sec          = theme.sections;
   const heroUrl      = photoSrc(hero);
   // Builder preview: show the section as soon as a block exists (empty photo
   // slots render as placeholders) unless the couple hid it.
   const showStory    = settings.storyShowOnInvitation !== false && storyBlocks.length > 0;
+
+  // Invitation buttons: same pill shape, size and label as before, now solid
+  // so the white label stays readable (the old 70% opacity fell below 4.5:1).
+  const btnStyle = { backgroundColor: theme.button, color: theme.buttonLabel };
 
   const groomFirst = invitation?.groomName?.first || "Groom";
   const brideFirst = invitation?.brideName?.first || "Bride";
@@ -948,22 +820,22 @@ const PhonePreview = ({ invitation, settings, hero, storyBlocks = [] }) => {
         style={{ backgroundColor: "#3a3d3a" }} />
 
       {/* Screen */}
-      <div className="w-full h-full rounded-[2.5rem] overflow-hidden"
-        style={{ backgroundColor: CANVAS.surface }}>
+      <div className="w-full h-full rounded-[2.5rem] overflow-hidden" data-testid="invitation-preview"
+        style={{ backgroundColor: theme.background, fontFamily: theme.bodyFont, color: theme.bodyText }}>
         <div className="h-full overflow-y-auto" style={{ scrollbarWidth: "none" }}>
 
           {/* Hero header */}
-          <div className="p-6 text-center" style={{ backgroundColor: CANVAS.surface }}>
+          <div className="p-6 text-center" data-section="header" style={{ backgroundColor: sec.header }}>
             <p className="text-[9px] uppercase tracking-widest mb-1"
-              style={{ color: CANVAS.onSurfaceVar }}>
+              style={{ color: theme.bodyText }}>
               {settings.greetingTitle || "Together with their families"}
             </p>
             <h1 className="text-2xl mb-1"
-              style={{ fontFamily: headingFont, color: CANVAS.onSurface }}>
+              style={{ fontFamily: theme.headingFont, color: theme.headingText }}>
               {groomFirst} & {brideFirst}
             </h1>
             <p className="text-[9px] uppercase tracking-widest"
-              style={{ color: CANVAS.onSurfaceVar }}>
+              style={{ color: theme.bodyText }}>
               {formattedDate}
               {invitation?.venueName && ` · ${invitation.venueName}`}
             </p>
@@ -985,19 +857,19 @@ const PhonePreview = ({ invitation, settings, hero, storyBlocks = [] }) => {
             {/* RSVP overlay button */}
             <div className="absolute bottom-4 left-4 right-4 text-center">
               <button className="w-full py-2 rounded-full text-white text-[9px] font-bold uppercase tracking-widest"
-                style={{ backgroundColor: `${primaryColor}cc` }}>
+                style={{ backgroundColor: `${theme.button}cc`, color: theme.buttonLabel }}>
                 RSVP
               </button>
             </div>
           </div>
 
           {/* Greetings */}
-          <div className="p-8 text-center" style={{ backgroundColor: "#ffffff" }}>
+          <div className="p-8 text-center" data-section="greetings" style={{ backgroundColor: sec.greetings }}>
             <h2 className="text-base mb-3"
-              style={{ fontFamily: headingFont, color: CANVAS.onSurface }}>
+              style={{ fontFamily: theme.headingFont, color: theme.headingText }}>
               Greetings
             </h2>
-            <p className="text-[9px] leading-relaxed" style={{ color: CANVAS.onSurfaceVar }}>
+            <p className="text-[9px] leading-relaxed" style={{ color: theme.bodyText }}>
               {settings.greetingMessage ||
                 "The stars aligned when we met, and now we're getting married! Your presence at our wedding would make our special day even more memorable."}
             </p>
@@ -1008,11 +880,12 @@ const PhonePreview = ({ invitation, settings, hero, storyBlocks = [] }) => {
             <StorySection
               title={settings.storyTitle}
               blocks={storyBlocks}
-              headingFont={headingFont}
-              bodyFont={settings.font2 || "DM Sans"}
-              accentColor={settings.colorPalette2 || CANVAS.primaryLight}
-              textColor={CANVAS.onSurface}
-              mutedColor={CANVAS.onSurfaceVar}
+              headingFont={theme.headingFont}
+              bodyFont={theme.bodyFont}
+              accentColor={theme.secondary}
+              backgroundColor={sec.story}
+              textColor={theme.headingText}
+              mutedColor={theme.bodyText}
               showPlaceholders
             />
           )}
@@ -1021,9 +894,9 @@ const PhonePreview = ({ invitation, settings, hero, storyBlocks = [] }) => {
               AND the host has "Show music on invitation" enabled. No fake
               placeholder song info is ever displayed. */}
           {settings.musicTrackId && settings.musicShowOnInvitation && (
-            <div className="p-6 text-center" style={{ backgroundColor: CANVAS.surface }}>
+            <div className="p-6 text-center" data-section="music" style={{ backgroundColor: sec.music }}>
               <h2 className="text-base mb-4"
-                style={{ fontFamily: headingFont, color: CANVAS.onSurface }}>
+                style={{ fontFamily: theme.headingFont, color: theme.headingText }}>
                 Music
               </h2>
               <iframe
@@ -1039,35 +912,35 @@ const PhonePreview = ({ invitation, settings, hero, storyBlocks = [] }) => {
           )}
 
           {/* Wedding date */}
-          <div className="p-6 text-center" style={{ backgroundColor: "#ffffff" }}>
+          <div className="p-6 text-center" data-section="date" style={{ backgroundColor: sec.date }}>
             <h2 className="text-base mb-2"
-              style={{ fontFamily: headingFont, color: CANVAS.onSurface }}>
+              style={{ fontFamily: theme.headingFont, color: theme.headingText }}>
               Wedding Day
             </h2>
-            <p className="text-[9px] mb-4" style={{ color: CANVAS.onSurfaceVar }}>
+            <p className="text-[9px] mb-4" style={{ color: theme.bodyText }}>
               {formattedDate}
               {invitation?.ceremonyTime && ` · ${invitation.ceremonyTime}`}
             </p>
             <button className="w-full py-2 rounded-full text-white text-[9px] font-bold"
-              style={{ backgroundColor: `${primaryColor}b3` }}>
+              style={btnStyle}>
               Add to calendar
             </button>
           </div>
 
           {/* Venue */}
-          <div className="p-6 text-center" style={{ backgroundColor: CANVAS.surface }}>
+          <div className="p-6 text-center" data-section="venue" style={{ backgroundColor: sec.venue }}>
             <h2 className="text-base mb-4"
-              style={{ fontFamily: headingFont, color: CANVAS.onSurface }}>
+              style={{ fontFamily: theme.headingFont, color: theme.headingText }}>
               Wedding Venue
             </h2>
             <div className="mb-3">
               <GoogleMapEmbed query={venueQuery} heightClass="h-28" interactive={false}
                 title="Venue map preview" />
             </div>
-            <p className="text-[10px] font-bold" style={{ color: CANVAS.onSurface }}>
+            <p className="text-[10px] font-bold" style={{ color: theme.headingText }}>
               {invitation?.venueName || "Venue Name"}
             </p>
-            <p className="text-[9px]" style={{ color: CANVAS.onSurfaceVar }}>
+            <p className="text-[9px]" style={{ color: theme.bodyText }}>
               {invitation?.venueAddress || "Venue Address"}
             </p>
             {venueQuery ? (
@@ -1076,13 +949,13 @@ const PhonePreview = ({ invitation, settings, hero, storyBlocks = [] }) => {
                 target="_blank"
                 rel="noopener noreferrer"
                 className="block w-full mt-3 py-2 rounded-full text-white text-[9px] font-bold"
-                style={{ backgroundColor: `${primaryColor}b3` }}
+                style={btnStyle}
               >
                 Get directions
               </a>
             ) : (
               <button className="w-full mt-3 py-2 rounded-full text-white text-[9px] font-bold"
-                style={{ backgroundColor: `${primaryColor}b3` }}>
+                style={btnStyle}>
                 Get directions
               </button>
             )}
@@ -1091,29 +964,29 @@ const PhonePreview = ({ invitation, settings, hero, storyBlocks = [] }) => {
           {/* Travel & Stay — only when the toggle is on AND at least one place
               has a name. Links are re-checked so only http(s) URLs render. */}
           {shouldShowTravelSection(settings) && (
-            <div className="p-6" style={{ backgroundColor: "#ffffff" }}>
+            <div className="p-6" data-section="travel" style={{ backgroundColor: sec.travel }}>
               <h2 className="text-base mb-2 text-center"
-                style={{ fontFamily: headingFont, color: CANVAS.onSurface }}>
+                style={{ fontFamily: theme.headingFont, color: theme.headingText }}>
                 Travel &amp; Stay
               </h2>
               {settings.travelMessage?.trim() && (
-                <p className="text-[9px] leading-relaxed text-center mb-4" style={{ color: CANVAS.onSurfaceVar }}>
+                <p className="text-[9px] leading-relaxed text-center mb-4" style={{ color: theme.bodyText }}>
                   {settings.travelMessage.trim()}
                 </p>
               )}
               <div className="space-y-3">
                 {getVisibleTravelItems(settings.travelItems).map(item => (
                   <div key={item.id} className="rounded-xl p-3 text-left"
-                    style={{ backgroundColor: CANVAS.surface, border: `1px solid ${CANVAS.outline}` }}>
+                    style={{ border: `1px solid ${CANVAS.outline}` }}>
                     <p className="text-[8px] font-bold uppercase tracking-widest mb-0.5"
-                      style={{ color: primaryColor }}>
+                      style={{ color: theme.button }}>
                       {getTravelCategoryLabel(item.category)}
                     </p>
-                    <p className="text-[10px] font-bold" style={{ color: CANVAS.onSurface }}>
+                    <p className="text-[10px] font-bold" style={{ color: theme.headingText }}>
                       {item.name}
                     </p>
                     {item.description && (
-                      <p className="text-[9px] leading-relaxed mt-1" style={{ color: CANVAS.onSurfaceVar }}>
+                      <p className="text-[9px] leading-relaxed mt-1" style={{ color: theme.bodyText }}>
                         {item.description}
                       </p>
                     )}
@@ -1123,7 +996,7 @@ const PhonePreview = ({ invitation, settings, hero, storyBlocks = [] }) => {
                         target="_blank"
                         rel="noopener noreferrer"
                         className="mt-2 inline-flex items-center gap-1 text-[9px] font-bold"
-                        style={{ color: primaryColor }}
+                        style={{ color: theme.button }}
                       >
                         View on Google Maps <ExternalLink size={9} />
                       </a>
@@ -1135,32 +1008,32 @@ const PhonePreview = ({ invitation, settings, hero, storyBlocks = [] }) => {
           )}
 
           {/* RSVP section */}
-          <div className="p-6 text-center" style={{ backgroundColor: "#ffffff" }}>
+          <div className="p-6 text-center" data-section="rsvp" style={{ backgroundColor: sec.rsvp }}>
             <h2 className="text-base mb-4"
-              style={{ fontFamily: headingFont, color: CANVAS.onSurface }}>
+              style={{ fontFamily: theme.headingFont, color: theme.headingText }}>
               RSVP
             </h2>
-            <p className="text-[9px] mb-4" style={{ color: CANVAS.onSurfaceVar }}>
+            <p className="text-[9px] mb-4" style={{ color: theme.bodyText }}>
               {invitation?.inviteDeadline
                 ? `Kindly reply by ${new Date(invitation.inviteDeadline + "T00:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric" })}`
                 : "Kindly reply at your earliest convenience"}
             </p>
             <button className="w-full py-2 rounded-full text-white text-[9px] font-bold"
-              style={{ backgroundColor: primaryColor }}>
+              style={btnStyle}>
               RSVP Now
             </button>
           </div>
 
           {/* Closure */}
-          <div className="p-10 text-center" style={{ backgroundColor: CANVAS.surface }}>
+          <div className="p-10 text-center" data-section="closure" style={{ backgroundColor: sec.closure }}>
             <h2 className="text-base mb-3"
-              style={{ fontFamily: headingFont, color: CANVAS.onSurface }}>
+              style={{ fontFamily: theme.headingFont, color: theme.headingText }}>
               {settings.closureTitle || "We can't wait to celebrate with you"}
             </h2>
             <div className="flex items-center justify-center gap-2 mt-4">
-              <div className="h-px w-10" style={{ backgroundColor: CANVAS.outline }} />
-              <Heart size={12} style={{ color: primaryColor }} />
-              <div className="h-px w-10" style={{ backgroundColor: CANVAS.outline }} />
+              <div className="h-px w-10" style={{ backgroundColor: theme.accent }} />
+              <Heart size={12} style={{ color: theme.primary }} />
+              <div className="h-px w-10" style={{ backgroundColor: theme.accent }} />
             </div>
           </div>
 
@@ -1169,7 +1042,7 @@ const PhonePreview = ({ invitation, settings, hero, storyBlocks = [] }) => {
         {/* Floating vellum overlay — zoom/rotate controls */}
         <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-[80%] p-3 rounded-xl flex justify-between items-center z-30"
           style={{ backdropFilter: "blur(20px)", backgroundColor: "rgba(227,227,222,0.7)" }}>
-          <Eye size={16} style={{ color: primaryColor }} />
+          <Eye size={16} style={{ color: theme.primary }} />
           <div className="flex gap-3">
             <span className="text-[10px] font-bold" style={{ color: CANVAS.onSurfaceVar }}>Preview</span>
           </div>
@@ -1192,8 +1065,10 @@ const CreateInvitation = () => {
   const [saved, setSaved]               = useState(false);
   // ?section=travel (e.g. from the dashboard sidebar) opens that section
   // directly; anything unknown falls back to the default "greetings" section.
+  // ?section=color / ?section=font (the former tabs) open Color Theme.
   const [searchParams] = useSearchParams();
-  const requestedSection = searchParams.get("section");
+  const rawSection = searchParams.get("section");
+  const requestedSection = SECTION_ALIASES[rawSection] || rawSection;
   const [activeSection, setActiveSection] = useState(
     SECTIONS.some(s => s.id === requestedSection) ? requestedSection : "greetings"
   );
@@ -1202,10 +1077,10 @@ const CreateInvitation = () => {
   // They are saved back to the `invitations` Firestore doc on Save/Publish
   const [settings, setSettings] = useState({
     privacy:          "private",
-    colorPalette1:    "#56642b",
-    colorPalette2:    "#8a9a5b",
-    font1:            "Playfair Display",
-    font2:            "DM Sans",
+    // Color Theme: colorPalette1/2 (primary/secondary), font1/2 (heading/body)
+    // plus background, button, accent, text colors and section backgrounds.
+    // Garden + Classic until the saved invitation loads.
+    ...DEFAULT_THEME_SETTINGS,
     // layoutStyle was removed with the Layout tab. Existing invitation docs keep
     // their stored value untouched (updateDoc never deletes unlisted fields).
     greetingTitle:    "",
@@ -1239,6 +1114,8 @@ const CreateInvitation = () => {
   const [travelLoaded, setTravelLoaded] = useState(false);
   // Same guard for storyTitle / storyShowOnInvitation.
   const [storySettingsLoaded, setStorySettingsLoaded] = useState(false);
+  // Same guard for the Color Theme fields (colors, fonts, section backgrounds).
+  const [themeLoaded, setThemeLoaded] = useState(false);
 
   // Notice shown when photos/Story couldn't be saved (local edits are kept)
   const [saveNotice, setSaveNotice] = useState(null); // { kind: "error" | "warning", text }
@@ -1260,10 +1137,9 @@ const CreateInvitation = () => {
           setSettings(prev => ({
             ...prev,
             privacy:         inv.isPublished ? "public" : "private",
-            colorPalette1:   inv.colorPalette1   || prev.colorPalette1,
-            colorPalette2:   inv.colorPalette2   || prev.colorPalette2,
-            font1:           inv.font1           || prev.font1,
-            font2:           inv.font2           || prev.font2,
+            // Color Theme — older invitations only have colorPalette1/2 and
+            // font1/2 (or nothing); every missing setting gets a default.
+            ...normalizeThemeSettings(inv),
             greetingMessage: inv.greetingMessage || prev.greetingMessage,
             greetingTitle:   inv.greetingTitle   || prev.greetingTitle,
             inviteDeadline:  inv.inviteDeadline  || prev.inviteDeadline,
@@ -1288,6 +1164,7 @@ const CreateInvitation = () => {
         setMealOptionsLoaded(true);
         setTravelLoaded(true);
         setStorySettingsLoaded(true);
+        setThemeLoaded(true);
       } catch (err) {
         console.error("Load invitation error:", err);
         media.markLoadFailed();
@@ -1297,28 +1174,17 @@ const CreateInvitation = () => {
     })();
   }, [user]);
 
-  // ── Dynamically load Google Fonts when font changes ──────────────────────
-  // The app only loads Playfair Display + DM Sans by default.
-  // When the user picks a different font pairing, we inject a <link> tag
-  // so the browser can actually render the new font in the preview.
-  useEffect(() => {
-    const fontsToLoad = [settings.font1, settings.font2].filter(Boolean);
-    fontsToLoad.forEach(font => {
-      const fontSlug = font.replace(/ /g, "+");
-      const id = `google-font-${fontSlug}`;
-      if (!document.getElementById(id)) {
-        const link = document.createElement("link");
-        link.id   = id;
-        link.rel  = "stylesheet";
-        link.href = `https://fonts.googleapis.com/css2?family=${fontSlug}:ital,wght@0,400;0,600;0,700;1,400&display=swap`;
-        document.head.appendChild(link);
-      }
-    });
-  }, [settings.font1, settings.font2]);
+  // ── Load the invitation's Google Fonts (preview) + the builder's own font ──
+  useGoogleFonts([settings.font1, settings.font2, "DM Sans"]);
 
   // ── Update a single settings field ────────────────────────────────────────
   const handleChange = (field, value) => {
     setSettings(prev => ({ ...prev, [field]: value }));
+  };
+
+  // ── Update several settings fields at once (theme presets, reset) ─────────
+  const handleApply = (updates) => {
+    setSettings(prev => ({ ...prev, ...updates }));
   };
 
   // ── Save to Firestore ──────────────────────────────────────────────────────
@@ -1371,6 +1237,14 @@ const CreateInvitation = () => {
         delete dataToSave.travelShowOnInvitation;
       }
 
+      // Color Theme — cleaned (valid hex, known fonts/sections) and only
+      // written after a successful load, so stored colors can't be wiped.
+      if (themeLoaded) {
+        Object.assign(dataToSave, normalizeThemeSettings(settings));
+      } else {
+        THEME_FIELDS.forEach(field => delete dataToSave[field]);
+      }
+
       // Our Story section settings — same "only after a successful load" guard.
       if (storySettingsLoaded) {
         dataToSave.storyTitle = normalizeStoryTitle(settings.storyTitle);
@@ -1408,8 +1282,7 @@ const CreateInvitation = () => {
   const renderPanel = () => {
     switch (activeSection) {
       case "privacy":   return <PrivacyPanel   settings={settings} onChange={handleChange} />;
-      case "color":     return <ColorPanel     settings={settings} onChange={handleChange} />;
-      case "font":      return <FontPanel      settings={settings} onChange={handleChange} />;
+      case "theme":     return <ColorThemePanel settings={settings} onChange={handleChange} onApply={handleApply} />;
       case "music":     return <MusicPanel     settings={settings} onChange={handleChange} />;
       case "greetings": return <GreetingsPanel settings={settings} onChange={handleChange}
                                  hero={media.hero} onHeroChange={media.setHeroPhoto} saving={saving}
@@ -1455,7 +1328,7 @@ const CreateInvitation = () => {
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen flex flex-col overflow-hidden"
-      style={{ backgroundColor: BUILDER_UI.surface, fontFamily: settings.font2 || "DM Sans" }}>
+      style={{ backgroundColor: BUILDER_UI.surface, fontFamily: BUILDER_FONT }}>
 
       {/* ── Top App Bar — ToGather style ── */}
       <header className="w-full sticky top-0 z-50 flex justify-between items-center px-8 h-16 border-b"
