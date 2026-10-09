@@ -16,6 +16,16 @@ vi.mock("@/contexts/AuthContext", () => ({ useAuth: () => auth }));
 vi.mock("@/components/GoogleMapEmbed", () => ({
   default: () => null, buildMapQuery: () => "", mapLinkUrl: () => "",
 }));
+// Hero Photo / Our Story talk to Firestore + Cloud Storage — keep them offline here.
+vi.mock("@/lib/storyStore", () => ({
+  loadAllStoryEntries: vi.fn(async () => []),
+  commitMediaChanges: vi.fn(async () => {}),
+  updateMediaBookkeeping: vi.fn(async () => {}),
+}));
+vi.mock("@/lib/mediaStorage", () => ({
+  uploadPhoto: vi.fn(), deletePhoto: vi.fn(async () => true),
+  buildHeroPath: vi.fn(), buildStoryPath: vi.fn(),
+}));
 
 import CreateInvitation from "@/pages/CreateInvitation";
 
@@ -56,7 +66,8 @@ describe("Invitation Builder — Travel & Stay", () => {
   it("falls back to the default section for an unknown ?section value", async () => {
     fs.getInvitationByUser.mockResolvedValue({ weddingId: "w1" });
     renderBuilder("/create-invitation?section=nope");
-    await screen.findAllByText("Layout");
+    // Greetings is the default section now that the Layout tab was removed
+    expect(await screen.findByText("Invitation Title")).toBeTruthy();
     expect(screen.queryByText("Show Travel & Stay on invitation")).toBeNull();
   });
 

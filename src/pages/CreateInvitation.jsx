@@ -12,7 +12,7 @@
 //   - This creates a clear separation between the "tool" and the "artifact"
 //
 // LAYOUT:
-//   Left sidebar  → section navigation (Privacy, Color, Font, Music, Layout, etc.)
+//   Left sidebar  → section navigation (Privacy, Color, Font, Music, Greetings, etc.)
 //   Center panel  → active section's controls/settings
 //   Right panel   → live phone mockup preview showing real wedding data
 //
@@ -20,15 +20,19 @@
 //   1. Loads existing invitation from Firestore (couple names, date, venue)
 //   2. Loads/saves invitation customization settings to Firestore
 //   3. All preview updates happen locally — only saved on "Save" or "Publish"
+//   4. Hero Photo + Our Story photos are uploaded to Cloud Storage on Save
+//      (see src/lib/storySave.js and docs/STORY_AND_MEDIA.md). Story blocks
+//      live in invitations/{weddingId}/storyEntries, NOT in `settings`.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState, useEffect } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
-  Heart, Lock, Palette, Type, Music, Sparkles, LayoutDashboard,
+  Heart, Lock, Palette, Type, Music, Sparkles,
   BookOpen, Calendar, Image, MapPin, BookHeart, CheckSquare,
-  BookMarked, ArrowLeft, Save, Globe, Upload, ChevronRight,
+  BookMarked, ArrowLeft, Save, Globe, ChevronRight,
   Eye, Volume2, Info, Loader2, Hotel, Plus, Trash2, Utensils, ExternalLink,
+  AlertCircle, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -53,45 +57,18 @@ import {
   getTravelShowOnInvitation,
   shouldShowTravelSection,
 } from "@/lib/travelStay";
+import { CANVAS, BUILDER_UI, ERROR_COLOR } from "@/components/invitation/builderTheme";
+import HeroPhotoField from "@/components/invitation/HeroPhotoField";
+import StoryPanel from "@/components/invitation/StoryPanel";
+import StorySection from "@/components/invitation/StorySection";
+import { DEFAULT_STORY_TITLE, normalizeStoryTitle } from "@/lib/storyBlocks";
+import { photoSrc } from "@/lib/imageProcessing";
+import { useInvitationMedia } from "@/hooks/useInvitationMedia";
 
-// ── Stitch-inspired color palette for the invitation canvas ───────────────────
-// This describes the actual wedding invitation artifact rendered in
-// <PhonePreview> (hero, greetings, RSVP button, etc.) — kept separate from the
-// ToGather design system tokens so the builder feels like a distinct creative
-// tool AND so recoloring the app's UI never touches the invitation itself.
-// Do NOT use CANVAS for the surrounding builder chrome (header/sidebar/panels)
-// — use BUILDER_UI below for that.
-const CANVAS = {
-  primary:        "#56642b",   // olive green — main accent
-  primaryLight:   "#8a9a5b",   // sage — secondary
-  primaryFixed:   "#d9eaa3",   // light green — hover/selected
-  surface:        "#fafaf5",   // warm off-white — backgrounds
-  surfaceContainer: "#eeeee9", // slightly darker — cards
-  surfaceHigh:    "#e8e8e3",   // even darker — borders
-  onSurface:      "#1a1c19",   // near-black text
-  onSurfaceVar:   "#46483c",   // medium text
-  outline:        "#76786b",   // borders
-  secondary:      "#735c00",   // warm gold
-  secondaryFixed: "#ffe088",   // light gold
-};
-
-// ── ToGather palette for the builder's own interface ───────────────────────────
-// Used for everything that is NOT the invitation artifact itself: the top bar,
-// left section nav, center settings panels, and Save/Publish actions. Selection
-// indicators (font pairing, layout, sidebar section, etc.) use a blush-tinted
-// background with a dark-green border/text instead of CANVAS's olive/lime.
-const BUILDER_UI = {
-  primary:          "#3F5F47", // dark green — active states, buttons, selected borders/text
-  primaryLight:     "#5F8D6B", // softer green — hover/secondary emphasis
-  selected:         "#FCEBEF", // subtle blush tint — selected card/section background
-  surface:          "#F7F3ED", // warm ivory — top bar, center workspace & preview stage background
-  sidebar:          "#F0EAE5", // warm beige — left section-nav background, distinct from the workspace
-  surfaceContainer: "#FFFFFF", // white — panel cards & input backgrounds
-  surfaceHigh:      "#F3EAE3", // warm beige — icon wells, dropzones, toggle-off track
-  onSurface:        "#2C2C2C", // charcoal — primary text
-  onSurfaceVar:     "#746B63", // softer warm gray — labels/secondary text
-  outline:          "#E7DED4", // borders/dividers
-};
+// ── Color tokens ──────────────────────────────────────────────────────────────
+// CANVAS (the invitation itself) and BUILDER_UI (the builder chrome) now live in
+// src/components/invitation/builderTheme.js so the extracted Hero Photo and
+// Our Story components can share them. Values are unchanged.
 
 // ── Section definitions — left sidebar nav ────────────────────────────────────
 const SECTIONS = [
@@ -99,10 +76,8 @@ const SECTIONS = [
   { id: "color",     label: "Color",     icon: Palette },
   { id: "font",      label: "Font",      icon: Type },
   { id: "music",     label: "Music",     icon: Music },
-  { id: "layout",    label: "Layout",    icon: LayoutDashboard },
   { id: "greetings", label: "Greetings", icon: BookOpen },
   { id: "date",      label: "Date",      icon: Calendar },
-  { id: "gallery",   label: "Gallery",   icon: Image },
   { id: "venue",     label: "Venue",     icon: MapPin },
   { id: "travel",    label: "Travel & Stay", icon: Hotel },
   { id: "story",     label: "Story",     icon: BookHeart },
@@ -316,64 +291,9 @@ const FontPanel = ({ settings, onChange }) => (
   </div>
 );
 
-// ── Center Panel: Layout ──────────────────────────────────────────────────────
-const LayoutPanel = ({ settings, onChange }) => (
-  <div className="space-y-8">
-    <div>
-      <h3 className="text-xs font-bold tracking-widest uppercase mb-4"
-        style={{ color: BUILDER_UI.onSurfaceVar }}>
-        Layout Style
-      </h3>
-      <div className="grid grid-cols-2 gap-4">
-        {[
-          { id: "poster",   label: "Poster",   desc: "Clean, high-impact with centralized typography" },
-          { id: "editorial",label: "Editorial", desc: "Magazine-style with dynamic photo placement" },
-        ].map(opt => (
-          <button key={opt.id}
-            onClick={() => onChange("layoutStyle", opt.id)}
-            className="p-6 rounded-lg border-2 text-left transition-all"
-            style={{
-              backgroundColor: settings.layoutStyle === opt.id
-                ? BUILDER_UI.selected : BUILDER_UI.surfaceContainer,
-              borderColor: settings.layoutStyle === opt.id
-                ? BUILDER_UI.primary : "transparent",
-              color: BUILDER_UI.onSurface,
-            }}>
-            <LayoutDashboard size={24} className="mb-3"
-              style={{ color: BUILDER_UI.primary }} />
-            <p className="font-bold text-sm mb-1">{opt.label}</p>
-            <p className="text-xs" style={{ color: BUILDER_UI.onSurfaceVar }}>{opt.desc}</p>
-          </button>
-        ))}
-      </div>
-    </div>
-
-    <div>
-      <h3 className="text-xs font-bold tracking-widest uppercase mb-4"
-        style={{ color: BUILDER_UI.onSurfaceVar }}>
-        Hero Image
-      </h3>
-      <div className="border-2 border-dashed rounded-lg p-10 flex flex-col items-center text-center"
-        style={{ borderColor: BUILDER_UI.outline, backgroundColor: BUILDER_UI.surfaceContainer }}>
-        <div className="w-14 h-14 rounded-full flex items-center justify-center mb-4"
-          style={{ backgroundColor: BUILDER_UI.surfaceHigh }}>
-          <Upload size={22} style={{ color: BUILDER_UI.primary }} />
-        </div>
-        <p className="font-bold mb-1" style={{ color: BUILDER_UI.onSurface }}>Upload Hero Image</p>
-        <p className="text-xs mb-5" style={{ color: BUILDER_UI.onSurfaceVar }}>
-          High-resolution JPEG recommended
-        </p>
-        <button className="px-8 py-2 text-sm font-bold uppercase tracking-widest"
-          style={{ backgroundColor: BUILDER_UI.primary, color: "#FFFFFF" }}>
-          Select File
-        </button>
-      </div>
-    </div>
-  </div>
-);
-
 // ── Center Panel: Greetings ───────────────────────────────────────────────────
-const GreetingsPanel = ({ settings, onChange }) => (
+// Title + welcome message + Hero Photo (moved here from the removed Layout tab).
+const GreetingsPanel = ({ settings, onChange, hero, onHeroChange, heroProgress, saving }) => (
   <div className="space-y-6">
     <div>
       <h3 className="text-xs font-bold tracking-widest uppercase mb-4"
@@ -413,6 +333,7 @@ const GreetingsPanel = ({ settings, onChange }) => (
         {(settings.greetingMessage || "").length}/300
       </p>
     </div>
+    <HeroPhotoField photo={hero} onChange={onHeroChange} progress={heroProgress} disabled={saving} />
   </div>
 );
 
@@ -995,10 +916,16 @@ const DatePanel = ({ invitation }) => (
 );
 
 // ── Phone Preview ─────────────────────────────────────────────────────────────
-// Renders a live phone mockup showing the invitation with current settings
-const PhonePreview = ({ invitation, settings }) => {
+// Renders a live phone mockup showing the invitation with current settings.
+// `hero` and `storyBlocks` are the builder's local (possibly unsaved) state, so
+// photo and Story edits show up here before they are saved.
+const PhonePreview = ({ invitation, settings, hero, storyBlocks = [] }) => {
   const primaryColor = settings.colorPalette1 || CANVAS.primary;
   const headingFont  = settings.font1 || "Playfair Display";
+  const heroUrl      = photoSrc(hero);
+  // Builder preview: show the section as soon as a block exists (empty photo
+  // slots render as placeholders) unless the couple hid it.
+  const showStory    = settings.storyShowOnInvitation !== false && storyBlocks.length > 0;
 
   const groomFirst = invitation?.groomName?.first || "Groom";
   const brideFirst = invitation?.brideName?.first || "Bride";
@@ -1041,13 +968,18 @@ const PhonePreview = ({ invitation, settings }) => {
             </p>
           </div>
 
-          {/* Hero image placeholder */}
-          <div className="relative w-full h-48 flex items-center justify-center"
+          {/* Hero image — center-cropped to fill; placeholder until one is added */}
+          <div className="relative w-full h-48 flex items-center justify-center overflow-hidden"
             style={{ backgroundColor: CANVAS.surfaceHigh }}>
-            <div className="text-center">
-              <Image size={28} style={{ color: CANVAS.outline, margin: "0 auto 8px" }} />
-              <p className="text-[9px]" style={{ color: CANVAS.outline }}>Hero Photo</p>
-            </div>
+            {heroUrl ? (
+              <img src={heroUrl} alt="Hero" decoding="async"
+                className="absolute inset-0 w-full h-full object-cover object-center" />
+            ) : (
+              <div className="text-center">
+                <Image size={28} style={{ color: CANVAS.outline, margin: "0 auto 8px" }} />
+                <p className="text-[9px]" style={{ color: CANVAS.outline }}>Hero Photo</p>
+              </div>
+            )}
             {/* RSVP overlay button */}
             <div className="absolute bottom-4 left-4 right-4 text-center">
               <button className="w-full py-2 rounded-full text-white text-[9px] font-bold uppercase tracking-widest"
@@ -1068,6 +1000,20 @@ const PhonePreview = ({ invitation, settings }) => {
                 "The stars aligned when we met, and now we're getting married! Your presence at our wedding would make our special day even more memorable."}
             </p>
           </div>
+
+          {/* Our Story — after Greetings, before Wedding Day */}
+          {showStory && (
+            <StorySection
+              title={settings.storyTitle}
+              blocks={storyBlocks}
+              headingFont={headingFont}
+              bodyFont={settings.font2 || "DM Sans"}
+              accentColor={settings.colorPalette2 || CANVAS.primaryLight}
+              textColor={CANVAS.onSurface}
+              mutedColor={CANVAS.onSurfaceVar}
+              showPlaceholders
+            />
+          )}
 
           {/* Music player — only shown once a real Spotify song is selected
               AND the host has "Show music on invitation" enabled. No fake
@@ -1243,11 +1189,11 @@ const CreateInvitation = () => {
   const [saving, setSaving]             = useState(false);
   const [saved, setSaved]               = useState(false);
   // ?section=travel (e.g. from the dashboard sidebar) opens that section
-  // directly; anything unknown falls back to the default "layout" section.
+  // directly; anything unknown falls back to the default "greetings" section.
   const [searchParams] = useSearchParams();
   const requestedSection = searchParams.get("section");
   const [activeSection, setActiveSection] = useState(
-    SECTIONS.some(s => s.id === requestedSection) ? requestedSection : "layout"
+    SECTIONS.some(s => s.id === requestedSection) ? requestedSection : "greetings"
   );
 
   // Settings state — these are the invitation customization options
@@ -1258,7 +1204,8 @@ const CreateInvitation = () => {
     colorPalette2:    "#8a9a5b",
     font1:            "Playfair Display",
     font2:            "DM Sans",
-    layoutStyle:      "poster",
+    // layoutStyle was removed with the Layout tab. Existing invitation docs keep
+    // their stored value untouched (updateDoc never deletes unlisted fields).
     greetingTitle:    "",
     greetingMessage:  "",
     musicTrackId:          "",
@@ -1272,6 +1219,9 @@ const CreateInvitation = () => {
     travelItems:            [], // [{ id, category, name, mapUrl, description }]
     travelMessage:          "",
     travelShowOnInvitation: true,
+    // Our Story section settings (the blocks live in useInvitationMedia)
+    storyTitle:             DEFAULT_STORY_TITLE,
+    storyShowOnInvitation:  true,
   });
 
   // True only once the saved invitation has been read successfully (or we
@@ -1285,6 +1235,15 @@ const CreateInvitation = () => {
   // there isn't one yet). Until then the travel fields are NOT written on save,
   // so a failed load can never overwrite saved places with empty defaults.
   const [travelLoaded, setTravelLoaded] = useState(false);
+  // Same guard for storyTitle / storyShowOnInvitation.
+  const [storySettingsLoaded, setStorySettingsLoaded] = useState(false);
+
+  // Notice shown when photos/Story couldn't be saved (local edits are kept)
+  const [saveNotice, setSaveNotice] = useState(null); // { kind: "error" | "warning", text }
+
+  // ── Hero Photo + Our Story state, loading and saving ───────────────────────
+  // See src/hooks/useInvitationMedia.js — kept out of `settings` on purpose.
+  const media = useInvitationMedia({ saving });
 
   // ── Load existing invitation data on mount ─────────────────────────────────
   useEffect(() => {
@@ -1316,12 +1275,20 @@ const CreateInvitation = () => {
             travelItems:            normalizeTravelItems(inv.travelItems),
             travelMessage:          typeof inv.travelMessage === "string" ? inv.travelMessage : "",
             travelShowOnInvitation: getTravelShowOnInvitation(inv),
+            // Older invitations have no story fields → "Our Story", shown
+            storyTitle: typeof inv.storyTitle === "string" && inv.storyTitle.trim()
+              ? inv.storyTitle : DEFAULT_STORY_TITLE,
+            storyShowOnInvitation: inv.storyShowOnInvitation !== false,
           }));
         }
+        // Hero Photo + Story entries (older invitations have neither)
+        media.initFromInvitation(inv);
         setMealOptionsLoaded(true);
         setTravelLoaded(true);
+        setStorySettingsLoaded(true);
       } catch (err) {
         console.error("Load invitation error:", err);
+        media.markLoadFailed();
       } finally {
         setLoading(false);
       }
@@ -1366,6 +1333,7 @@ const CreateInvitation = () => {
       return;
     }
 
+    setSaveNotice(null);
     setSaving(true);
     try {
       const dataToSave = {
@@ -1401,11 +1369,28 @@ const CreateInvitation = () => {
         delete dataToSave.travelShowOnInvitation;
       }
 
+      // Our Story section settings — same "only after a successful load" guard.
+      if (storySettingsLoaded) {
+        dataToSave.storyTitle = normalizeStoryTitle(settings.storyTitle);
+        dataToSave.storyShowOnInvitation = settings.storyShowOnInvitation !== false;
+      } else {
+        delete dataToSave.storyTitle;
+        delete dataToSave.storyShowOnInvitation;
+      }
+
       const id = await saveInvitation(user.uid, dataToSave, weddingId);
       if (travelLoaded) setSettings(prev => ({ ...prev, travelItems: cleanedTravelItems }));
       if (!weddingId) setWeddingId(id);
       if (publish) setSettings(prev => ({ ...prev, isPublished: true }));
       if (mealOptionsLoaded) setSettings(prev => ({ ...prev, mealOptions: cleanedMealOptions }));
+      if (storySettingsLoaded) setSettings(prev => ({ ...prev, storyTitle: dataToSave.storyTitle }));
+
+      // Photos + Story: uploads happen here, on Save.
+      const mediaResult = await media.save(id);
+      if (!mediaResult.ok) {
+        setSaveNotice(mediaResult.notice);
+        return;
+      }
 
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
@@ -1424,8 +1409,15 @@ const CreateInvitation = () => {
       case "color":     return <ColorPanel     settings={settings} onChange={handleChange} />;
       case "font":      return <FontPanel      settings={settings} onChange={handleChange} />;
       case "music":     return <MusicPanel     settings={settings} onChange={handleChange} />;
-      case "layout":    return <LayoutPanel    settings={settings} onChange={handleChange} />;
-      case "greetings": return <GreetingsPanel settings={settings} onChange={handleChange} />;
+      case "greetings": return <GreetingsPanel settings={settings} onChange={handleChange}
+                                 hero={media.hero} onHeroChange={media.setHeroPhoto} saving={saving}
+                                 heroProgress={media.hero?.pending ? media.uploadProgress?.byKey?.[media.hero.localId] : undefined} />;
+      case "story":     return <StoryPanel     settings={settings} onSettingChange={handleChange}
+                                 blocks={media.storyBlocks} setBlocks={media.setStoryBlocks}
+                                 status={media.storyStatus} loadedCount={media.storyLoadedCount}
+                                 onRetryLoad={media.retryLoad}
+                                 mediaBytes={media.mediaBytes} progressByKey={media.uploadProgress?.byKey}
+                                 disabled={saving} />;
       case "rsvp":      return <RsvpPanel      settings={settings} onChange={handleChange} />;
       case "date":      return <DatePanel      invitation={invitation} />;
       case "travel":    return <TravelPanel    settings={settings} onChange={handleChange}
@@ -1508,7 +1500,10 @@ const CreateInvitation = () => {
             className="px-5 py-2 text-sm font-semibold transition-colors hover:opacity-80 flex items-center gap-2"
             style={{ color: BUILDER_UI.primary }}>
             {saving
-              ? <><Loader2 size={14} className="animate-spin" /> Saving...</>
+              ? <><Loader2 size={14} className="animate-spin" />
+                  {media.uploadProgress && media.uploadProgress.total > 0
+                    ? `Uploading ${Math.min(media.uploadProgress.done + 1, media.uploadProgress.total)}/${media.uploadProgress.total} · ${media.uploadProgress.percent}%`
+                    : "Saving..."}</>
               : <><Save size={14} /> Save</>}
           </button>
 
@@ -1589,6 +1584,20 @@ const CreateInvitation = () => {
           style={{ backgroundColor: BUILDER_UI.surface }}>
           <div className="max-w-2xl mx-auto">
 
+            {/* Save problems (photos/Story) — local edits are kept */}
+            {saveNotice && (
+              <div role="alert" className="mb-6 flex items-start gap-3 p-4 rounded-lg text-sm"
+                style={{ backgroundColor: BUILDER_UI.selected, color: BUILDER_UI.onSurface }}>
+                <AlertCircle size={16} className="mt-0.5 flex-shrink-0"
+                  style={{ color: saveNotice.kind === "error" ? ERROR_COLOR : BUILDER_UI.primary }} />
+                <p className="flex-1">{saveNotice.text}</p>
+                <button type="button" onClick={() => setSaveNotice(null)} aria-label="Dismiss message"
+                  className="flex-shrink-0 hover:opacity-70" style={{ color: BUILDER_UI.onSurfaceVar }}>
+                  <X size={14} />
+                </button>
+              </div>
+            )}
+
             {/* Section header */}
             <div className="flex justify-between items-end mb-10">
               <div>
@@ -1624,7 +1633,7 @@ const CreateInvitation = () => {
             position: "sticky",
             top: "4rem",
           }}>
-          <PhonePreview invitation={invitation} settings={settings} />
+          <PhonePreview invitation={invitation} settings={settings} hero={media.hero} storyBlocks={media.storyBlocks} />
         </aside>
 
       </div>

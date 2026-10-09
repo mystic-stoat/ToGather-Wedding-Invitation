@@ -60,6 +60,16 @@ export default defineConfig({
       {
         extends: true,
         test: {
+          name: 'integration:storage',
+          environment: 'node',
+          globals: true,
+          include: ['**/storageRules.integration.test.jsx'],
+          setupFiles: ['./src/test/setup.integration.js'],
+        },
+      },
+      {
+        extends: true,
+        test: {
           name: 'all',
           environment: 'jsdom',
           globals: true,

@@ -11,7 +11,13 @@
         "source": "**",
         "destination": "/index.html"
       }
-    ]
+    ]  
+  },
+  "firestore": {
+    "rules": "firestore.rules"
+  },
+  "storage": {
+    "rules": "storage.rules"
   },
   "emulators": {
     "auth": {
@@ -21,8 +27,8 @@
       "port": 5001
     },
     "firestore": {
-      "port": 8080,
-      "rules": "firestore.rules"
+      "port": 8080
+    
     },
     "hosting": {
       "port": 5000
