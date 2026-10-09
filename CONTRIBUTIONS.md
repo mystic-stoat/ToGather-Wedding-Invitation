@@ -55,6 +55,12 @@ Christopher Nguyen:
 * Guest RSVP: Updated the guest-facing page to respect venue visibility settings.
 * Privacy: Removed the Privacy tab while preserving existing security functionality.
 * Testing: Added automated tests and isolated test emulators to prevent development data from being erased.
+* Wedding Party: Added the Wedding Party feature to the Invitation Builder.
+* Registry: Integrated Registry into the Invitation Builder, including visibility controls.
+* Q\&A: Added customizable questions and answers, including starter questions, editing, reordering, and guest-facing display.
+* Invitation Builder: Improved the tab order, phone preview, and sidebar styling.
+* Hero Photo: Doubled the hero photo height and updated its editing frame.
+* Header Cleanup: Removed the unused Preview, Share, and Settings links.
 
 
 
