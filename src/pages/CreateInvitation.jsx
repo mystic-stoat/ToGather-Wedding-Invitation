@@ -14,7 +14,7 @@
 // LAYOUT:
 //   Left sidebar  → section navigation in a fixed order: Greetings, Color Theme,
 //                   Date, Music, Our Story, Wedding Party, Venue, Travel & Stay,
-//                   RSVP, Registry (see SECTIONS)
+//                   RSVP, Registry, Q&A (see SECTIONS)
 //                   (the former Privacy tab was removed — it never controlled
 //                   access; publishing is the header's Publish button)
 //   Center panel  → active section's controls/settings
@@ -37,14 +37,18 @@
 //      the invitation doc) SAVES IMMEDIATELY from its tab, exactly like the
 //      former dashboard Registry page (src/hooks/useRegistries.js). The main
 //      Save button never writes those fields, so it can't overwrite them.
+//   7. Q&A (qaItems / qaShowOnInvitation / qaStartersCreated on the invitation
+//      doc) also SAVES IMMEDIATELY from its tab (src/hooks/useQa.js), and the
+//      main Save never writes those fields either. Suggested questions are
+//      added once, the first time the Q&A tab is opened.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   Heart, Palette, Music, Sparkles,
   BookOpen, Calendar, Image, MapPin, BookHeart, CheckSquare,
-  Users, Gift, ArrowLeft, Save, ChevronRight,
+  Users, Gift, MessageCircle, ArrowLeft, Save, ChevronRight,
   Eye, Volume2, Info, Loader2, Hotel, Plus, Trash2, Utensils, ExternalLink,
   AlertCircle, X,
 } from "lucide-react";
@@ -117,6 +121,11 @@ import RegistryPanel from "@/components/invitation/RegistryPanel";
 import RegistrySection from "@/components/registry/RegistrySection";
 import { useRegistries } from "@/hooks/useRegistries";
 import { hasRegistryContent } from "@/lib/registry";
+import QaPanel from "@/components/invitation/QaPanel";
+import QaSection from "@/components/qa/QaSection";
+import { scrollToSectionWithin } from "@/components/qa/qaNavigation";
+import { useQa } from "@/hooks/useQa";
+import { getGuestQaItems } from "@/lib/qa";
 
 // ── Color tokens ──────────────────────────────────────────────────────────────
 // CANVAS (the invitation itself) and BUILDER_UI (the builder chrome) now live in
@@ -126,7 +135,6 @@ import { hasRegistryContent } from "@/lib/registry";
 // ── Section definitions — left sidebar nav ────────────────────────────────────
 // FIXED order (no drag-and-drop). The phone preview shows its content in the
 // same order (Color Theme has no section — it styles everything).
-// Q&A will be added after Registry in the future.
 const SECTIONS = [
   { id: "greetings", label: "Greetings",     icon: BookOpen },
   { id: "theme",     label: "Color Theme",   icon: Palette },
@@ -138,7 +146,25 @@ const SECTIONS = [
   { id: "travel",    label: "Travel & Stay", icon: Hotel },
   { id: "rsvp",      label: "RSVP",          icon: CheckSquare },
   { id: "registry",  label: "Registry",      icon: Gift },
+  { id: "qa",        label: "Q&A",           icon: MessageCircle },
 ];
+
+// ── Sections that are actually shown in the phone preview ─────────────────────
+// Used by Q&A "link to section" answers: a link only counts (and is only shown)
+// when its destination is really on the invitation. Mirrors each section's own
+// show/hide rule below in <PhonePreview>.
+const getPreviewSectionIds = ({
+  settings, storyBlocks = [], partyMembers = [], registries = [], registryMessage = "", registryShown = true,
+}) => {
+  const ids = new Set(["rsvp"]);
+  if (shouldShowWeddingDaySection(settings)) ids.add("date");
+  if (getVenueDisplay(settings).section) ids.add("venue");
+  if (shouldShowTravelSection(settings)) ids.add("travel");
+  if (settings.storyShowOnInvitation !== false && storyBlocks.length > 0) ids.add("story");
+  if (shouldShowPartySection(settings, partyMembers)) ids.add("party");
+  if (registryShown && hasRegistryContent(registries, registryMessage)) ids.add("registry");
+  return ids;
+};
 
 // Older links to the former Color / Font tabs open the combined Color Theme tab.
 // The former Privacy tab's only working control (RSVP deadline) is now in RSVP.
@@ -974,8 +1000,9 @@ const VenuePanel = ({ invitation, settings, onChange }) => {
 // for neutral photo placeholders, card borders and the preview's own overlay.
 const PhonePreview = ({
   invitation, settings, hero, storyBlocks = [], partyMembers = [], registries = [], registryMessage = "",
-  registryShown = true,
+  registryShown = true, qaEntries = [],
 }) => {
+  const screenRef = useRef(null);
   const theme        = resolveInvitationTheme(settings);
   const sec          = theme.sections;
   const heroUrl      = photoSrc(hero);
@@ -1011,7 +1038,7 @@ const PhonePreview = ({
       {/* Screen */}
       <div className="w-full h-full rounded-[2.5rem] overflow-hidden" data-testid="invitation-preview"
         style={{ backgroundColor: theme.background, fontFamily: theme.bodyFont, color: theme.bodyText }}>
-        <div className="h-full overflow-y-auto" style={{ scrollbarWidth: "none" }}>
+        <div ref={screenRef} className="h-full overflow-y-auto" style={{ scrollbarWidth: "none" }}>
 
           {/* Hero header */}
           <div className="p-6 text-center" data-section="header" style={{ backgroundColor: sec.header }}>
@@ -1246,6 +1273,18 @@ const PhonePreview = ({
             </div>
           </div>
 
+          {/* Q&A — after Registry, before the closing. Same component as the
+              guest RSVP page: only questions that are switched on and fully
+              answered, in the couple's order. Section links scroll this
+              preview to that section. Hidden while the Q&A switch is off. */}
+          <div className="tg-invite-theme" data-section="qa"
+            style={{ ...buildGuestThemeStyle(settings), backgroundColor: theme.background }}>
+            <div className={qaEntries.length ? "p-4" : undefined}>
+              <QaSection entries={qaEntries} compact
+                onNavigate={id => scrollToSectionWithin(screenRef.current, id)} />
+            </div>
+          </div>
+
           {/* Closure */}
           <div className="p-10 text-center" data-section="closure" style={{ backgroundColor: sec.closure }}>
             <h2 className="text-base mb-3"
@@ -1366,6 +1405,9 @@ const CreateInvitation = () => {
   //    immediately (src/hooks/useRegistries.js) ─────────────────────────────
   const registry = useRegistries({ userId: user?.uid, weddingId });
 
+  // ── Q&A: saves immediately (src/hooks/useQa.js) ────────────────────────────
+  const qa = useQa({ userId: user?.uid, weddingId });
+
   // ── Wedding Party private contact details (loaded when the tab is opened) ──
   const partyContacts = useWeddingPartyContacts({
     weddingId,
@@ -1418,6 +1460,8 @@ const CreateInvitation = () => {
         media.initFromInvitation(inv);
         // Registry links + message from the same invitation doc (no extra read)
         registry.initFromInvitation(inv);
+        // Q&A questions + settings from the same invitation doc (no extra read)
+        qa.initFromInvitation(inv);
         setMealOptionsLoaded(true);
         setTravelLoaded(true);
         setStorySettingsLoaded(true);
@@ -1429,11 +1473,32 @@ const CreateInvitation = () => {
         console.error("Load invitation error:", err);
         media.markLoadFailed();
         registry.markLoadFailed();
+        qa.markLoadFailed();
       } finally {
         setLoading(false);
       }
     })();
   }, [user]);
+
+  // ── Q&A: add the suggested questions the first time the tab is opened ────
+  // (once per invitation — the transaction checks qaStartersCreated)
+  useEffect(() => {
+    if (activeSection === "qa") qa.ensureStarters();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSection, qa.status, qa.startersCreated, weddingId]);
+
+  // ── Q&A answers resolve against the live builder state ───────────────────
+  // Auto-fill reads Wedding Details (invitation) + the live Venue switches
+  // (settings); section links only count when that section is in the preview.
+  const qaContext = {
+    data: { ...(invitation || {}), ...settings },
+    availableSections: getPreviewSectionIds({
+      settings, storyBlocks: media.storyBlocks, partyMembers: media.partyMembers,
+      registries: registry.registries, registryMessage: registry.message,
+      registryShown: registry.showOnInvitation,
+    }),
+  };
+  const qaEntries = getGuestQaItems(qa.items, qaContext, qa.showOnInvitation);
 
   // ── Load the invitation's Google Fonts (preview) + the builder's own font ──
   useGoogleFonts([settings.font1, settings.font2, "DM Sans"]);
@@ -1508,7 +1573,7 @@ const CreateInvitation = () => {
       } else {
         delete dataToSave.mealOptions;
       }
-      
+
       // Travel & Stay: trimmed, empty places dropped. Skipped entirely if the
       // saved invitation never loaded, so stored places can't be wiped.
       const cleanedTravelItems = cleanTravelItemsForSave(settings.travelItems);
@@ -1566,6 +1631,10 @@ const CreateInvitation = () => {
       delete dataToSave.registries;
       delete dataToSave.registryMessage;
       delete dataToSave.registryShowOnInvitation;
+      // Same for Q&A — it saves immediately from its own tab.
+      delete dataToSave.qaItems;
+      delete dataToSave.qaShowOnInvitation;
+      delete dataToSave.qaStartersCreated;
 
       const id = await saveInvitation(user.uid, dataToSave, weddingId);
       if (travelLoaded) setSettings(prev => ({ ...prev, travelItems: cleanedTravelItems }));
@@ -1637,6 +1706,7 @@ const CreateInvitation = () => {
                                  progressByKey={media.uploadProgress?.byKey}
                                  disabled={saving} />;
       case "registry":  return <RegistryPanel registry={registry} />;
+      case "qa":        return <QaPanel qa={qa} ctx={qaContext} />;
       default:
         return (
           <div className="flex flex-col items-center justify-center h-64 text-center">
@@ -1856,7 +1926,8 @@ const CreateInvitation = () => {
           <PhonePreview invitation={invitation} settings={settings} hero={media.hero} storyBlocks={media.storyBlocks}
             partyMembers={media.partyMembers}
             registries={registry.registries} registryMessage={registry.message}
-            registryShown={registry.showOnInvitation} />
+            registryShown={registry.showOnInvitation}
+            qaEntries={qaEntries} />
         </aside>
 
       </div>

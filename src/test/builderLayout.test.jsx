@@ -36,7 +36,7 @@ import { THEME_SECTIONS } from "@/lib/invitationTheme";
 
 const TAB_ORDER = [
   "Greetings", "Color Theme", "Date", "Music", "Our Story",
-  "Wedding Party", "Venue", "Travel & Stay", "RSVP", "Registry",
+  "Wedding Party", "Venue", "Travel & Stay", "RSVP", "Registry", "Q&A",
 ];
 
 // An invitation with EVERY optional preview section switched on
@@ -64,12 +64,11 @@ beforeEach(() => {
 });
 
 describe("builder tabs", () => {
-  it("uses the exact fixed tab order (no Q&A yet)", async () => {
+  it("uses the exact fixed tab order, with Q&A after Registry", async () => {
     renderBuilder();
     await screen.findByText("Invitation Title");
     const labels = within(nav()).getAllByRole("button").map(b => b.textContent.trim());
     expect(labels).toEqual(TAB_ORDER);
-    expect(labels).not.toContain("Q&A");
   });
 
   it("opens Greetings first and shows the renamed Our Story tab", async () => {
@@ -103,7 +102,7 @@ describe("phone preview order", () => {
       .map(el => (el.matches("section.tg-story") ? "story" : el.getAttribute("data-section")));
     expect(order).toEqual([
       "header", "greetings",   // Greetings tab (title + hero photo + message)
-      "date", "music", "story", "party", "venue", "travel", "rsvp", "registry",
+      "date", "music", "story", "party", "venue", "travel", "rsvp", "registry", "qa",
       "closure",
     ]);
   });

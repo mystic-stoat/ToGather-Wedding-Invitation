@@ -51,7 +51,10 @@ import {
 } from "@/lib/invitationTheme";
 import { useGoogleFonts } from "@/hooks/useGoogleFonts";
 import RegistrySection from "@/components/registry/RegistrySection";
-import { isRegistrySectionShown } from "@/lib/registry";
+import { isRegistrySectionShown, hasRegistryContent } from "@/lib/registry";
+import QaSection from "@/components/qa/QaSection";
+import { guestSectionId, scrollToGuestSection } from "@/components/qa/qaNavigation";
+import { getGuestQaItems, isQaSectionShown, normalizeQaItems } from "@/lib/qa";
 import { getVenueDisplay } from "@/lib/venueDisplay";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -564,6 +567,15 @@ const ConfirmationScreen = ({ isAttending, name, invitation, coupleNames }) => (
 // Registry on Invitation" off, or when there's no message and no visible
 // registries.
 
+// ── Sections this guest page shows (Q&A section links may only point here) ──
+const getGuestPageSections = (invitation) => {
+  const ids = new Set(["rsvp"]);
+  if (isRegistrySectionShown(invitation) && hasRegistryContent(invitation?.registries, invitation?.registryMessage)) {
+    ids.add("registry");
+  }
+  return ids;
+};
+
 // ── Main RSVP page ────────────────────────────────────────────────────────────
 const RSVP = () => {
   const { inviteeId, token } = useParams();
@@ -862,7 +874,8 @@ const RSVP = () => {
             <InvitationHeader invitation={invitation} />
           </div>
 
-          <div className="rounded-3xl border border-border/50 bg-card p-6 shadow-xl shadow-foreground/[0.04] sm:p-8">
+          <div id={guestSectionId("rsvp")}
+            className="scroll-mt-6 rounded-3xl border border-border/50 bg-card p-6 shadow-xl shadow-foreground/[0.04] sm:p-8">
             {submitted ? (
               <ConfirmationScreen
                 isAttending={isAttending}
@@ -1001,10 +1014,25 @@ const RSVP = () => {
           </div>
 
           {/* Gift registry — visible entries + message from the invitation doc */}
-          <RegistrySection
-            registries={invitation?.registries}
-            registryMessage={invitation?.registryMessage}
-            showOnInvitation={isRegistrySectionShown(invitation)}
+          <div id={guestSectionId("registry")} className="scroll-mt-6">
+            <RegistrySection
+              registries={invitation?.registries}
+              registryMessage={invitation?.registryMessage}
+              showOnInvitation={isRegistrySectionShown(invitation)}
+            />
+          </div>
+
+          {/* Q&A — only when the couple switched it on; only questions that are
+              switched on and fully answered. Section links count only for
+              sections this page actually shows (RSVP, Registry); when later
+              phases add more sections, add their ids here and existing
+              questions start showing automatically. */}
+          <QaSection
+            entries={getGuestQaItems(normalizeQaItems(invitation?.qaItems), {
+              data: invitation || {},
+              availableSections: getGuestPageSections(invitation),
+            }, isQaSectionShown(invitation))}
+            onNavigate={scrollToGuestSection}
           />
           </div>
 

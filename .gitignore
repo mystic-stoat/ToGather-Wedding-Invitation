@@ -32,5 +32,6 @@ dist-ssr
 # Firebase emulator data and local backups
 /emulator-data/
 /emulator-data-before-restore/
+/emulator-data-backup/
 /emulator-data-backup-*/
 /firebase-export-*/

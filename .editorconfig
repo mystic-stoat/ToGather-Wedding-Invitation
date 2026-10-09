@@ -1,0 +1,13 @@
+root = true
+
+# Minimal editor rules for ToGather (whitespace only — no code style).
+# Keeps editors from adding trailing spaces or dropping the final newline.
+# Line endings are left to Git (core.autocrlf), so nothing here converts them.
+[*]
+charset = utf-8
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+# Markdown uses two trailing spaces for an intentional line break.
+[*.md]
+trim_trailing_whitespace = false
