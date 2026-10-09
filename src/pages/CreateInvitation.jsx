@@ -69,6 +69,14 @@ import { useGoogleFonts } from "@/hooks/useGoogleFonts";
 import HeroPhotoField from "@/components/invitation/HeroPhotoField";
 import StoryPanel from "@/components/invitation/StoryPanel";
 import StorySection from "@/components/invitation/StorySection";
+import WeddingDaySection from "@/components/invitation/WeddingDaySection";
+import {
+  DEFAULT_DATE_SETTINGS,
+  DATE_SETTING_FIELDS,
+  normalizeDateSettings,
+  parseWeddingDate,
+  shouldShowWeddingDaySection,
+} from "@/lib/weddingDate";
 import { DEFAULT_STORY_TITLE, normalizeStoryTitle } from "@/lib/storyBlocks";
 import { photoSrc } from "@/lib/imageProcessing";
 import { photoImageStyle } from "@/lib/photoAdjust";
@@ -737,7 +745,19 @@ const TravelPanel = ({ settings, onChange, errors, setErrors }) => {
 };
 
 // ── Center Panel: Date ────────────────────────────────────────────────────────
-const DatePanel = ({ invitation }) => (
+// The date and ceremony time come from Wedding Details (no duplicate inputs).
+// Calendar View and Countdown are independent switches, both OFF by default,
+// saved as dateShowCalendar / dateShowCountdown on the invitation doc.
+const DATE_OPTIONS = [
+  { field: "dateShowCalendar",  label: "Calendar View", desc: "Show a mini calendar with the date highlighted" },
+  { field: "dateShowCountdown", label: "Countdown",     desc: "Show a live countdown to the wedding" },
+];
+
+const DatePanel = ({ invitation, settings, onChange }) => {
+  const dateSettings = normalizeDateSettings(settings);
+  const hasValidDate = parseWeddingDate(invitation?.weddingDate) !== null;
+
+  return (
   <div className="space-y-6">
     <div className="p-5 rounded-lg" style={{ backgroundColor: BUILDER_UI.surfaceContainer }}>
       <div className="flex items-center gap-2 mb-2">
@@ -755,31 +775,49 @@ const DatePanel = ({ invitation }) => (
           Wedding Details
         </Link>.
       </p>
+      {!hasValidDate && (
+        <p className="text-xs mt-3 flex items-center gap-1.5" role="status" style={{ color: ERROR_COLOR }}>
+          <AlertCircle size={13} className="flex-shrink-0" />
+          No wedding date set yet. The Wedding Day section will show a placeholder until you add one.
+        </p>
+      )}
     </div>
 
     <div>
-      <h3 className="text-xs font-bold tracking-widest uppercase mb-4"
+      <h3 className="text-xs font-bold tracking-widest uppercase mb-1"
         style={{ color: BUILDER_UI.onSurfaceVar }}>
         Display Options
       </h3>
-      {[
-        { id: "calendar", label: "Calendar View", desc: "Show a mini calendar with the date highlighted" },
-        { id: "text",     label: "Text View",     desc: "Show date as elegant text" },
-        { id: "countdown",label: "Countdown",     desc: "Show a countdown timer to the wedding" },
-      ].map(opt => (
-        <div key={opt.id} className="flex items-center justify-between p-4 rounded-lg mb-2"
-          style={{ backgroundColor: BUILDER_UI.surfaceContainer }}>
-          <div>
-            <p className="text-sm font-bold" style={{ color: BUILDER_UI.onSurface }}>{opt.label}</p>
-            <p className="text-xs" style={{ color: BUILDER_UI.onSurfaceVar }}>{opt.desc}</p>
+      <p className="text-sm mb-4" style={{ color: BUILDER_UI.onSurfaceVar }}>
+        Turn on either option, or both, to add a Wedding Day section to your invitation.
+      </p>
+      {DATE_OPTIONS.map(opt => {
+        const on = dateSettings[opt.field];
+        return (
+          <div key={opt.field} className="flex items-center justify-between p-4 rounded-lg mb-2"
+            style={{ backgroundColor: BUILDER_UI.surfaceContainer }}>
+            <div>
+              <p className="text-sm font-bold" style={{ color: BUILDER_UI.onSurface }}>{opt.label}</p>
+              <p className="text-xs" style={{ color: BUILDER_UI.onSurfaceVar }}>{opt.desc}</p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={on}
+              aria-label={`Show ${opt.label}`}
+              onClick={() => onChange(opt.field, !on)}
+              className="w-12 h-6 rounded-full transition-colors relative flex-shrink-0"
+              style={{ backgroundColor: on ? BUILDER_UI.primary : BUILDER_UI.surfaceHigh }}>
+              <div className="w-5 h-5 bg-white rounded-full absolute top-0.5 transition-transform"
+                style={{ transform: on ? "translateX(26px)" : "translateX(2px)" }} />
+            </button>
           </div>
-          <div className="w-5 h-5 rounded border-2"
-            style={{ borderColor: BUILDER_UI.primary, backgroundColor: BUILDER_UI.selected }} />
-        </div>
-      ))}
+        );
+      })}
     </div>
   </div>
-);
+  );
+};
 
 // ── Phone Preview ─────────────────────────────────────────────────────────────
 // Renders a live phone mockup showing the invitation with current settings.
@@ -911,21 +949,12 @@ const PhonePreview = ({ invitation, settings, hero, storyBlocks = [] }) => {
             </div>
           )}
 
-          {/* Wedding date */}
-          <div className="p-6 text-center" data-section="date" style={{ backgroundColor: sec.date }}>
-            <h2 className="text-base mb-2"
-              style={{ fontFamily: theme.headingFont, color: theme.headingText }}>
-              Wedding Day
-            </h2>
-            <p className="text-[9px] mb-4" style={{ color: theme.bodyText }}>
-              {formattedDate}
-              {invitation?.ceremonyTime && ` · ${invitation.ceremonyTime}`}
-            </p>
-            <button className="w-full py-2 rounded-full text-white text-[9px] font-bold"
-              style={btnStyle}>
-              Add to calendar
-            </button>
-          </div>
+          {/* Wedding Day — only when Calendar View and/or Countdown is on (Date tab).
+              The hero date above is always shown regardless of these settings. */}
+          {shouldShowWeddingDaySection(settings) && (
+            <WeddingDaySection invitation={invitation} settings={settings}
+              theme={theme} backgroundColor={sec.date} />
+          )}
 
           {/* Venue */}
           <div className="p-6 text-center" data-section="venue" style={{ backgroundColor: sec.venue }}>
@@ -1099,6 +1128,8 @@ const CreateInvitation = () => {
     // Our Story section settings (the blocks live in useInvitationMedia)
     storyTitle:             DEFAULT_STORY_TITLE,
     storyShowOnInvitation:  true,
+    // Date tab: Calendar View / Countdown — both OFF by default
+    ...DEFAULT_DATE_SETTINGS,
   });
 
   // True only once the saved invitation has been read successfully (or we
@@ -1116,6 +1147,8 @@ const CreateInvitation = () => {
   const [storySettingsLoaded, setStorySettingsLoaded] = useState(false);
   // Same guard for the Color Theme fields (colors, fonts, section backgrounds).
   const [themeLoaded, setThemeLoaded] = useState(false);
+  // Same guard for the Date tab's Calendar View / Countdown switches.
+  const [dateSettingsLoaded, setDateSettingsLoaded] = useState(false);
 
   // Notice shown when photos/Story couldn't be saved (local edits are kept)
   const [saveNotice, setSaveNotice] = useState(null); // { kind: "error" | "warning", text }
@@ -1157,6 +1190,8 @@ const CreateInvitation = () => {
             storyTitle: typeof inv.storyTitle === "string" && inv.storyTitle.trim()
               ? inv.storyTitle : DEFAULT_STORY_TITLE,
             storyShowOnInvitation: inv.storyShowOnInvitation !== false,
+            // Older invitations have no date settings → both OFF
+            ...normalizeDateSettings(inv),
           }));
         }
         // Hero Photo + Story entries (older invitations have neither)
@@ -1165,6 +1200,7 @@ const CreateInvitation = () => {
         setTravelLoaded(true);
         setStorySettingsLoaded(true);
         setThemeLoaded(true);
+        setDateSettingsLoaded(true);
       } catch (err) {
         console.error("Load invitation error:", err);
         media.markLoadFailed();
@@ -1254,6 +1290,13 @@ const CreateInvitation = () => {
         delete dataToSave.storyShowOnInvitation;
       }
 
+      // Date tab switches — strict booleans, same "only after a successful load" guard.
+      if (dateSettingsLoaded) {
+        Object.assign(dataToSave, normalizeDateSettings(settings));
+      } else {
+        DATE_SETTING_FIELDS.forEach(field => delete dataToSave[field]);
+      }
+
       const id = await saveInvitation(user.uid, dataToSave, weddingId);
       if (travelLoaded) setSettings(prev => ({ ...prev, travelItems: cleanedTravelItems }));
       if (!weddingId) setWeddingId(id);
@@ -1294,7 +1337,7 @@ const CreateInvitation = () => {
                                  mediaBytes={media.mediaBytes} progressByKey={media.uploadProgress?.byKey}
                                  disabled={saving} />;
       case "rsvp":      return <RsvpPanel      settings={settings} onChange={handleChange} />;
-      case "date":      return <DatePanel      invitation={invitation} />;
+      case "date":      return <DatePanel      invitation={invitation} settings={settings} onChange={handleChange} />;
       case "travel":    return <TravelPanel    settings={settings} onChange={handleChange}
                                  errors={travelErrors} setErrors={setTravelErrors} />;
       default:
@@ -1516,4 +1559,4 @@ const CreateInvitation = () => {
   );
 };
 
-export default CreateInvitation;
+export default CreateInvitation;

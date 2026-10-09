@@ -92,6 +92,8 @@ describe("Color Theme tab", () => {
   });
 
   it("applying a preset updates every preview color immediately, including the background", async () => {
+    // The Wedding Day section only renders when a Date option is on (both OFF by default)
+    fs.getInvitationByUser.mockResolvedValue({ weddingId: "w1", weddingDate: "2026-06-20", dateShowCalendar: true });
     renderBuilder();
     await openTheme();
     fireEvent.click(screen.getByRole("button", { name: "Navy" }));
