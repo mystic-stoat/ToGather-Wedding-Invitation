@@ -19,7 +19,7 @@ import {
   normalizeStoryEntry, normalizeSavedPhoto, normalizePendingDeletes, toEntryData,
   collectReferencedPhotos, sumBytes, estimateMediaBytes,
 } from "@/lib/storyBlocks";
-import { releasePhoto } from "@/lib/imageProcessing";
+import { releasePhoto, releaseIfReplaced } from "@/lib/imageProcessing";
 import { loadAllStoryEntries } from "@/lib/storyStore";
 import { saveStoryMedia, retryPendingDeletes, MediaSaveError } from "@/lib/storySave";
 
@@ -93,9 +93,12 @@ export const useInvitationMedia = ({ saving = false } = {}) => {
   const markLoadFailed = () => setStoryStatus("error");
   const retryLoad = () => loadStory(weddingIdRef.current, pendingDeletes, savedHero);
 
-  /** Hero Photo picked / removed. Frees the old preview if it was never saved. */
+  /**
+   * Hero Photo picked / removed / repositioned. Frees the old preview only if
+   * the photo was really replaced (not when just its position/zoom changed).
+   */
   const setHeroPhoto = (photo) => {
-    releasePhoto(hero);
+    releaseIfReplaced(hero, photo);
     setHero(photo);
   };
 

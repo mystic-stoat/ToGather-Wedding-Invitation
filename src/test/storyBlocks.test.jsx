@@ -153,3 +153,14 @@ describe("saving helpers", () => {
     expect(shouldShowStorySection({}, [createStoryBlock()])).toBe(false);
   });
 });
+
+describe("photo adjust in stored data", () => {
+  it("keeps a valid adjust, clamps bad values and drops the default", () => {
+    const p = { path: "weddings/w1/story/b/1.webp", url: "https://x/1", width: 1, height: 1, bytes: 1, contentType: "image/webp" };
+    expect(normalizeSavedPhoto({ ...p, adjust: { x: 10, y: 20, zoom: 1.5 } }).adjust).toEqual({ x: 10, y: 20, zoom: 1.5 });
+    expect(normalizeSavedPhoto({ ...p, adjust: { x: -5, y: 200, zoom: 7 } }).adjust).toEqual({ x: 0, y: 100, zoom: 3 });
+    expect(normalizeSavedPhoto({ ...p, adjust: { x: 50, y: 50, zoom: 1 } })).not.toHaveProperty("adjust");
+    const block = { ...createStoryBlock("photoLeft"), images: [{ ...p, adjust: { x: 1, y: 2, zoom: 1.1 } }, null, null] };
+    expect(toEntryData(block, 0).images[0].adjust).toEqual({ x: 1, y: 2, zoom: 1.1 });
+  });
+});

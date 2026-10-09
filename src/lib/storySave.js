@@ -27,7 +27,7 @@
 import { WEDDING_MEDIA_QUOTA_BYTES, formatBytes } from "@/lib/mediaConfig";
 import {
   isBlockEmpty, getVisibleSlots, getSlotCount, toEntryData, diffStoryEntries,
-  collectReferencedPhotos, sumBytes, estimateMediaBytes,
+  collectReferencedPhotos, sumBytes, estimateMediaBytes, normalizeSavedPhoto,
 } from "@/lib/storyBlocks";
 import { uploadPhoto, deletePhoto, buildHeroPath, buildStoryPath } from "@/lib/mediaStorage";
 import { commitMediaChanges, updateMediaBookkeeping } from "@/lib/storyStore";
@@ -209,15 +209,20 @@ export const saveStoryMedia = async ({
   }
 
   // ── 4. Build the final state and commit ─────────────────────────────────────
-  const finalHero = hero ? (hero.pending ? uploaded.get(hero.localId) : hero) : null;
+  // Every photo is written in its clean stored shape. An uploaded photo keeps
+  // the position/zoom (`adjust`) chosen before Save; a default adjust is omitted.
+  const asSaved = (p) => {
+    if (!p) return null;
+    return normalizeSavedPhoto(p.pending ? { ...uploaded.get(p.localId), adjust: p.adjust } : p);
+  };
+  const finalHero = hero ? asSaved(hero) : null;
   const finalBlocks = keptBlocks.map(b => {
     const count = getSlotCount(b.layout);
     return {
       ...b,
       images: [0, 1, 2].map(i => {
         if (i >= count) return null; // hidden photos are dropped on save (user was warned)
-        const p = b.images[i];
-        return p?.pending ? uploaded.get(p.localId) : p || null;
+        return asSaved(b.images[i]);
       }),
     };
   });

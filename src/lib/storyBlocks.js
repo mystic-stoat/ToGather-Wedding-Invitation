@@ -19,6 +19,8 @@
 //     createdAt, updatedAt }   — `images` length = the layout's slot count.
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { adjustForSave } from "@/lib/photoAdjust";
+
 export const DEFAULT_STORY_TITLE = "Our Story";
 export const STORY_TITLE_SUGGESTIONS = ["Our Story", "Our Journey", "Our Memories", "How We Met"];
 export const STORY_SECTION_TITLE_MAX = 60;
@@ -62,14 +64,21 @@ export const createStoryBlock = (layout = DEFAULT_LAYOUT) => ({
 const isSavedPhoto = (p) =>
   p && typeof p === "object" && typeof p.path === "string" && typeof p.url === "string";
 
-const cleanSavedPhoto = (p) => ({
-  path: p.path,
-  url: p.url,
-  width: Number.isFinite(p.width) ? Math.round(p.width) : 0,
-  height: Number.isFinite(p.height) ? Math.round(p.height) : 0,
-  bytes: Number.isFinite(p.bytes) ? Math.round(p.bytes) : 0,
-  contentType: typeof p.contentType === "string" ? p.contentType : "image/jpeg",
-});
+const cleanSavedPhoto = (p) => {
+  const clean = {
+    path: p.path,
+    url: p.url,
+    width: Number.isFinite(p.width) ? Math.round(p.width) : 0,
+    height: Number.isFinite(p.height) ? Math.round(p.height) : 0,
+    bytes: Number.isFinite(p.bytes) ? Math.round(p.bytes) : 0,
+    contentType: typeof p.contentType === "string" ? p.contentType : "image/jpeg",
+  };
+  // Photo position/zoom (src/lib/photoAdjust.js) — stored only when changed
+  // from the default, so untouched photos keep their original shape.
+  const adjust = adjustForSave(p.adjust);
+  if (adjust) clean.adjust = adjust;
+  return clean;
+};
 
 /** Normalize a saved photo (e.g. heroImage from Firestore) or return null. */
 export const normalizeSavedPhoto = (p) => (isSavedPhoto(p) ? cleanSavedPhoto(p) : null);

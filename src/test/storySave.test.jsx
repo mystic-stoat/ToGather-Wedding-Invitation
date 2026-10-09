@@ -183,3 +183,37 @@ describe("retryPendingDeletes", () => {
     expect(deps.deletePhoto).not.toHaveBeenCalled();
   });
 });
+
+describe("saveStoryMedia — photo position/zoom (adjust)", () => {
+  it("an adjust-only change updates Firestore without uploading or deleting", async () => {
+    const deps = makeDeps();
+    const photo = stored("weddings/w1/story/b1/a.webp", 500);
+    const block = { ...createStoryBlock("photoLeft"), id: "b1", images: [{ ...photo, adjust: { x: 30, y: 60, zoom: 1.5 } }, null, null] };
+    const savedEntry = toEntryData({ ...block, images: [photo, null, null] }, 0);
+    await saveStoryMedia({ ...base, hero: null, blocks: [block], savedEntriesById: { b1: savedEntry }, savedMediaBytesUsed: 500, deps });
+    expect(deps.uploadPhoto).not.toHaveBeenCalled();
+    expect(deps.deletePhoto).not.toHaveBeenCalled();
+    const { updates } = deps.commitMediaChanges.mock.calls[0][1];
+    expect(updates[0].images[0]).toEqual({ ...photo, adjust: { x: 30, y: 60, zoom: 1.5 } });
+  });
+
+  it("an uploaded photo keeps the adjust chosen before saving", async () => {
+    const deps = makeDeps();
+    const hero = { ...pending(1000), adjust: { x: 10, y: 90, zoom: 2 } };
+    const res = await saveStoryMedia({ ...base, hero, blocks: [], deps });
+    expect(res.hero.adjust).toEqual({ x: 10, y: 90, zoom: 2 });
+    expect(deps.commitMediaChanges.mock.calls[0][2].heroImage.adjust).toEqual({ x: 10, y: 90, zoom: 2 });
+  });
+
+  it("a default adjust is not stored, and resetting a saved one removes it", async () => {
+    const deps = makeDeps();
+    const saved = { ...stored("weddings/w1/hero/h.webp", 100), adjust: { x: 20, y: 20, zoom: 1.2 } };
+    const res = await saveStoryMedia({
+      ...base, savedHero: saved, savedMediaBytesUsed: 100, blocks: [], deps,
+      hero: { ...saved, adjust: { x: 50, y: 50, zoom: 1 } },
+    });
+    expect(deps.commitMediaChanges.mock.calls[0][2].heroImage).not.toHaveProperty("adjust");
+    expect(res.hero).not.toHaveProperty("adjust");
+    expect(deps.deletePhoto).not.toHaveBeenCalled();
+  });
+});

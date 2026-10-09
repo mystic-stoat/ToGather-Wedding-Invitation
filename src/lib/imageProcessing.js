@@ -187,6 +187,14 @@ export const releasePhoto = (photo) => {
   }
 };
 
+/**
+ * Release `oldPhoto`'s preview only if it is really being replaced/removed —
+ * not when the "new" photo is the same pending photo with a new position/zoom.
+ */
+export const releaseIfReplaced = (oldPhoto, newPhoto) => {
+  if (oldPhoto?.pending && oldPhoto.localId !== newPhoto?.localId) releasePhoto(oldPhoto);
+};
+
 /** File extension used in the storage path for a content type. */
 export const extensionFor = (contentType) =>
   contentType === "image/webp" ? "webp" : contentType === "image/png" ? "png" : "jpg";

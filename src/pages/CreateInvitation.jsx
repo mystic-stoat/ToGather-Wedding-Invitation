@@ -63,6 +63,7 @@ import StoryPanel from "@/components/invitation/StoryPanel";
 import StorySection from "@/components/invitation/StorySection";
 import { DEFAULT_STORY_TITLE, normalizeStoryTitle } from "@/lib/storyBlocks";
 import { photoSrc } from "@/lib/imageProcessing";
+import { photoImageStyle } from "@/lib/photoAdjust";
 import { useInvitationMedia } from "@/hooks/useInvitationMedia";
 
 // ── Color tokens ──────────────────────────────────────────────────────────────
@@ -968,12 +969,13 @@ const PhonePreview = ({ invitation, settings, hero, storyBlocks = [] }) => {
             </p>
           </div>
 
-          {/* Hero image — center-cropped to fill; placeholder until one is added */}
+          {/* Hero image — fills the frame using the couple's position/zoom
+              (same style as the editor); placeholder until one is added */}
           <div className="relative w-full h-48 flex items-center justify-center overflow-hidden"
             style={{ backgroundColor: CANVAS.surfaceHigh }}>
             {heroUrl ? (
-              <img src={heroUrl} alt="Hero" decoding="async"
-                className="absolute inset-0 w-full h-full object-cover object-center" />
+              <img src={heroUrl} alt="Hero" decoding="async" draggable={false}
+                className="absolute inset-0 w-full h-full" style={photoImageStyle(hero)} />
             ) : (
               <div className="text-center">
                 <Image size={28} style={{ color: CANVAS.outline, margin: "0 auto 8px" }} />

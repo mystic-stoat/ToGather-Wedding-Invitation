@@ -84,11 +84,23 @@ service cloud.firestore {
           return get(/databases/$(database)/documents/invitations/$(weddingId));
         }
 
+        // Optional photo position/zoom (src/lib/photoAdjust.js):
+        // x, y = focal point in % (0–100), zoom = 1–3.
+        function validAdjust(a) {
+          return a is map
+            && a.keys().hasOnly(['x', 'y', 'zoom'])
+            && a.keys().hasAll(['x', 'y', 'zoom'])
+            && a.x is number && a.x >= 0 && a.x <= 100
+            && a.y is number && a.y >= 0 && a.y <= 100
+            && a.zoom is number && a.zoom >= 1 && a.zoom <= 3;
+        }
+
         function validStoryImage(img) {
           return img == null || (
             img is map
-            && img.keys().hasOnly(['path', 'url', 'width', 'height', 'bytes', 'contentType'])
+            && img.keys().hasOnly(['path', 'url', 'width', 'height', 'bytes', 'contentType', 'adjust'])
             && img.keys().hasAll(['path', 'url', 'width', 'height', 'bytes', 'contentType'])
+            && (!('adjust' in img) || validAdjust(img.adjust))
             && img.path is string
             && img.path.matches('weddings/' + weddingId + '/story/' + entryId + '/[A-Za-z0-9_-]+[.](webp|jpg|png)')
             && img.url is string && img.url.size() <= 2048

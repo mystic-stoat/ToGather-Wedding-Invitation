@@ -1453,6 +1453,20 @@ describe('storyEntries rules', () => {
       entry(DRAFT, 'x8', { images: [{ ...photo(DRAFT, 'x8'), bytes: 6 * 1024 * 1024 }] })));
   });
 
+  it('accepts a saved photo position/zoom and rejects invalid ones', async () => {
+    const alice = testEnv.authenticatedContext('alice-uid');
+    const db = alice.firestore();
+    const withAdjust = (id, adjust) => entry(DRAFT, id, { images: [{ ...photo(DRAFT, id), adjust }] });
+    await assertSucceeds(setDoc(doc(db, entryPath(DRAFT, 'a1')), withAdjust('a1', { x: 12.5, y: 80, zoom: 1.75 })));
+    await assertSucceeds(setDoc(doc(db, entryPath(DRAFT, 'a2')), withAdjust('a2', { x: 0, y: 100, zoom: 3 })));
+    await assertFails(setDoc(doc(db, entryPath(DRAFT, 'a3')), withAdjust('a3', { x: 120, y: 50, zoom: 1 })));
+    await assertFails(setDoc(doc(db, entryPath(DRAFT, 'a4')), withAdjust('a4', { x: 50, y: 50, zoom: 5 })));
+    await assertFails(setDoc(doc(db, entryPath(DRAFT, 'a5')), withAdjust('a5', { x: 50, y: 50, zoom: 0.5 })));
+    await assertFails(setDoc(doc(db, entryPath(DRAFT, 'a6')), withAdjust('a6', { x: 50, y: 50 })));
+    await assertFails(setDoc(doc(db, entryPath(DRAFT, 'a7')), withAdjust('a7', { x: '50', y: 50, zoom: 1 })));
+    await assertFails(setDoc(doc(db, entryPath(DRAFT, 'a8')), withAdjust('a8', { x: 50, y: 50, zoom: 1, rotate: 90 })));
+  });
+
   it('lets the owner update and delete, but not rewrite createdAt', async () => {
     const alice = testEnv.authenticatedContext('alice-uid');
     const ref = doc(alice.firestore(), entryPath(DRAFT, 'e1'));

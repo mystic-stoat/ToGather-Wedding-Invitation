@@ -12,6 +12,7 @@
 import { ChevronDown, Image as ImageIcon } from "lucide-react";
 import { getLayout, getVisibleSlots, blockHasVisibleContent, normalizeStoryTitle } from "@/lib/storyBlocks";
 import { photoSrc } from "@/lib/imageProcessing";
+import { photoImageStyle } from "@/lib/photoAdjust";
 import "./storySection.css";
 
 /** Mix a hex color with white (weight = share of the color). Falls back to a soft blush. */
@@ -31,7 +32,7 @@ const Photo = ({ photo, shape, alt, showPlaceholder, className = "" }) => {
   return (
     <div className={`tg-story__photo tg-story__photo--${shape} ${className}`}>
       {src ? (
-        <img src={src} alt={alt} loading="lazy" decoding="async"
+        <img src={src} alt={alt} loading="lazy" decoding="async" style={photoImageStyle(photo)}
           width={photo?.width || undefined} height={photo?.height || undefined} />
       ) : (
         <div className="tg-story__placeholder" aria-hidden="true">

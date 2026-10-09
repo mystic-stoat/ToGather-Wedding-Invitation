@@ -1,12 +1,17 @@
 // src/components/invitation/HeroPhotoField.jsx
 // ─────────────────────────────────────────────────────────────────────────────
 // Hero Photo controls shown in the Greetings tab (moved here from the removed
-// Layout tab). One photo; preview / replace / remove; uploaded on Save.
-// The photo is center-cropped to fill the hero area of the invitation.
+// Layout tab). One photo; preview / adjust / replace / remove; uploaded on Save.
+// The editor frame has the SAME shape as the invitation's hero area
+// (HERO_FRAME_ASPECT), so the position/zoom chosen here looks identical there.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import ImageSlot from "@/components/invitation/ImageSlot";
 import { BUILDER_UI } from "@/components/invitation/builderTheme";
+
+// Shape of the hero area in the invitation preview: 268 × 192 px
+// (phone screen width × h-48). Keep in sync if that area changes.
+export const HERO_FRAME_ASPECT = "67 / 48";
 
 const HeroPhotoField = ({ photo, onChange, progress, disabled }) => (
   <div>
@@ -15,15 +20,15 @@ const HeroPhotoField = ({ photo, onChange, progress, disabled }) => (
       Hero Photo
     </h3>
     <p className="text-sm mb-4" style={{ color: BUILDER_UI.onSurfaceVar }}>
-      The large photo at the top of your invitation. It's cropped from the center
-      to fit, so keep the two of you near the middle.
+      The large photo at the top of your invitation. Use Adjust to drag it into
+      place and zoom — the frame below matches the invitation exactly.
     </p>
     <div className="max-w-md">
       <ImageSlot
         photo={photo}
         onChange={onChange}
         label="Hero Photo"
-        aspect="3 / 2"
+        aspect={HERO_FRAME_ASPECT}
         progress={progress}
         disabled={disabled}
       />

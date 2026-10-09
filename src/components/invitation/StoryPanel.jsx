@@ -31,7 +31,7 @@ import {
   createStoryBlock, changeBlockLayout, countPhotosHiddenBy, moveItem, isBlockEmpty,
   getLayout, STORY_TITLE_SUGGESTIONS, STORY_SECTION_TITLE_MAX, DEFAULT_STORY_TITLE,
 } from "@/lib/storyBlocks";
-import { releasePhoto } from "@/lib/imageProcessing";
+import { releasePhoto, releaseIfReplaced } from "@/lib/imageProcessing";
 import { WEDDING_MEDIA_QUOTA_BYTES, formatBytes } from "@/lib/mediaConfig";
 
 // ── One sortable row ─────────────────────────────────────────────────────────
@@ -108,7 +108,9 @@ const StoryPanel = ({
   const setPhoto = (id, slotIndex, photo) => {
     const block = blocks.find(b => b.id === id);
     if (!block) return;
-    releasePhoto(block.images[slotIndex]); // free the old preview if it was never saved
+    // Free the old preview if it was never saved — but not when this is the
+    // same photo with a new position/zoom.
+    releaseIfReplaced(block.images[slotIndex], photo);
     updateBlock(id, b => ({ ...b, images: b.images.map((p, i) => (i === slotIndex ? photo : p)) }));
   };
 

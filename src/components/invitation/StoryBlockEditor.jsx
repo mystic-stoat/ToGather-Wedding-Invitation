@@ -100,7 +100,9 @@ const StoryBlockEditor = ({
       case "collage":
         return (
           <div className="grid grid-cols-[minmax(0,3fr)_minmax(0,2fr)] gap-3">
-            {slot(0, "4 / 5", "large photo")}
+            {/* 8 / 11 ≈ the collage's tall photo in the invitation (its height
+                matches the two stacked squares), so adjustments line up. */}
+            {slot(0, "8 / 11", "large photo")}
             <div className="grid gap-3 content-start">
               {slot(1, "1 / 1", "top photo")}
               {slot(2, "1 / 1", "bottom photo")}
