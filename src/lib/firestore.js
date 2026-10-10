@@ -37,7 +37,9 @@ where,
 orderBy,
 // sort order for a query
 serverTimestamp, // Firebase server time (more reliable than client time)
-runTransaction // atomic read-modify-write — used for the embedded registries array
+runTransaction, // atomic read-modify-write — used for the embedded registries array
+writeBatch,
+increment
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
@@ -454,4 +456,67 @@ export const deleteRegistry = async (weddingId, registryId) => {
     transaction.update(invRef, { registries: updated });
     return updated;
   });
+};
+
+export const sectionToId = (section) =>
+  section.toLowerCase().trim().replace(/\s+/g, "-");
+
+// ccreate converstaion document
+const conversationDoc = (userId, conversationId) => 
+  doc(db, "betrothed", userId, "conversations", conversationId);
+
+// inside the conversation sub colection, create messages
+const messagesCol = (userId, conversationId) =>
+  collection(db, "betrothed", userId, "conversations", conversationId, "messages");
+
+// init the Conversation subcollection
+export const getOrCreateConversation = async (userId, section) => {
+  const conversationId = sectionToId(section);
+  const ref = conversationDoc(userId, conversationId);
+  const snap = await getDoc(ref);
+
+  if (!snap.exists()) {
+    await setDoc(ref, {
+      section,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      messageCount: 0,
+    });
+  }
+  return conversationId;
+};
+
+// create message on db, role, etc: increments our index as we go
+export const saveMessage = async (userId, conversationId, role, content, section) => {
+  const batch = writeBatch(db);
+
+  // doc(collection) with no ID generates a new auto-ID reference
+  const msgRef = doc(messagesCol(userId, conversationId));
+  batch.set(msgRef, { role, content, section: section ?? null, timestamp: serverTimestamp() });
+
+  batch.update(conversationDoc(userId, conversationId), {
+    updatedAt: serverTimestamp(),
+    messageCount: increment(1),
+  });
+
+  await batch.commit();
+};
+
+// go get conv data grab snapshot and return a mapping 
+export const loadConversationHistory = async (userId, conversationId) => {
+  const q = query(messagesCol(userId, conversationId), orderBy("timestamp", "asc"));
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => ({ role: d.data().role, content: d.data().content }));
+};
+
+// kinda trash button but its here 
+export const clearConversationMessages = async (userId, conversationId) => {
+  const snap = await getDocs(messagesCol(userId, conversationId));
+  const batch = writeBatch(db);
+  snap.docs.forEach((d) => batch.delete(d.ref));
+  batch.update(conversationDoc(userId, conversationId), {
+    updatedAt: serverTimestamp(),
+    messageCount: 0,
+  });
+  await batch.commit();
 };

@@ -8,7 +8,13 @@
 import { useState, useEffect, useRef } from "react";
 import { Send, Mic } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { getInvitationByUser } from "@/lib/firestore";
+import { 
+  getInvitationByUser,
+  getOrCreateConversation,
+  saveMessage,
+  loadConversationHistory,
+  clearConversationMessages,
+} from "@/lib/firestore";
 import Sidebar from "@/components/Sidebar";
 import { useNavigate } from "react-router-dom";
 import ChatBubble from "@/components/ChatBubble";
@@ -45,9 +51,10 @@ const WeddingAssistant = () => {
   const navigate = useNavigate();
 
   // chat vars
+  const [conversationId, setConversationId] = useState(null);
   const [conversation, setConversation] = useState([]);
   const [apiLoading, setApiLoading] = useState(false);
-  const [ error, setError ] = useState([]);
+  const [error, setError] = useState(null)
   const bottomRef = useRef(null);
 
   const [loading, setLoading]  = useState(true);
@@ -107,7 +114,7 @@ const WeddingAssistant = () => {
   }, [user]);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({behvior: "smooth"});
+    bottomRef.current?.scrollIntoView({behavior: "smooth"});
   }, [conversation, apiLoading]);
 
 
@@ -124,16 +131,25 @@ const WeddingAssistant = () => {
   };
 
   // adds user message, go to claude, get claude response
-  const sendMessage = async(text, section = selectedSection) => {
+  const sendMessage = async(text, section = selectedSection, convId = conversationId) => {
     // load our new data in, conversation only updates on render tho, so don't use that
-    const newConverstation = [...conversation, {role: "user", content: text}];
-    setConversation(newConverstation);
+    const next = [...conversation, {role: "user", content: text}];
+    setConversation(next);
     setError(null);
     setApiLoading(true);
+    
+    // hit dat persist
+    const persist = (role, content) =>
+      saveMessage(user.uid, convId, role, content, section).catch((e) =>
+        console.error("save message error:", e)
+      );
+
+    await persist("user", text);
   
     try {
-      const reply = await claudeApiGet(newConverstation, section);
+      const reply = await claudeApiGet(next, section);
       setConversation((current) => [...current, { role: "assistant", content: reply }]);
+      persist("assistant", reply);
     } catch (err) {
       console.error("Claude API error", err);
       setError(err.message || "Something went wrong, Please try again.");
@@ -141,30 +157,51 @@ const WeddingAssistant = () => {
       setApiLoading(false);
     }
   }
-  
-
 
     // Handles the user's answer and advances to the next wedding question.
   const handleSend = () => {
     const trimmedMessage = message.trim();
 
     // Do nothing if the message box is empty.
-    if (!trimmedMessage || apiLoading) return;
+    if (!trimmedMessage || apiLoading || !conversationId) return;
 
-    sendMessage(trimmedMessage);
+    sendMessage(trimmedMessage, selectedSection, conversationId);
     // Clear the input after sending.
     setMessage("");
   };
 
-  // Starts one of the guided wedding-planning sections.
-  const startSection = (section) => {
+  // starts the wedding plan conversation, loading history if it exists
+  const startSection = async (section) => {
     setSelectedSection(section);
-    sendMessage(section, section);
+    setError(null);
+    try {
+      const convId = await getOrCreateConversation(user.uid, section);
+      setConversationId(convId);
+      // grab out history
+      const history = await loadConversationHistory(user.uid, convId);
+      if (history.length > 0) {
+        setConversation(history);
+      } else {
+        setConversation([]); // set it to mty
+        await sendMessage(section,section,convId); // start it out
+      }
+    } catch (err) {
+      console.error("start section error", err);
+      setError("Couldn't load this chat. Please try again.");
+    }
   };
 
   const handleClearChat = () => {
+    try {
+      if (conversationId) {
+        clearConversationMessages(user.uid, conversationId);
+      }
+    } catch (err) {
+      console.error("clear chat error", err);
+    }
     setConversation([]);
     setSelectedSection(null);
+    setConversationId(null);
     setError(null);
     setMessage("");
   };
@@ -268,8 +305,8 @@ const WeddingAssistant = () => {
                 onKeyDown={(event) => {
                   if (event.key === "Enter") handleSend();
                 }}
-                disabled={apiLoading}
-                placeholder="Message your wedding assistant..."
+                disabled={apiLoading || !conversationId}
+                placeholder={conversationId ? "Message your wedding assistant..." : "Pick a section above to begin"}
                 className="flex-1 bg-transparent outline-none py-2"
               />
  
@@ -285,7 +322,7 @@ const WeddingAssistant = () => {
               <button
                 type="button"
                 onClick={handleSend}
-                disabled={apiLoading}
+                disabled={apiLoading || !conversationId}
                 className="p-2 rounded-full hover:bg-muted disabled:opacity-50"
                 aria-label="Send message"
               >
