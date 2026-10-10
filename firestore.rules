@@ -32,19 +32,18 @@ service cloud.firestore {
         if request.auth != null
         && request.auth.uid == userId;
     }
-    match /conversations/{conversationId} {
 
-    allow read, write:
-      if request.auth != null
-      && request.auth.uid == userId;
-
-    match /messages/{messageId} {
-
-      allow read, write:
-        if request.auth != null
-        && request.auth.uid == userId;
+    match /betrothed/{uid}/messages/{msgId} {
+      allow read, delete: if request.auth != null && request.auth.uid == uid;
+      allow create: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(["role", "content", "createdAt", "status"])
+        && request.resource.data.role == "user"
+        && request.resource.data.status == "pending"
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.content.size() == 1
+        && request.resource.data.content[0].text.size() <= 4000;
+      allow update: if false;
     }
-  }
 
 
 
