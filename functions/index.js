@@ -1,12 +1,21 @@
 const {setGlobalOptions} = require("firebase-functions");
-const {onDocumentUpdated} = require("firebase-functions/v2/firestore");
+const {
+  onDocumentCreated,
+  onDocumentUpdated,
+} = require("firebase-functions/v2/firestore");
 const {onTaskDispatched} = require("firebase-functions/v2/tasks");
 const {defineSecret, defineString} = require("firebase-functions/params");
 const logger = require("firebase-functions/logger");
 const {initializeApp} = require("firebase-admin/app");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {getFunctions} = require("firebase-admin/functions");
+const Anthropic = require("@anthropic-ai/sdk");
 const {hasUsableEmail, buildEmail} = require("./email-utils");
+const {
+  newestUserMessageId,
+  buildClaudeMessages,
+  extractReplyText,
+} = require("./chat-utils");
 
 // Initialise the Admin SDK before anything that might use it.
 initializeApp();
@@ -42,6 +51,26 @@ const EmailStatus = Object.freeze({
   RECEIVED: "received", // SMTP2GO accepted it
   FAILED: "failed",
 });
+
+// --- Wedding assistant chat ---
+// Set with: firebase functions:secrets:set ANTHROPIC_API_KEY
+// In the emulator it's read from functions/.secret.local instead.
+const ANTHROPIC_API_KEY = defineSecret("ANTHROPIC_API_KEY");
+
+const CLAUDE_MODEL = "claude-haiku-5-5";
+const CLAUDE_MAX_TOKENS = 512; // explicit so a reply can never run away
+const CLAUDE_MAX_HISTORY = 20; // last N messages sent each turn
+
+const ASSISTANT_SYSTEM_PROMPT =
+  "You are a warm, concise wedding planning assistant helping a host " +
+  "enter details for their wedding invitation website.\n" +
+  "Ask one friendly question at a time to collect what is needed " +
+  "(for example the wedding date, the location, and what time guests " +
+  "should arrive).\n" +
+  "Keep replies to 1-3 sentences.";
+
+// Shown in the chat UI on failure; the real error only goes to the logs.
+const CHAT_USER_ERROR = "The assistant couldn't reply. Please try again.";
 
 // ---------------------------------------------------------------------------
 // Helper functions
@@ -234,4 +263,111 @@ exports.sendInviteEmail = onTaskDispatched(
       }
     },
 );
- 
+
+// ---------------------------------------------------------------------------
+// Trigger: wedding assistant chat
+// ---------------------------------------------------------------------------
+// The client only writes a user message to betrothed/{uid}/messages and
+// listens for new docs. This is the ONLY code that talks to Claude: it reads
+// recent history, asks Claude, and writes the reply as reply-{msgId}.
+exports.replyToUserMessage = onDocumentCreated(
+    {
+      document: "betrothed/{uid}/messages/{msgId}",
+      secrets: [ANTHROPIC_API_KEY],
+      // The default timeout can be too short for a slow reply.
+      timeoutSeconds: 120,
+      // NOTE: a Firestore trigger must run in the same region as the
+      // database. If it isn't the default region, add: region: "<region>"
+    },
+    async (event) => {
+      const snap = event.data;
+      if (!snap) return;
+
+      const {uid, msgId} = event.params;
+      const message = snap.data();
+
+      // LOOP GUARD: the reply we write is also a new message document, which
+      // fires this trigger again. Anything that isn't a user message exits
+      // immediately, so the function can never answer its own replies.
+      if (message.role !== "user") return;
+
+      const messagesRef = db.collection("betrothed").doc(uid)
+          .collection("messages");
+      // Deterministic ID: a duplicate trigger overwrites, never double-replies.
+      const replyRef = messagesRef.doc(`reply-${msgId}`);
+
+      try {
+        // Events are delivered at least once. If this message already has a
+        // reply, skip so a repeat delivery doesn't pay for a second API call.
+        if ((await replyRef.get()).exists) return;
+
+        // Last N messages, newest first (flipped to chronological in helper).
+        const recent = await messagesRef
+            .orderBy("createdAt", "desc")
+            .limit(CLAUDE_MAX_HISTORY)
+            .get();
+        const docs = recent.docs.map((d) => ({id: d.id, ...d.data()}));
+
+        // Message was deleted before we got to it (chat cleared): do nothing.
+        if (!docs.some((d) => d.id === msgId)) return;
+
+        // DOUBLE-SUBMIT GUARD: if a newer user message exists, that message's
+        // own run answers with the full context. Replying here would double up.
+        if (newestUserMessageId(docs) !== msgId) {
+          await snap.ref.update({status: "superseded"});
+          return;
+        }
+
+        const messages = buildClaudeMessages(docs);
+        if (messages.length === 0) {
+          throw new Error("No sendable messages in history.");
+        }
+
+        // Created per call: the secret's value only exists at runtime.
+        const client = new Anthropic({apiKey: ANTHROPIC_API_KEY.value()});
+        const response = await client.messages.create({
+          model: CLAUDE_MODEL,
+          max_tokens: CLAUDE_MAX_TOKENS,
+          system: ASSISTANT_SYSTEM_PROMPT,
+          messages,
+        });
+
+        const text = extractReplyText(response);
+        if (!text) {
+          throw new Error(`Empty reply (stop: ${response.stop_reason}).`);
+        }
+
+        // Reply + status flip in ONE batch: both happen or neither. If the
+        // chat was cleared mid-call, the update fails and no orphan is saved.
+        const batch = db.batch();
+        batch.set(replyRef, {
+          role: "assistant",
+          content: [{type: "text", text}],
+          createdAt: FieldValue.serverTimestamp(),
+          status: "complete",
+        });
+        batch.update(snap.ref, {status: "replied"});
+        await batch.commit();
+      } catch (err) {
+        logger.error("replyToUserMessage failed", {
+          uid,
+          msgId,
+          error: err.message,
+        });
+
+        // A trigger can't return an error to the client, so record it on the
+        // user message: the UI shows it and offers a retry. No automatic
+        // retry is enabled on purpose, so a persistent failure can't loop.
+        await snap.ref
+            .update({status: "error", errorMessage: CHAT_USER_ERROR})
+            .catch((writeErr) => {
+              // e.g. the message was deleted while we were working
+              logger.warn("Could not mark message as error", {
+                uid,
+                msgId,
+                error: writeErr.message,
+              });
+            });
+      }
+    },
+);

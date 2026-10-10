@@ -9,6 +9,7 @@
 //
 // DATABASE STRUCTURE (matches your ER diagram):
 //   betrothed/{userId}      — host user profile (created on signup)
+//   betrothed/{userId}/messages/{messageId} — one chat message per doc
 //   invitations/{weddingId}  — wedding details + invitation style
 //   invitee/{inviteeId}      — one doc per guest
 //   rsvp/{rsvpId}            — one doc per RSVP submission
@@ -37,7 +38,11 @@ where,
 orderBy,
 // sort order for a query
 serverTimestamp, // Firebase server time (more reliable than client time)
-runTransaction // atomic read-modify-write — used for the embedded registries array
+runTransaction, // atomic read-modify-write — used for the embedded registries array
+writeBatch,
+// batched writes — used for retry and for clearing the chat
+onSnapshot
+// live listener — the chat uses it to stream new messages
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
@@ -457,6 +462,103 @@ export const deleteRegistry = async (weddingId, registryId) => {
 };
 
 // ══════════════════════════════════════════════════════════════════════════════
+// WEDDING ASSISTANT — Chat Messages
+// ══════════════════════════════════════════════════════════════════════════════
+// One continuous chat per couple, one document per message, stored at:
+//
+//   betrothed/{userId}/messages/{messageId}
+//     role:      "user" | "assistant"
+//     content:   [{ type: "text", text: "..." }]  (same block shape the Claude API uses)
+//     createdAt: server timestamp
+//     status:    user messages:      "pending" -> "replied" | "error" | "superseded"
+//                assistant messages: "complete"
+//
+// WHO WRITES WHAT:
+//   - This file (the client) ONLY creates user messages and listens for new docs.
+//   - The Cloud Function (functions/index.js) is the ONLY thing that talks to
+//     Claude, and the only thing that writes assistant messages / updates status.
+//   - The client never calls the Claude API and never holds an API key.
+
+// the messages subcollection hangs directly off the user's profile document
+const messagesCol = (userId) =>
+  collection(db, "betrothed", userId, "messages");
+
+/**
+ * messageText
+ * Content is stored as an array of blocks. The chat UI only needs plain text,
+ * so this joins the text blocks into one string.
+ */
+export const messageText = (message) =>
+  (message.content || [])
+    .filter((block) => block.type === "text")
+    .map((block) => block.text)
+    .join("");
+
+/**
+ * sendUserMessage
+ * Writes one user message with status "pending". That write is the ONLY thing
+ * the client does: it triggers the Cloud Function, which writes the reply.
+ * Returns the new message ID.
+ */
+export const sendUserMessage = async (userId, text) => {
+  const ref = await addDoc(messagesCol(userId), {
+    role: "user",
+    content: [{ type: "text", text }],
+    createdAt: serverTimestamp(),
+    status: "pending",
+  });
+  return ref.id;
+};
+
+/**
+ * subscribeToMessages
+ * Live listener on the whole chat, oldest first. Calls onMessages(array) once
+ * with the saved history and again every time a document is added or changed
+ * (including the assistant's reply and status changes).
+ * Returns the unsubscribe function: call it in the useEffect cleanup.
+ */
+export const subscribeToMessages = (userId, onMessages, onError) => {
+  const q = query(messagesCol(userId), orderBy("createdAt", "asc"));
+  return onSnapshot(
+    q,
+    (snap) => onMessages(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
+    onError
+  );
+};
+
+/**
+ * retryUserMessage
+ * A trigger only fires when a document is CREATED, so "retry" means: delete the
+ * failed user message and write the same text again as a brand-new message.
+ * Both happen in one batch so the chat never shows a duplicate.
+ */
+export const retryUserMessage = async (userId, failedMessage) => {
+  const batch = writeBatch(db);
+  batch.delete(doc(messagesCol(userId), failedMessage.id));
+  batch.set(doc(messagesCol(userId)), {
+    role: "user",
+    content: failedMessage.content,
+    createdAt: serverTimestamp(),
+    status: "pending",
+  });
+  await batch.commit();
+};
+
+/**
+ * clearMessages
+ * Deletes every message in the chat. Firestore caps a batch at 500 writes, so
+ * deletes are split into chunks and a long chat can still be cleared.
+ */
+const BATCH_LIMIT = 400;
+
+export const clearMessages = async (userId) => {
+  const snap = await getDocs(messagesCol(userId));
+  for (let i = 0; i < snap.docs.length; i += BATCH_LIMIT) {
+    const batch = writeBatch(db);
+    snap.docs.slice(i, i + BATCH_LIMIT).forEach((d) => batch.delete(d.ref));
+    await batch.commit();
+  }
+};
 // Q&A — Invitation questions & answers
 // ══════════════════════════════════════════════════════════════════════════════
 // Like registries, Q&A lives on the wedding's invitation document (no new
@@ -466,8 +568,7 @@ export const deleteRegistry = async (weddingId, registryId) => {
 //   invitations/{weddingId}.qaShowOnInvitation = boolean   (saved via saveInvitation)
 //   invitations/{weddingId}.qaStartersCreated  = true      (set once, never unset)
 //
-// Every change is a read-modify-write of the qaItems array inside a Firestore
-// transaction, so quick edits can't overwrite each other and no other
+// Every change is a read-modify-write of the qaItems array inside a Firest// transaction, so quick edits can't overwrite each other and no other
 // invitation field is touched. Each helper returns the updated array.
 // Field rules / limits live in src/lib/qa.js.
 
