@@ -225,10 +225,10 @@ describe('Signup Component - Input Validation Tests', () => {
     await userEvent.type(emailInput, "test@test.com");
     await userEvent.type(passwordInput, "testpassword1");
     await userEvent.type(confirmInput, "testpassword1");
-    
+
     // Try to submit
     await userEvent.click(signUpButton);
-    
+
     // We can't fully test the success case without mocking more, but we know it should pass validation
     // The key is that no error messages should appear for valid inputs
   });

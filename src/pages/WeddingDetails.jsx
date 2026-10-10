@@ -34,6 +34,7 @@ import Sidebar from "@/components/Sidebar";
 import GoogleMapEmbed, { buildMapQuery } from "@/components/GoogleMapEmbed";
 import PlaceAutocompleteInput from "@/components/PlaceAutocompleteInput";
 import { CHILDREN_POLICY, getWeddingChildrenPolicy } from "@/lib/rsvpOptions";
+import { getInviteDeadlineError } from "@/lib/rsvpDeadline";
 
 // Wedding-level children policy choices. Individual guests can override this
 // in Guest List → Add Guest.
@@ -176,11 +177,9 @@ const WeddingDetails = () => {
     if (!form.brideName.first.trim()) errors["brideName.first"] = "First name is required.";
     if (!form.weddingDate) errors.weddingDate = "Wedding date is required.";
     if (!form.ceremonyTime) errors.ceremonyTime = "Ceremony time is required.";
-    if (!form.inviteDeadline) errors.inviteDeadline = "RSVP deadline is required.";
-
-    if (form.weddingDate && form.inviteDeadline && form.inviteDeadline > form.weddingDate) {
-      errors.inviteDeadline = "RSVP deadline must be on or before the wedding date.";
-    }
+    // Shared with the Invitation Builder's RSVP tab (same field, same rule)
+    const deadlineError = getInviteDeadlineError(form.inviteDeadline, form.weddingDate);
+    if (deadlineError) errors.inviteDeadline = deadlineError;
 
     if (!form.venueName.trim()) errors.venueName = "Wedding venue name is required.";
     if (!form.receptionName.trim()) errors.receptionName = "Reception venue name is required.";
@@ -522,4 +521,4 @@ const WeddingDetails = () => {
   );
 };
 
-export default WeddingDetails;
+export default WeddingDetails;

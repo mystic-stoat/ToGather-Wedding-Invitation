@@ -9,13 +9,17 @@
     "preview": "vite preview",
     "lint": "eslint .",
     "test:unit": "vitest run --project unit",
-    "test:integration:auth": "vitest run --project integration:auth",
-    "test:integration:firestore": "vitest run --project integration:firestore",
-    "test:all": "vitest run --project all",
-    "test:watch": "vitest --project all --ui",
-    "start:emulators": "firebase emulators:start --export-on-exit=./emulator-data --import=./emulator-data --only functions,firestore,auth"
+    "test:integration:auth": "firebase emulators:exec --config firebase.test.json --project demo-togather-test --only auth,firestore \"vitest run --project integration:auth\"",
+    "test:integration:firestore": "firebase emulators:exec --config firebase.test.json --project demo-togather-test --only firestore \"vitest run --project integration:firestore\"",
+    "test:integration:storage": "firebase emulators:exec --config firebase.test.json --project demo-togather-test --only firestore,storage \"vitest run --project integration:storage\"",
+    "test:all": "firebase emulators:exec --config firebase.test.json --project demo-togather-test --only auth,firestore,storage \"vitest run --project all\"",
+    "test:watch": "firebase emulators:exec --config firebase.test.json --project demo-togather-test --only auth,firestore,storage \"vitest --project all --ui\"",
+    "start:emulators": "firebase emulators:start --export-on-exit=./emulator-data --import=./emulator-data --only functions,firestore,auth,storage"
   },
   "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
     "@hookform/resolvers": "^3.10.0",
     "@radix-ui/react-accordion": "^1.2.11",
     "@radix-ui/react-alert-dialog": "^1.1.14",

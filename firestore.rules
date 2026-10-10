@@ -73,6 +73,133 @@ service cloud.firestore {
       allow update, delete:
         if request.auth != null
         && request.auth.uid == resource.data.userId;
+
+
+      /*
+       * ==========================================================
+       * OUR STORY ENTRIES
+       * ==========================================================
+       *
+       *   /invitations/{weddingId}/storyEntries/{entryId}
+       *
+       * The invitation rule above does NOT cascade to subcollections,
+       * so Story needs its own rules:
+       *   - Only the wedding owner can create/update/delete entries.
+       *   - Unpublished Story content is private to the owner.
+       *   - Once the invitation is published, guests can read it.
+       *   - Writes are shape-checked; photo paths must live in this
+       *     entry's own Storage folder (weddings/{weddingId}/story/{entryId}/).
+       * Limits mirror src/lib/storyBlocks.js and src/lib/mediaConfig.js.
+       */
+      match /storyEntries/{entryId} {
+
+        function invitationDoc() {
+          return get(/databases/$(database)/documents/invitations/$(weddingId));
+        }
+
+        // Optional photo position/zoom (src/lib/photoAdjust.js):
+        // x, y = focal point in % (0–100), zoom = 1–3.
+        function validAdjust(a) {
+          return a is map
+            && a.keys().hasOnly(['x', 'y', 'zoom'])
+            && a.keys().hasAll(['x', 'y', 'zoom'])
+            && a.x is number && a.x >= 0 && a.x <= 100
+            && a.y is number && a.y >= 0 && a.y <= 100
+            && a.zoom is number && a.zoom >= 1 && a.zoom <= 3;
+        }
+
+        function validStoryImage(img) {
+          return img == null || (
+            img is map
+            && img.keys().hasOnly(['path', 'url', 'width', 'height', 'bytes', 'contentType', 'adjust'])
+            && img.keys().hasAll(['path', 'url', 'width', 'height', 'bytes', 'contentType'])
+            && (!('adjust' in img) || validAdjust(img.adjust))
+            && img.path is string
+            && img.path.matches('weddings/' + weddingId + '/story/' + entryId + '/[A-Za-z0-9_-]+[.](webp|jpg|png)')
+            && img.url is string && img.url.size() <= 2048
+            && img.width is int && img.height is int
+            && img.bytes is int && img.bytes > 0 && img.bytes <= 5242880
+            && img.contentType in ['image/jpeg', 'image/png', 'image/webp']
+          );
+        }
+
+        function validStoryEntry() {
+          let d = request.resource.data;
+          let maxPhotos = {
+            'photoLeft': 1, 'photoRight': 1, 'twoPhotos': 2,
+            'fullWidth': 1, 'textOnly': 0, 'collage': 3
+          };
+          return d.keys().hasOnly(['id', 'layout', 'title', 'description', 'images', 'order', 'createdAt', 'updatedAt'])
+            && d.keys().hasAll(['id', 'layout', 'title', 'description', 'images', 'order', 'createdAt', 'updatedAt'])
+            && d.id == entryId
+            && d.layout in maxPhotos
+            && d.title is string && d.title.size() <= 100
+            && d.description is string && d.description.size() <= 1000
+            && d.images is list && d.images.size() <= maxPhotos[d.layout]
+            && (d.images.size() < 1 || validStoryImage(d.images[0]))
+            && (d.images.size() < 2 || validStoryImage(d.images[1]))
+            && (d.images.size() < 3 || validStoryImage(d.images[2]))
+            && d.order is int && d.order >= 0
+            && d.updatedAt == request.time;
+        }
+
+        // Owner always; everyone else only once the invitation is published.
+        allow read:
+          if isWeddingHost(weddingId)
+          || invitationDoc().data.get('isPublished', false) == true;
+
+        allow create:
+          if isWeddingHost(weddingId)
+          && validStoryEntry()
+          && request.resource.data.createdAt == request.time;
+
+        allow update:
+          if isWeddingHost(weddingId)
+          && validStoryEntry()
+          && request.resource.data.createdAt == resource.data.createdAt;
+
+        allow delete:
+          if isWeddingHost(weddingId);
+      }
+
+
+      /*
+       * ==========================================================
+       * PRIVATE (OWNER-ONLY) DATA
+       * ==========================================================
+       *
+       *   /invitations/{weddingId}/private/weddingPartyContacts
+       *     { contacts: { [memberId]: { phone, email } }, updatedAt }
+       *
+       * Wedding Party phone numbers and emails. The invitation document
+       * itself is publicly readable, so contact details live here and are
+       * only copied onto a member in invitations/{weddingId}.partyMembers
+       * when the couple turns "Show contact details" on for that member.
+       *   - Only the wedding owner can read or write — guests never can,
+       *     published or not.
+       *   - Only the known document id is allowed.
+       * Limits mirror src/lib/weddingParty.js (MAX_PARTY_MEMBERS = 40).
+       */
+      match /private/{docId} {
+
+        function validPartyContacts() {
+          let d = request.resource.data;
+          return d.keys().hasOnly(['contacts', 'updatedAt'])
+            && d.keys().hasAll(['contacts', 'updatedAt'])
+            && d.contacts is map
+            && d.contacts.size() <= 40
+            && d.updatedAt == request.time;
+        }
+
+        allow read, delete:
+          if docId == 'weddingPartyContacts'
+          && isWeddingHost(weddingId);
+
+        allow create, update:
+          if docId == 'weddingPartyContacts'
+          && isWeddingHost(weddingId)
+          && validPartyContacts();
+      }
     }
 
 

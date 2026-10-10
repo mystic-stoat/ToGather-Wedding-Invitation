@@ -271,7 +271,7 @@ export const getInviteeByToken = async token => {
  *   3. Updates the `invitee` document with their RSVP response
  *
  *   RSVP stored directly in invitee doc
- * 
+ *
  * Returns { success: true } or { success: false, error: "message" }
  */
 export const submitRSVP = async (token, response) => {
@@ -558,4 +558,98 @@ export const clearMessages = async (userId) => {
     snap.docs.slice(i, i + BATCH_LIMIT).forEach((d) => batch.delete(d.ref));
     await batch.commit();
   }
+};
+// Q&A — Invitation questions & answers
+// ══════════════════════════════════════════════════════════════════════════════
+// Like registries, Q&A lives on the wedding's invitation document (no new
+// collection):
+//
+//   invitations/{weddingId}.qaItems            = [ { id, question, answerType, ... }, ... ]
+//   invitations/{weddingId}.qaShowOnInvitation = boolean   (saved via saveInvitation)
+//   invitations/{weddingId}.qaStartersCreated  = true      (set once, never unset)
+//
+// Every change is a read-modify-write of the qaItems array inside a Firest// transaction, so quick edits can't overwrite each other and no other
+// invitation field is touched. Each helper returns the updated array.
+// Field rules / limits live in src/lib/qa.js.
+
+const QA_ITEM_FIELDS = [
+  "question", "answerType", "autoSource", "text", "section", "note", "url", "linkLabel", "isVisible",
+];
+const QA_MAX_ITEMS = 50; // keep in sync with src/lib/qa.js
+
+const readQa = async (transaction, invRef) => {
+  const snap = await transaction.get(invRef);
+  if (!snap.exists()) throw new Error("Wedding not found.");
+  const data = snap.data();
+  return { items: Array.isArray(data.qaItems) ? data.qaItems : [], startersCreated: data.qaStartersCreated === true };
+};
+
+/**
+ * initQaStarters
+ * Adds the suggested starter questions ONCE per invitation. If they were
+ * already created (qaStartersCreated), nothing is written — so deleted or
+ * edited starters are never restored. Resolves { created, items }.
+ */
+export const initQaStarters = async (weddingId, starters) => {
+  const invRef = doc(db, "invitations", weddingId);
+  return runTransaction(db, async transaction => {
+    const { items, startersCreated } = await readQa(transaction, invRef);
+    if (startersCreated) return { created: false, items };
+    const updated = [...starters, ...items].slice(0, QA_MAX_ITEMS);
+    transaction.update(invRef, { qaItems: updated, qaStartersCreated: true });
+    return { created: true, items: updated };
+  });
+};
+
+/** addQaItem — appends a question (max 50). Returns the updated array. */
+export const addQaItem = async (weddingId, item) => {
+  const invRef = doc(db, "invitations", weddingId);
+  return runTransaction(db, async transaction => {
+    const { items } = await readQa(transaction, invRef);
+    if (items.length >= QA_MAX_ITEMS) throw new Error(`You can add up to ${QA_MAX_ITEMS} questions.`);
+    const updated = [...items, item];
+    transaction.update(invRef, { qaItems: updated });
+    return updated;
+  });
+};
+
+/** updateQaItem — changes allowed fields of one question. Returns the updated array. */
+export const updateQaItem = async (weddingId, itemId, updates) => {
+  const invRef = doc(db, "invitations", weddingId);
+  return runTransaction(db, async transaction => {
+    const { items } = await readQa(transaction, invRef);
+    if (!items.some(i => i.id === itemId)) throw new Error("Question not found.");
+    const allowed = Object.fromEntries(
+      Object.entries(updates).filter(([k, v]) => QA_ITEM_FIELDS.includes(k) && v !== undefined)
+    );
+    const updated = items.map(i => (i.id === itemId ? { ...i, ...allowed } : i));
+    transaction.update(invRef, { qaItems: updated });
+    return updated;
+  });
+};
+
+/** deleteQaItem — removes one question. Returns the updated array. */
+export const deleteQaItem = async (weddingId, itemId) => {
+  const invRef = doc(db, "invitations", weddingId);
+  return runTransaction(db, async transaction => {
+    const { items } = await readQa(transaction, invRef);
+    const updated = items.filter(i => i.id !== itemId);
+    transaction.update(invRef, { qaItems: updated });
+    return updated;
+  });
+};
+
+/** moveQaItem — moves one question up (-1) or down (+1). Returns the updated array. */
+export const moveQaItem = async (weddingId, itemId, delta) => {
+  const invRef = doc(db, "invitations", weddingId);
+  return runTransaction(db, async transaction => {
+    const { items } = await readQa(transaction, invRef);
+    const from = items.findIndex(i => i.id === itemId);
+    const to = from + delta;
+    if (from === -1 || to < 0 || to >= items.length) return items;
+    const updated = [...items];
+    [updated[from], updated[to]] = [updated[to], updated[from]];
+    transaction.update(invRef, { qaItems: updated });
+    return updated;
+  });
 };

@@ -15,6 +15,14 @@
 //   - Invalid token
 //   - Token already used
 //   - Firestore errors on submit
+//
+// INVITATION THEME:
+//   The invitation's Color Theme (colors, fonts, header/RSVP backgrounds — see
+//   src/lib/invitationTheme.js) is applied to the invitation area only: the
+//   header, RSVP card and gift registry. It re-points the app's Tailwind color
+//   tokens for that subtree, so the ToGather badge, footer and the loading /
+//   error screens keep the app's own look. Older invitations without theme
+//   fields get the defaults (their saved primary/secondary/fonts are kept).
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState, useEffect } from "react";
@@ -33,11 +41,21 @@ import {
   Sparkles,
   Loader2,
   AlertCircle,
-  Gift,
-  ExternalLink,
 } from "lucide-react";
 import { submitRSVP } from "@/lib/firestore";
 import { normalizeMealOptions } from "@/lib/rsvpOptions";
+import {
+  resolveInvitationTheme,
+  buildGuestThemeStyle,
+  hasCustomSectionBackground,
+} from "@/lib/invitationTheme";
+import { useGoogleFonts } from "@/hooks/useGoogleFonts";
+import RegistrySection from "@/components/registry/RegistrySection";
+import { isRegistrySectionShown, hasRegistryContent } from "@/lib/registry";
+import QaSection from "@/components/qa/QaSection";
+import { guestSectionId, scrollToGuestSection } from "@/components/qa/qaNavigation";
+import { getGuestQaItems, isQaSectionShown, normalizeQaItems } from "@/lib/qa";
+import { getVenueDisplay } from "@/lib/venueDisplay";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
@@ -116,6 +134,9 @@ const InvitationHeader = ({ invitation }) => {
   const brideFirst = invitation?.brideName?.first || "";
   const coupleNames =
     groomFirst && brideFirst ? `${groomFirst} & ${brideFirst}` : "Your Wedding";
+  // Venue tab switches from the builder (older invitations: everything shown).
+  // This page has no map or directions button, so only section/address apply.
+  const venueDisplay = getVenueDisplay(invitation || {});
 
   return (
     <div className="mb-10 animate-fade-up text-center">
@@ -144,10 +165,10 @@ const InvitationHeader = ({ invitation }) => {
         </p>
       )}
 
-      {invitation?.venueName && (
-        <p className="mt-1 text-sm text-muted-foreground">
+      {venueDisplay.section && invitation?.venueName && (
+        <p className="mt-1 text-sm text-muted-foreground" data-testid="invitation-venue">
           {invitation.venueName}
-          {invitation?.venueAddress && `, ${invitation.venueAddress}`}
+          {venueDisplay.address && invitation?.venueAddress && `, ${invitation.venueAddress}`}
         </p>
       )}
 
@@ -528,8 +549,8 @@ const ConfirmationScreen = ({ isAttending, name, invitation, coupleNames }) => (
             </p>
           )}
 
-          {invitation.venueName && (
-            <p className="text-muted-foreground">{invitation.venueName}</p>
+          {getVenueDisplay(invitation).section && invitation.venueName && (
+            <p className="text-muted-foreground" data-testid="confirmation-venue">{invitation.venueName}</p>
           )}
         </div>
       </div>
@@ -537,56 +558,22 @@ const ConfirmationScreen = ({ isAttending, name, invitation, coupleNames }) => (
   </div>
 );
 
-// ── Registry section — visible registries + the couple's registry message ─────
-// Guest-facing only: rendered below the RSVP card on the public page.
-// Registries are embedded on the invitation doc this page already loads —
-// no extra Firestore query. Only entries with isVisible === true render
-// (visibility is enforced client-side since the invitation doc is already
-// public to the guest). Returns null when there's no message and no
-// visible registries so the section never renders empty.
-const RegistrySection = ({ registries = [], registryMessage }) => {
-  const visible = registries.filter(r => r.isVisible === true);
-  const hasMessage = Boolean(registryMessage?.trim());
-  if (!hasMessage && visible.length === 0) return null;
+// ── Registry section ─────────────────────────────────────────────────────────
+// Rendered below the RSVP card by the shared component
+// src/components/registry/RegistrySection.jsx (also used by the Invitation
+// Builder's phone preview). Registries are embedded on the invitation doc this
+// page already loads — no extra Firestore query. Only entries with
+// isVisible === true render; it returns null when the couple turned "Show
+// Registry on Invitation" off, or when there's no message and no visible
+// registries.
 
-  return (
-    <section className="mt-6 rounded-2xl border border-border/50 bg-card p-6 shadow-sm animate-fade-up">
-      <div className="mb-4 flex items-center justify-center gap-3">
-        <div className="h-px w-10 bg-gradient-to-r from-transparent to-border" />
-        <Gift size={15} className="text-primary" />
-        <div className="h-px w-10 bg-gradient-to-l from-transparent to-border" />
-      </div>
-
-      <h2 className="font-heading text-xl font-semibold italic text-foreground text-center">
-        Gift Registry
-      </h2>
-
-      {hasMessage && (
-        <p className="mt-3 text-center text-sm text-muted-foreground leading-relaxed">
-          {registryMessage}
-        </p>
-      )}
-
-      {visible.length > 0 && (
-        <ul className="mt-5 space-y-2">
-          {visible.map(r => (
-            <li key={r.id}>
-              <a
-                href={r.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center justify-center gap-2 rounded-xl border border-border/50 bg-background px-4 py-3 text-sm font-medium text-foreground transition-colors hover:border-primary/40 hover:text-primary"
-              >
-                <Gift size={14} className="text-primary flex-shrink-0" />
-                <span className="truncate">{r.name}</span>
-                <ExternalLink size={13} className="text-muted-foreground flex-shrink-0" />
-              </a>
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
-  );
+// ── Sections this guest page shows (Q&A section links may only point here) ──
+const getGuestPageSections = (invitation) => {
+  const ids = new Set(["rsvp"]);
+  if (isRegistrySectionShown(invitation) && hasRegistryContent(invitation?.registries, invitation?.registryMessage)) {
+    ids.add("registry");
+  }
+  return ids;
 };
 
 // ── Main RSVP page ────────────────────────────────────────────────────────────
@@ -822,6 +809,15 @@ const RSVP = () => {
   const visibleSteps = TOTAL_STEPS;
   const visualStep = step;
 
+  // Invitation theme — only once the invitation itself has loaded.
+  const theme = invitation ? resolveInvitationTheme(invitation) : null;
+  const themeStyle = invitation ? buildGuestThemeStyle(invitation) : undefined;
+  useGoogleFonts(theme ? [theme.font1, theme.font2] : []);
+  // The header only gets its own panel when the couple gave it a background.
+  const headerPanelStyle = theme && hasCustomSectionBackground(theme, "header")
+    ? { backgroundColor: theme.sections.header }
+    : undefined;
+
   if (pageLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
@@ -856,8 +852,10 @@ const RSVP = () => {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-background">
-      <div className="h-1 bg-gradient-to-r from-primary via-accent-light to-primary" />
+    <div className="flex min-h-screen flex-col bg-background"
+      style={theme ? { backgroundColor: theme.background } : undefined}>
+      <div className="h-1 bg-gradient-to-r from-primary via-accent-light to-primary"
+        style={theme ? { backgroundImage: `linear-gradient(to right, ${theme.button}, ${theme.accent}, ${theme.button})` } : undefined} />
 
       <main className="flex flex-1 items-start justify-center px-4 py-12 sm:py-16">
         <div className="w-full max-w-lg">
@@ -869,9 +867,15 @@ const RSVP = () => {
             </div>
           </div>
 
-          <InvitationHeader invitation={invitation} />
+          {/* Themed invitation area: header, RSVP card, registry */}
+          <div className="tg-invite-theme" data-testid="invitation-theme" style={themeStyle}>
+          <div className={headerPanelStyle ? "mb-6 rounded-3xl px-4 pt-8 pb-1" : undefined}
+            data-testid="invitation-header" style={headerPanelStyle}>
+            <InvitationHeader invitation={invitation} />
+          </div>
 
-          <div className="rounded-3xl border border-border/50 bg-card p-6 shadow-xl shadow-foreground/[0.04] sm:p-8">
+          <div id={guestSectionId("rsvp")}
+            className="scroll-mt-6 rounded-3xl border border-border/50 bg-card p-6 shadow-xl shadow-foreground/[0.04] sm:p-8">
             {submitted ? (
               <ConfirmationScreen
                 isAttending={isAttending}
@@ -1010,10 +1014,27 @@ const RSVP = () => {
           </div>
 
           {/* Gift registry — visible entries + message from the invitation doc */}
-          <RegistrySection
-            registries={invitation?.registries}
-            registryMessage={invitation?.registryMessage}
+          <div id={guestSectionId("registry")} className="scroll-mt-6">
+            <RegistrySection
+              registries={invitation?.registries}
+              registryMessage={invitation?.registryMessage}
+              showOnInvitation={isRegistrySectionShown(invitation)}
+            />
+          </div>
+
+          {/* Q&A — only when the couple switched it on; only questions that are
+              switched on and fully answered. Section links count only for
+              sections this page actually shows (RSVP, Registry); when later
+              phases add more sections, add their ids here and existing
+              questions start showing automatically. */}
+          <QaSection
+            entries={getGuestQaItems(normalizeQaItems(invitation?.qaItems), {
+              data: invitation || {},
+              availableSections: getGuestPageSections(invitation),
+            }, isQaSectionShown(invitation))}
+            onNavigate={scrollToGuestSection}
           />
+          </div>
 
           <p className="mt-6 text-center text-xs text-muted-foreground">
             Powered by{" "}
