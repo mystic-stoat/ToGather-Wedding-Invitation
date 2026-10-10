@@ -23,44 +23,44 @@ vi.mock('@/contexts/AuthContext', () => ({
 describe('Login Component - Input Validation Tests', () => {
   it('shows error when email is empty and user tries to submit', async () => {
     render(<BrowserRouter><Login /></BrowserRouter>);
-    
+
     const loginButton = screen.getByRole('button', { name: /log in/i });
-    
+
     // Try to submit with empty fields
     await userEvent.click(loginButton);
-    
+
     // Check that validation errors appear
     expect(screen.getByText(/email is required/i)).toBeInTheDocument();
   });
-  
+
   it('shows error when password is empty and user tries to submit', async () => {
     render(<BrowserRouter><Login /></BrowserRouter>);
-    
+
     const loginButton = screen.getByRole('button', { name: /log in/i });
-    
+
     // Try to submit with empty password
     await userEvent.click(loginButton);
-    
+
     // Check that validation errors appear
     expect(screen.getByText(/password is required/i)).toBeInTheDocument();
   });
-  
+
   it('shows error for invalid email format', async () => {
     render(<BrowserRouter><Login /></BrowserRouter>);
-    
+
     const emailInput = screen.getByLabelText(/email/i);
     const loginButton = screen.getByRole('button', { name: /log in/i });
-    
+
     // Enter invalid email
     await userEvent.type(emailInput, 'invalid-email');
-    
+
     // Try to submit
     await userEvent.click(loginButton);
-    
+
     // Check that validation errors appear
     expect(screen.getByText("Enter a valid email address")).toBeInTheDocument();
   });
-  
+
   it('shows error for incorrect credentials', async () => {
     useAuth.mockReturnValue({
       login: vi.fn().mockRejectedValue({ code: 'auth/invalid-credential' }),
@@ -80,5 +80,5 @@ describe('Login Component - Input Validation Tests', () => {
     // Async: wait for the server's error response to render
     expect(await screen.findByText("Incorrect email or password. Please try again.")).toBeInTheDocument();
   });
-  
+
 });

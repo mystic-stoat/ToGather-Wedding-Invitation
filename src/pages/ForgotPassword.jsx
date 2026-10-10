@@ -54,7 +54,7 @@ const ForgotPassword = () => {
   const [success, setSuccess] = useState("");
 
 
-// ── Client-side validation ──────────────────────────────────────────────── 
+// ── Client-side validation ────────────────────────────────────────────────
 // Check the email before sending a password reset request to Firebase
   const validate = () => {
     const errs = {};

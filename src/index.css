@@ -103,3 +103,10 @@
 .font-heading {
   font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
 }
+
+/* Guest RSVP page: inside the themed invitation area, headings use the
+ * invitation's heading font (set by buildGuestThemeStyle in
+ * src/lib/invitationTheme.js). Body text inherits the body font. */
+.tg-invite-theme .font-heading {
+  font-family: var(--tg-heading-font, system-ui, -apple-system, "Segoe UI", sans-serif);
+}

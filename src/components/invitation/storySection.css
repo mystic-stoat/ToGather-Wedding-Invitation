@@ -1,0 +1,144 @@
+/* src/components/invitation/storySection.css
+ * Responsive styles for <StorySection>.
+ * Uses CSS container queries + container units (cqi) so the section scales
+ * with the space it is given — the ~250px phone mockup in the builder today,
+ * and a full-width published page later — instead of the browser window.
+ * Photos sit in fixed aspect-ratio boxes with object-fit: cover, so they are
+ * cropped from the center and never stretched.
+ */
+
+.tg-story {
+  container-type: inline-size;
+  width: 100%;
+  overflow: hidden;
+}
+
+.tg-story__inner {
+  max-width: 720px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(14px, 6cqi, 40px);
+}
+
+.tg-story__heading {
+  text-align: center;
+  font-size: clamp(16px, 6.5cqi, 36px);
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.tg-story__title {
+  font-size: clamp(11px, 4.6cqi, 24px);
+  line-height: 1.25;
+  margin: 0 0 0.35em;
+  overflow-wrap: anywhere;
+}
+
+.tg-story__text {
+  font-size: clamp(9px, 3.7cqi, 17px);
+  line-height: 1.55;
+  margin: 0;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+/* ── Photo box ─────────────────────────────────────────────────────────── */
+.tg-story__photo {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: clamp(4px, 2cqi, 14px);
+}
+.tg-story__photo img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  display: block;
+}
+.tg-story__photo--portrait  { aspect-ratio: 4 / 5; }
+.tg-story__photo--landscape { aspect-ratio: 3 / 2; }
+.tg-story__photo--square    { aspect-ratio: 1 / 1; }
+
+.tg-story__placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed currentColor;
+  border-radius: inherit;
+  opacity: 0.45;
+}
+
+/* ── 1 & 2: photo + text side by side (as in the prototype) ─────────────── */
+.tg-story__split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: clamp(8px, 4cqi, 28px);
+  align-items: center;
+}
+
+/* ── 3: two photos ─────────────────────────────────────────────────────── */
+.tg-story__pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: clamp(6px, 2.5cqi, 16px);
+}
+
+/* ── 5: text only ──────────────────────────────────────────────────────── */
+.tg-story__text-only {
+  text-align: center;
+  max-width: 36em;
+  margin: 0 auto;
+}
+
+/* ── 6: collage — one tall photo + two stacked squares ─────────────────── */
+.tg-story__collage {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: clamp(6px, 2.5cqi, 16px);
+}
+.tg-story__collage-side {
+  display: grid;
+  grid-template-rows: auto auto;
+  gap: clamp(6px, 2.5cqi, 16px);
+  align-content: space-between;
+}
+.tg-story__collage-main {
+  aspect-ratio: auto;
+  height: 100%;
+  min-height: 100%;
+}
+
+.tg-story__chevron {
+  display: flex;
+  justify-content: center;
+  opacity: 0.55;
+}
+
+/* ── Very narrow containers: stack instead of squeezing ─────────────────── */
+@container (max-width: 220px) {
+  .tg-story__split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .tg-story__split .tg-story__photo {
+    order: -1; /* photo first, then text, for both photo-left and photo-right */
+  }
+  .tg-story__collage {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .tg-story__collage-main {
+    aspect-ratio: 3 / 2;
+    height: auto;
+    min-height: 0;
+  }
+  .tg-story__collage-side {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: auto;
+  }
+}

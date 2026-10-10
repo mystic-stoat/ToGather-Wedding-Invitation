@@ -14,14 +14,14 @@
 //   Public routes    → must NOT be logged in (login, signup, landing, RSVP)
 //   Protected routes → must be logged in, otherwise redirected to /login
 // ─────────────────────────────────────────────────────────────────────────────
- 
+
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
- 
+
 // Page imports — each route loads one of these
 import Index            from "./pages/Index.jsx";
 import Login            from "./pages/Login.jsx";
@@ -35,10 +35,10 @@ import RSVP             from "./pages/RSVP.jsx";
 import GuestList        from "./pages/GuestList.jsx";
 import Registry         from "./pages/Registry.jsx";
 import NotFound         from "./pages/NotFound.jsx";
- 
+
 // React Query client — manages caching for API/Firestore calls
 const queryClient = new QueryClient();
- 
+
 // ── PublicRoute ───────────────────────────────────────────────────────────────
 // Wrapper for pages that should NOT be accessible when already logged in
 // (landing page, login, signup).
@@ -56,7 +56,7 @@ const queryClient = new QueryClient();
 //      stays there rather than bouncing into the app.
 const PublicRoute = ({ children }) => {
   const { user, loading } = useAuth();
- 
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -67,15 +67,15 @@ const PublicRoute = ({ children }) => {
       </div>
     );
   }
- 
+
   // Already logged in — push them into the app instead of showing login/landing
   if (user) {
     return <Navigate to="/dashboard" replace />;
   }
- 
+
   return children;
 };
- 
+
 // ── ProtectedRoute ────────────────────────────────────────────────────────────
 // Wrapper component that guards pages requiring login.
 //
@@ -88,7 +88,7 @@ const PublicRoute = ({ children }) => {
 //   <ProtectedRoute><Dashboard /></ProtectedRoute>
 const ProtectedRoute = ({ children }) => {
   const { user, loading } = useAuth();
- 
+
   // Still checking Firebase session — show spinner so page doesn't flash
   if (loading) {
     return (
@@ -100,17 +100,17 @@ const ProtectedRoute = ({ children }) => {
       </div>
     );
   }
- 
+
   // Not logged in — send them to the login page
   // `replace` means the /dashboard URL is replaced in history (so back button works)
   if (!user) {
     return <Navigate to="/login" replace />;
   }
- 
+
   // Logged in — render the actual page
   return children;
 };
- 
+
 // ── App ───────────────────────────────────────────────────────────────────────
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -121,13 +121,13 @@ const App = () => (
         {/* AuthProvider must be inside BrowserRouter so Navigate works */}
         <AuthProvider>
           <Routes>
- 
+
             {/* ── Public routes — redirects to /dashboard if already logged in ── */}
             <Route path="/"      element={<PublicRoute><Index /></PublicRoute>} />
             <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
             <Route path="/forgot-password" element={<PublicRoute><ForgotPassword /></PublicRoute>} />
             <Route path="/signup" element={<PublicRoute><Signup /></PublicRoute>} />
- 
+
             {/* RSVP is fully public — guests don't have accounts */}
             {/* :token is a URL parameter — e.g. /rsvp/abc-123 */}
             <Route path="/rsvp/:inviteeId/:token" element={<RSVP />} />
@@ -148,12 +148,12 @@ const App = () => (
 
             {/* Catch-all — shows 404 page for any unknown URL */}
             <Route path="*" element={<NotFound />} />
- 
+
           </Routes>
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
 );
- 
+
 export default App;

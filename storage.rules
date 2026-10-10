@@ -1,0 +1,80 @@
+// storage.rules — Firebase Cloud Storage security rules for ToGather
+// ─────────────────────────────────────────────────────────────────────────────
+// Photo files live at:
+//   weddings/{weddingId}/hero/{fileName}            — Hero Photo
+//   weddings/{weddingId}/story/{entryId}/{fileName} — Our Story photos
+//   weddings/{weddingId}/party/{memberId}/{fileName} — Wedding Party member photos
+//
+// - Only the wedding's owner (invitations/{weddingId}.userId) may upload or
+//   delete. Ownership is read from Firestore (cross-service rules). The first
+//   deploy asks you to let Storage read Firestore — accept that prompt.
+// - Uploads must be JPEG/PNG/WebP and at most 5 MB. Files are never
+//   overwritten (each upload gets a new random name).
+//   ⚠️ In Storage rules, uploading file CONTENT is always a `create` — even
+//   when a file already exists at that path. `update` only covers metadata
+//   changes. So "no overwrites" is enforced with `resource == null` on create
+//   (resource = the existing file, null if there is none), and `update` is
+//   denied so metadata (e.g. contentType) can't be changed afterwards either.
+// - Reading: owner always; anyone once the invitation is published.
+//   NOTE: Firebase download URLs contain an access token and work for anyone
+//   who has the URL. The app only hands those URLs out through Firestore
+//   documents that are themselves protected (story entries are private until
+//   published). See docs/STORY_AND_MEDIA.md.
+// - The per-wedding total quota (100 MB) can NOT be enforced here: rules can't
+//   add up file sizes. It is enforced in the app; see the docs for the
+//   server-side design.
+// ⚠️ Keep the 5 MB / content-type limits in sync with src/lib/mediaConfig.js.
+// ─────────────────────────────────────────────────────────────────────────────
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function invitation(weddingId) {
+      return firestore.get(/databases/(default)/documents/invitations/$(weddingId));
+    }
+
+    function isOwner(weddingId) {
+      return request.auth != null
+        && invitation(weddingId).data.userId == request.auth.uid;
+    }
+
+    function isPublished(weddingId) {
+      return invitation(weddingId).data.get('isPublished', false) == true;
+    }
+
+    function isValidPhoto(fileName) {
+      return request.resource.size > 0
+        && request.resource.size <= 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/(jpeg|png|webp)')
+        && fileName.matches('[A-Za-z0-9_-]+[.](webp|jpg|png)');
+    }
+
+    match /weddings/{weddingId}/hero/{fileName} {
+      allow read:   if isOwner(weddingId) || isPublished(weddingId);
+      allow create: if resource == null && isOwner(weddingId) && isValidPhoto(fileName);
+      allow update: if false;
+      allow delete: if isOwner(weddingId);
+    }
+
+    match /weddings/{weddingId}/story/{entryId}/{fileName} {
+      allow read:   if isOwner(weddingId) || isPublished(weddingId);
+      allow create: if resource == null && isOwner(weddingId) && isValidPhoto(fileName);
+      allow update: if false;
+      allow delete: if isOwner(weddingId);
+    }
+
+    // Wedding Party member photos — same rules as Our Story photos.
+    match /weddings/{weddingId}/party/{memberId}/{fileName} {
+      allow read:   if isOwner(weddingId) || isPublished(weddingId);
+      allow create: if resource == null && isOwner(weddingId) && isValidPhoto(fileName);
+      allow update: if false;
+      allow delete: if isOwner(weddingId);
+    }
+
+    // Everything else in the bucket is closed.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

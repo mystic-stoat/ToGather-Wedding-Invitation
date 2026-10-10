@@ -39,7 +39,7 @@ const Login = () => {
   const [email, setEmail]               = useState("");
   const [password, setPassword]         = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  
+
   // ── Client-side validation ────────────────────────────────────────────────
   // Runs before hitting Firebase — catches obvious mistakes instantly
   // without a network request
@@ -50,9 +50,9 @@ const Login = () => {
     if (emailError) {
       errs.email = emailError;
     }
-    
+
     if (!password) errs.password = "Password is required";
-    
+
     // loads errs into error.* which is then indexed in the html (JSX) below
     setErrors(errs);
     return Object.keys(errs).length == 0;
@@ -110,7 +110,7 @@ const Login = () => {
             </div>
 
             <form className="space-y-5" onSubmit={handleSubmit} noValidate>
-              
+
               {/* General error — now rendered with the same component, above the email field */}
               <FormError message={errors.general} />
 
