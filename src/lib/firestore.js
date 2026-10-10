@@ -458,41 +458,48 @@ export const deleteRegistry = async (weddingId, registryId) => {
   });
 };
 
-export const sectionToId = (section) =>
-  section.toLowerCase().trim().replace(/\s+/g, "-");
+// ══════════════════════════════════════════════════════════════════════════════
+// WEDDING ASSISTANT — Single Chat Conversation
+// ══════════════════════════════════════════════════════════════════════════════
+// There is exactly ONE conversation per user, always stored at:
+//   betrothed/{userId}/conversations/main
+//   betrothed/{userId}/conversations/main/messages/{autoId}
+//
+// There is no "section" concept: the chat is one continuous history and the
+// only context Claude gets is what is actually in the chat.
 
-// ccreate converstaion document
-const conversationDoc = (userId, conversationId) => 
+const MAIN_CONVERSATION_ID = "main";
+
+// reference to the conversation document
+const conversationDoc = (userId, conversationId) =>
   doc(db, "betrothed", userId, "conversations", conversationId);
 
-// inside the conversation sub colection, create messages
+// inside the conversation doc, the messages subcollection
 const messagesCol = (userId, conversationId) =>
   collection(db, "betrothed", userId, "conversations", conversationId, "messages");
 
-// init the Conversation subcollection
-export const getOrCreateConversation = async (userId, section) => {
-  const conversationId = sectionToId(section);
-  const ref = conversationDoc(userId, conversationId);
+// find or create the user's single conversation, returns its ID
+export const getOrCreateConversation = async (userId) => {
+  const ref = conversationDoc(userId, MAIN_CONVERSATION_ID);
   const snap = await getDoc(ref);
 
   if (!snap.exists()) {
     await setDoc(ref, {
-      section,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
       messageCount: 0,
     });
   }
-  return conversationId;
+  return MAIN_CONVERSATION_ID;
 };
 
-// create message on db, role, etc: increments our index as we go
-export const saveMessage = async (userId, conversationId, role, content, section) => {
+// save one message and bump the conversation's counters in a single atomic batch
+export const saveMessage = async (userId, conversationId, role, content) => {
   const batch = writeBatch(db);
 
   // doc(collection) with no ID generates a new auto-ID reference
   const msgRef = doc(messagesCol(userId, conversationId));
-  batch.set(msgRef, { role, content, section: section ?? null, timestamp: serverTimestamp() });
+  batch.set(msgRef, { role, content, timestamp: serverTimestamp() });
 
   batch.update(conversationDoc(userId, conversationId), {
     updatedAt: serverTimestamp(),
@@ -502,14 +509,14 @@ export const saveMessage = async (userId, conversationId, role, content, section
   await batch.commit();
 };
 
-// go get conv data grab snapshot and return a mapping 
+// load every message in order, oldest first
 export const loadConversationHistory = async (userId, conversationId) => {
   const q = query(messagesCol(userId, conversationId), orderBy("timestamp", "asc"));
   const snap = await getDocs(q);
   return snap.docs.map((d) => ({ role: d.data().role, content: d.data().content }));
 };
 
-// kinda trash button but its here 
+// wipe all messages and reset the counter (the conversation doc itself stays)
 export const clearConversationMessages = async (userId, conversationId) => {
   const snap = await getDocs(messagesCol(userId, conversationId));
   const batch = writeBatch(db);
