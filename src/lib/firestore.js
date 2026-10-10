@@ -9,6 +9,7 @@
 //
 // DATABASE STRUCTURE (matches your ER diagram):
 //   betrothed/{userId}      — host user profile (created on signup)
+//   betrothed/{userId}/messages/{messageId} — one chat message per doc
 //   invitations/{weddingId}  — wedding details + invitation style
 //   invitee/{inviteeId}      — one doc per guest
 //   rsvp/{rsvpId}            — one doc per RSVP submission
@@ -39,7 +40,9 @@ orderBy,
 serverTimestamp, // Firebase server time (more reliable than client time)
 runTransaction, // atomic read-modify-write — used for the embedded registries array
 writeBatch,
-increment
+// batched writes — used for retry and for clearing the chat
+onSnapshot
+// live listener — the chat uses it to stream new messages
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
@@ -459,71 +462,100 @@ export const deleteRegistry = async (weddingId, registryId) => {
 };
 
 // ══════════════════════════════════════════════════════════════════════════════
-// WEDDING ASSISTANT — Single Chat Conversation
+// WEDDING ASSISTANT — Chat Messages
 // ══════════════════════════════════════════════════════════════════════════════
-// There is exactly ONE conversation per user, always stored at:
-//   betrothed/{userId}/conversations/main
-//   betrothed/{userId}/conversations/main/messages/{autoId}
+// One continuous chat per couple, one document per message, stored at:
 //
-// There is no "section" concept: the chat is one continuous history and the
-// only context Claude gets is what is actually in the chat.
+//   betrothed/{userId}/messages/{messageId}
+//     role:      "user" | "assistant"
+//     content:   [{ type: "text", text: "..." }]  (same block shape the Claude API uses)
+//     createdAt: server timestamp
+//     status:    user messages:      "pending" -> "replied" | "error" | "superseded"
+//                assistant messages: "complete"
+//
+// WHO WRITES WHAT:
+//   - This file (the client) ONLY creates user messages and listens for new docs.
+//   - The Cloud Function (functions/index.js) is the ONLY thing that talks to
+//     Claude, and the only thing that writes assistant messages / updates status.
+//   - The client never calls the Claude API and never holds an API key.
 
-const MAIN_CONVERSATION_ID = "main";
+// the messages subcollection hangs directly off the user's profile document
+const messagesCol = (userId) =>
+  collection(db, "betrothed", userId, "messages");
 
-// reference to the conversation document
-const conversationDoc = (userId, conversationId) =>
-  doc(db, "betrothed", userId, "conversations", conversationId);
+/**
+ * messageText
+ * Content is stored as an array of blocks. The chat UI only needs plain text,
+ * so this joins the text blocks into one string.
+ */
+export const messageText = (message) =>
+  (message.content || [])
+    .filter((block) => block.type === "text")
+    .map((block) => block.text)
+    .join("");
 
-// inside the conversation doc, the messages subcollection
-const messagesCol = (userId, conversationId) =>
-  collection(db, "betrothed", userId, "conversations", conversationId, "messages");
+/**
+ * sendUserMessage
+ * Writes one user message with status "pending". That write is the ONLY thing
+ * the client does: it triggers the Cloud Function, which writes the reply.
+ * Returns the new message ID.
+ */
+export const sendUserMessage = async (userId, text) => {
+  const ref = await addDoc(messagesCol(userId), {
+    role: "user",
+    content: [{ type: "text", text }],
+    createdAt: serverTimestamp(),
+    status: "pending",
+  });
+  return ref.id;
+};
 
-// find or create the user's single conversation, returns its ID
-export const getOrCreateConversation = async (userId) => {
-  const ref = conversationDoc(userId, MAIN_CONVERSATION_ID);
-  const snap = await getDoc(ref);
+/**
+ * subscribeToMessages
+ * Live listener on the whole chat, oldest first. Calls onMessages(array) once
+ * with the saved history and again every time a document is added or changed
+ * (including the assistant's reply and status changes).
+ * Returns the unsubscribe function: call it in the useEffect cleanup.
+ */
+export const subscribeToMessages = (userId, onMessages, onError) => {
+  const q = query(messagesCol(userId), orderBy("createdAt", "asc"));
+  return onSnapshot(
+    q,
+    (snap) => onMessages(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
+    onError
+  );
+};
 
-  if (!snap.exists()) {
-    await setDoc(ref, {
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-      messageCount: 0,
-    });
+/**
+ * retryUserMessage
+ * A trigger only fires when a document is CREATED, so "retry" means: delete the
+ * failed user message and write the same text again as a brand-new message.
+ * Both happen in one batch so the chat never shows a duplicate.
+ */
+export const retryUserMessage = async (userId, failedMessage) => {
+  const batch = writeBatch(db);
+  batch.delete(doc(messagesCol(userId), failedMessage.id));
+  batch.set(doc(messagesCol(userId)), {
+    role: "user",
+    content: failedMessage.content,
+    createdAt: serverTimestamp(),
+    status: "pending",
+  });
+  await batch.commit();
+};
+
+/**
+ * clearMessages
+ * Deletes every message in the chat. Firestore caps a batch at 500 writes, so
+ * deletes are split into chunks and a long chat can still be cleared.
+ */
+const BATCH_LIMIT = 400;
+
+export const clearMessages = async (userId) => {
+  const snap = await getDocs(messagesCol(userId));
+  for (let i = 0; i < snap.docs.length; i += BATCH_LIMIT) {
+    const batch = writeBatch(db);
+    snap.docs.slice(i, i + BATCH_LIMIT).forEach((d) => batch.delete(d.ref));
+    await batch.commit();
   }
-  return MAIN_CONVERSATION_ID;
-};
-
-// save one message and bump the conversation's counters in a single atomic batch
-export const saveMessage = async (userId, conversationId, role, content) => {
-  const batch = writeBatch(db);
-
-  // doc(collection) with no ID generates a new auto-ID reference
-  const msgRef = doc(messagesCol(userId, conversationId));
-  batch.set(msgRef, { role, content, timestamp: serverTimestamp() });
-
-  batch.update(conversationDoc(userId, conversationId), {
-    updatedAt: serverTimestamp(),
-    messageCount: increment(1),
-  });
-
-  await batch.commit();
-};
-
-// load every message in order, oldest first
-export const loadConversationHistory = async (userId, conversationId) => {
-  const q = query(messagesCol(userId, conversationId), orderBy("timestamp", "asc"));
-  const snap = await getDocs(q);
-  return snap.docs.map((d) => ({ role: d.data().role, content: d.data().content }));
-};
-
-// wipe all messages and reset the counter (the conversation doc itself stays)
-export const clearConversationMessages = async (userId, conversationId) => {
-  const snap = await getDocs(messagesCol(userId, conversationId));
-  const batch = writeBatch(db);
-  snap.docs.forEach((d) => batch.delete(d.ref));
-  batch.update(conversationDoc(userId, conversationId), {
-    updatedAt: serverTimestamp(),
-    messageCount: 0,
-  });
-  await batch.commit();
 };

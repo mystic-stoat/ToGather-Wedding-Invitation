@@ -1,34 +1,27 @@
 // src/pages/WeddingAssistant.jsx
 // AI Wedding Assistant chat interface.
 //
-// One continuous conversation between the host and Claude. There are no
-// sections or preloaded flows: the only context Claude receives is the chat
-// history itself. Voice integration will be connected separately.
+// One continuous conversation between the host and Claude. This page only
+// WRITES the user's message and LISTENS for new messages. It never calls the
+// Claude API: a Cloud Function (functions/index.js) fires when a user message
+// is created, talks to Claude, and writes the reply back as a new message
+// document, which the live listener below picks up. Voice integration will be
+// connected separately.
 
 import { useState, useEffect, useRef } from "react";
 import { Send, Mic } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   getInvitationByUser,
-  getOrCreateConversation,
-  saveMessage,
-  loadConversationHistory,
-  clearConversationMessages,
+  subscribeToMessages,
+  sendUserMessage,
+  retryUserMessage,
+  clearMessages,
+  messageText,
 } from "@/lib/firestore";
 import Sidebar from "@/components/Sidebar";
 import { useNavigate } from "react-router-dom";
 import ChatBubble from "@/components/ChatBubble";
-
-// ── Claude config ────────────────────────────────────────────────────────────
-const CLAUDE_MODEL = "claude-haiku-5-5";
-const MAX_HISTORY = 20; // last n messages sent to Claude
-
-const CLAUDE_API_KEY = import.meta.env.VITE_CLAUDE_CONSOLE_API;
-
-// The system prompt is how we give Claude its "job".
-const SYSTEM_PROMPT = `You are a warm, concise wedding planning assistant helping a host enter details for their wedding invitation website.
-Ask one friendly question at a time to collect what is needed (for example the wedding date, the location, and what time guests should arrive).
-Keep replies to 1-3 sentences.`;
 
 // Optional starter prompts. Leave empty for now: nothing renders when empty.
 // If you add strings here later, each one shows up as a button that sends
@@ -40,10 +33,9 @@ const WeddingAssistant = () => {
 
   const navigate = useNavigate();
 
-  // chat state
-  const [conversationId, setConversationId] = useState(null);
-  const [conversation, setConversation] = useState([]);
-  const [apiLoading, setApiLoading] = useState(false);
+  // chat state: `messages` is the live copy of betrothed/{uid}/messages
+  const [messages, setMessages] = useState([]);
+  const [chatLoaded, setChatLoaded] = useState(false);
   const [error, setError] = useState(null);
   const [message, setMessage] = useState("");
   const bottomRef = useRef(null);
@@ -52,55 +44,40 @@ const WeddingAssistant = () => {
   const [loading, setLoading] = useState(true);
   const [invitation, setInvitation] = useState(null);
 
-  // ── Claude API ─────────────────────────────────────────────────────────────
-  const claudeApiGet = async (history) => {
-    // current history sliced by N
-    let recent = history.slice(-MAX_HISTORY);
-
-    // the API requires the first message to be from the user
-    while (recent.length && recent[0].role !== "user") recent = recent.slice(1);
-
-    // send our info to claude, get response
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-api-key": CLAUDE_API_KEY,
-        "anthropic-version": "2023-06-01",
-        // required for calls made directly from a browser
-        "anthropic-dangerous-direct-browser-access": "true",
-      },
-      body: JSON.stringify({
-        model: CLAUDE_MODEL,
-        max_tokens: 512,
-        system: SYSTEM_PROMPT,
-        messages: recent,
-      }),
-    });
-    if (!response.ok) {
-      const body = await response.json().catch(() => ({}));
-      throw new Error(body?.error?.message || `Request failed (${response.status})`);
-    }
-
-    // return our data
-    const data = await response.json();
-    return data.content
-      .filter((block) => block.type === "text")
-      .map((block) => block.text)
-      .join("");
-  };
+  // ── Derived chat state ─────────────────────────────────────────────────────
+  // There is no separate "loading" flag for the API call: if the newest user
+  // message is still "pending", the Cloud Function hasn't replied yet.
+  const lastUserMessage = [...messages].reverse().find((m) => m.role === "user");
+  const replyPending = lastUserMessage?.status === "pending";
+  // the function sets status "error" on the user message when it can't reply
+  const failedMessage = lastUserMessage?.status === "error" ? lastUserMessage : null;
 
   // ── Load on mount ──────────────────────────────────────────────────────────
   useEffect(() => {
     if (!user) return;
     loadData();
-    initChat();
+
+    // live listener: fires with the saved history, then again for every new doc
+    const unsubscribe = subscribeToMessages(
+      user.uid,
+      (docs) => {
+        setMessages(docs);
+        setChatLoaded(true);
+      },
+      (err) => {
+        console.error("messages listener error", err);
+        setError("Couldn't load your chat. Please refresh and try again.");
+      }
+    );
+
+    // stop listening when the page unmounts or the user changes
+    return unsubscribe;
   }, [user]);
 
   // keep the newest message in view
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [conversation, apiLoading]);
+  }, [messages, replyPending]);
 
   const loadData = async () => {
     setLoading(true);
@@ -114,64 +91,48 @@ const WeddingAssistant = () => {
     }
   };
 
-  // find/create the single conversation and load its saved history
-  const initChat = async () => {
-    try {
-      const convId = await getOrCreateConversation(user.uid);
-      setConversationId(convId);
-      const history = await loadConversationHistory(user.uid, convId);
-      setConversation(history);
-    } catch (err) {
-      console.error("init chat error", err);
-      setError("Couldn't load your chat. Please refresh and try again.");
-    }
-  };
-
   // ── Sending ────────────────────────────────────────────────────────────────
-  // adds the user message, gets Claude's reply, saves both
+  // The write IS the request: no API call here, the Cloud Function takes over.
   const sendMessage = async (text) => {
-    // build from the current array: state only updates on render, so don't read it back
-    const next = [...conversation, { role: "user", content: text }];
-    setConversation(next);
     setError(null);
-    setApiLoading(true);
-
-    // save to Firestore without letting a save failure break the chat
-    const persist = (role, content) =>
-      saveMessage(user.uid, conversationId, role, content).catch((e) =>
-        console.error("save message error:", e)
-      );
-
-    await persist("user", text);
-
     try {
-      const reply = await claudeApiGet(next);
-      setConversation((current) => [...current, { role: "assistant", content: reply }]);
-      persist("assistant", reply);
+      await sendUserMessage(user.uid, text);
+      return true;
     } catch (err) {
-      console.error("Claude API error", err);
-      setError(err.message || "Something went wrong, Please try again.");
-    } finally {
-      setApiLoading(false);
+      console.error("send message error", err);
+      setError("Couldn't send your message. Please try again.");
+      return false;
     }
   };
 
-  const handleSend = () => {
+  const handleSend = async () => {
     const trimmedMessage = message.trim();
 
     // Do nothing if the box is empty, a reply is pending, or the chat isn't loaded yet.
-    if (!trimmedMessage || apiLoading || !conversationId) return;
+    if (!trimmedMessage || replyPending || !chatLoaded) return;
 
-    sendMessage(trimmedMessage);
     setMessage("");
+    const sent = await sendMessage(trimmedMessage);
+    // put the text back so a failed send isn't lost
+    if (!sent) setMessage(trimmedMessage);
   };
 
-  // wipes the saved messages but keeps the same conversation, so the input stays usable
-  const handleClearChat = async () => {
-    if (!conversationId) return;
+  // re-sends a message the function failed to answer (see retryUserMessage)
+  const handleRetry = async () => {
+    if (!failedMessage) return;
+    setError(null);
     try {
-      await clearConversationMessages(user.uid, conversationId);
-      setConversation([]);
+      await retryUserMessage(user.uid, failedMessage);
+    } catch (err) {
+      console.error("retry error", err);
+      setError("Couldn't retry. Please try again.");
+    }
+  };
+
+  // wipes every saved message; the listener then empties the screen on its own
+  const handleClearChat = async () => {
+    try {
+      await clearMessages(user.uid);
       setError(null);
       setMessage("");
     } catch (err) {
@@ -219,7 +180,8 @@ const WeddingAssistant = () => {
               <button
                 type="button"
                 onClick={handleClearChat}
-                className="ml-auto p-2 rounded-lg border-2 hover:bg-muted"
+                disabled={replyPending || !chatLoaded}
+                className="ml-auto p-2 rounded-lg border-2 hover:bg-muted disabled:opacity-50"
               >
                 clear chat
               </button>
@@ -235,13 +197,13 @@ const WeddingAssistant = () => {
               />
 
               {/* Optional starter prompts: renders nothing while STARTER_PROMPTS is empty */}
-              {STARTER_PROMPTS.length > 0 && conversation.length === 0 && (
+              {STARTER_PROMPTS.length > 0 && messages.length === 0 && (
                 <div className="flex flex-wrap gap-3">
                   {STARTER_PROMPTS.map((prompt) => (
                     <button
                       key={prompt}
                       onClick={() => sendMessage(prompt)}
-                      disabled={apiLoading || !conversationId}
+                      disabled={replyPending || !chatLoaded}
                       className="border rounded-full px-4 py-2 hover:bg-muted transition disabled:opacity-50"
                     >
                       {prompt}
@@ -250,21 +212,37 @@ const WeddingAssistant = () => {
                 </div>
               )}
 
-              {/* Full conversation history (user + Claude) */}
-              {conversation.map((msg, index) => (
+              {/* Full conversation history (user + Claude), streamed from Firestore */}
+              {messages.map((msg) => (
                 <ChatBubble
-                  key={index}
-                  message={msg.content}
+                  key={msg.id}
+                  message={messageText(msg)}
                   isUser={msg.role === "user"}
                 />
               ))}
 
-              {/* Loading indicator while waiting on the API */}
-              {apiLoading && (
+              {/* Waiting on the Cloud Function: newest user message is still "pending" */}
+              {replyPending && (
                 <ChatBubble message="Thinking…" isUser={false} />
               )}
 
-              {/* Error message */}
+              {/* The function couldn't reply: offer a retry */}
+              {failedMessage && (
+                <div className="flex items-center gap-3">
+                  <p className="text-sm text-destructive">
+                    ⚠️ {failedMessage.errorMessage || "The assistant couldn't reply."}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleRetry}
+                    className="text-sm border rounded-full px-3 py-1 hover:bg-muted"
+                  >
+                    Retry
+                  </button>
+                </div>
+              )}
+
+              {/* Client-side errors (send, load, clear) */}
               {error && (
                 <p className="text-sm text-destructive">⚠️ {error}</p>
               )}
@@ -282,7 +260,7 @@ const WeddingAssistant = () => {
                 onKeyDown={(event) => {
                   if (event.key === "Enter") handleSend();
                 }}
-                disabled={apiLoading || !conversationId}
+                disabled={replyPending || !chatLoaded}
                 placeholder="Message your wedding assistant..."
                 className="flex-1 bg-transparent outline-none py-2"
               />
@@ -299,7 +277,7 @@ const WeddingAssistant = () => {
               <button
                 type="button"
                 onClick={handleSend}
-                disabled={apiLoading || !conversationId}
+                disabled={replyPending || !chatLoaded}
                 className="p-2 rounded-full hover:bg-muted disabled:opacity-50"
                 aria-label="Send message"
               >
