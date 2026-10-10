@@ -7,13 +7,19 @@ import {
   createUserWithEmailAndPassword,
   signOut,
 } from 'firebase/auth';
-import { firebaseAuth } from '@/lib/firebase';
+import { connectFirestoreEmulator } from 'firebase/firestore';
+import { firebaseAuth, db } from '@/lib/firebase';
 import { AuthProvider } from '@/contexts/AuthContext'; // real provider, unmocked
 import Login from '../pages/Login.jsx'
+import { requireIsolatedEmulators } from './isolatedEmulators';
 
-const EMULATOR_HOST = '127.0.0.1';
-const EMULATOR_PORT = 9099;
-const PROJECT_ID = 'togather-64b0b'; // match .firebaserc
+// Isolated test emulators only (npm run test:integration:auth). resetEmulatorState()
+// deletes EVERY Auth user, so this throws before any test or hook runs unless the
+// throwaway emulators from firebase.test.json are in use.
+const EMULATORS = requireIsolatedEmulators(['auth', 'firestore']);
+const EMULATOR_HOST = EMULATORS.auth.host;
+const EMULATOR_PORT = EMULATORS.auth.port;
+const PROJECT_ID = EMULATORS.projectId; // the Auth emulator files SDK users under its own project
 
 const KNOWN_EMAIL = 'existing-user@example.com';
 const KNOWN_PASSWORD = 'correct-horse-battery-staple';
@@ -40,6 +46,9 @@ beforeAll(() => {
   connectAuthEmulator(firebaseAuth, `http://${EMULATOR_HOST}:${EMULATOR_PORT}`, {
     disableWarnings: true,
   });
+  // AuthContext reads the signed-in user's profile from Firestore; keep that
+  // read on the isolated emulator too (never the dev emulator or production).
+  connectFirestoreEmulator(db, EMULATORS.firestore.host, EMULATORS.firestore.port);
 });
 
 beforeEach(async () => {

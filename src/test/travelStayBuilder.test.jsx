@@ -16,6 +16,16 @@ vi.mock("@/contexts/AuthContext", () => ({ useAuth: () => auth }));
 vi.mock("@/components/GoogleMapEmbed", () => ({
   default: () => null, buildMapQuery: () => "", mapLinkUrl: () => "",
 }));
+// Hero Photo / Our Story talk to Firestore + Cloud Storage — keep them offline here.
+vi.mock("@/lib/storyStore", () => ({
+  loadAllStoryEntries: vi.fn(async () => []),
+  commitMediaChanges: vi.fn(async () => {}),
+  updateMediaBookkeeping: vi.fn(async () => {}),
+}));
+vi.mock("@/lib/mediaStorage", () => ({
+  uploadPhoto: vi.fn(), deletePhoto: vi.fn(async () => true),
+  buildHeroPath: vi.fn(), buildStoryPath: vi.fn(),
+}));
 
 import CreateInvitation from "@/pages/CreateInvitation";
 
@@ -47,16 +57,19 @@ describe("Invitation Builder — Travel & Stay", () => {
     expect(await screen.findByText("Show Travel & Stay on invitation")).toBeTruthy();
     expect(screen.getByText("No places yet")).toBeTruthy();
 
-    const navLabels = screen.getAllByRole("button")
+    const navLabels = within(screen.getByRole("navigation", { name: "Invitation sections" }))
+      .getAllByRole("button")
       .map(b => b.textContent.trim())
-      .filter(t => ["Venue", "Travel & Stay", "Story"].includes(t));
-    expect(navLabels).toEqual(["Venue", "Travel & Stay", "Story"]);
+      .filter(t => ["Our Story", "Venue", "Travel & Stay", "RSVP"].includes(t));
+    // Fixed tab order: … Our Story, Wedding Party, Venue, Travel & Stay, RSVP …
+    expect(navLabels).toEqual(["Our Story", "Venue", "Travel & Stay", "RSVP"]);
   });
 
   it("falls back to the default section for an unknown ?section value", async () => {
     fs.getInvitationByUser.mockResolvedValue({ weddingId: "w1" });
     renderBuilder("/create-invitation?section=nope");
-    await screen.findAllByText("Layout");
+    // Greetings is the default section now that the Layout tab was removed
+    expect(await screen.findByText("Invitation Title")).toBeTruthy();
     expect(screen.queryByText("Show Travel & Stay on invitation")).toBeNull();
   });
 

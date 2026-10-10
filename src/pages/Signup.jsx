@@ -142,7 +142,7 @@ const Signup = () => {
                 <Label htmlFor="name" className="text-sm font-semibold text-foreground">Full name</Label>
                 <div className="relative">
                   <Input id="name" placeholder="Jane Smith" value={name}
-                    onChange={(e) => { 
+                    onChange={(e) => {
                       const formatted = e.target.value
                       .split(" ")
                       .map(word => word
@@ -153,7 +153,7 @@ const Signup = () => {
                       .join(" ");
                       setName(formatted);
                       clearError("name");}
-                    } 
+                    }
                     className={inputCls("name")} />
                 </div>
                 <FormError message={errors.name} />

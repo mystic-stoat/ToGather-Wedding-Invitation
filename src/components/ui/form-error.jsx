@@ -9,7 +9,7 @@ const FormError = ({ message, field, clearError, className = "" }) => {
           clearError(field);
         }
       };
-      
+
       // Add event listener to document for auto-clearing
       document.addEventListener('input', handler);
       return () => document.removeEventListener('input', handler);

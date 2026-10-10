@@ -2,14 +2,24 @@
 //Testing new tests
 
 import fs from 'fs';
+import { requireIsolatedEmulators } from './isolatedEmulators';
 
 import {
   doc,
   setDoc,
   updateDoc,
   getDoc,
+  getDocs,
   deleteDoc,
+  collection,
+  serverTimestamp,
 } from 'firebase/firestore';
+
+import {
+  normalizeThemeSettings,
+  applyColorPreset,
+  applyFontPair,
+} from '@/lib/invitationTheme';
 
 import {
   initializeTestEnvironment,
@@ -26,7 +36,10 @@ import {
 } from 'vitest';
 
 
-const PROJECT_ID = 'togather-64b0b';
+// Isolated test emulators only (npm run test:integration:firestore) — this
+// throws before any test or clearFirestore() runs if they aren't in use.
+const EMULATORS = requireIsolatedEmulators(['firestore']);
+const PROJECT_ID = EMULATORS.projectId;
 
 
 let testEnv;
@@ -38,8 +51,8 @@ beforeAll(async () => {
       projectId: PROJECT_ID,
       firestore: {
         rules: fs.readFileSync('firestore.rules', 'utf8'),
-        host: '127.0.0.1',
-        port: 8080,
+        host: EMULATORS.firestore.host,
+        port: EMULATORS.firestore.port,
       },
     });
 
@@ -1357,5 +1370,277 @@ describe('default deny behavior', () => {
         doc(alice.firestore(), 'randomCollection/doc1')
       )
     );
+  });
+});
+
+/*
+ * ============================================================
+ * OUR STORY ENTRIES
+ * ============================================================
+ *
+ *   /invitations/{weddingId}/storyEntries/{entryId}
+ *   - only the owner writes
+ *   - private until the invitation is published
+ */
+
+describe('storyEntries rules', () => {
+
+  const DRAFT = 'wedding-draft';
+  const LIVE = 'wedding-live';
+
+  const photo = (weddingId, entryId, name = 'abc-123.webp') => ({
+    path: `weddings/${weddingId}/story/${entryId}/${name}`,
+    url: 'https://example.com/photo',
+    width: 800,
+    height: 1000,
+    bytes: 1234,
+    contentType: 'image/webp',
+  });
+
+  const entry = (weddingId, entryId, overrides = {}) => ({
+    id: entryId,
+    layout: 'photoLeft',
+    title: 'How we met',
+    description: 'At UNT.',
+    images: [photo(weddingId, entryId)],
+    order: 0,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+    ...overrides,
+  });
+
+  const entryPath = (weddingId, entryId) => `invitations/${weddingId}/storyEntries/${entryId}`;
+
+  beforeEach(async () => {
+    await seed(async (context) => {
+      const db = context.firestore();
+      await setDoc(doc(db, `invitations/${DRAFT}`), { userId: 'alice-uid', isPublished: false });
+      await setDoc(doc(db, `invitations/${LIVE}`), { userId: 'alice-uid', isPublished: true });
+      await setDoc(doc(db, entryPath(DRAFT, 'e1')), { ...entry(DRAFT, 'e1'), createdAt: new Date(), updatedAt: new Date() });
+      await setDoc(doc(db, entryPath(LIVE, 'e1')), { ...entry(LIVE, 'e1'), createdAt: new Date(), updatedAt: new Date() });
+    });
+  });
+
+  it('lets the owner create a valid entry', async () => {
+    const alice = testEnv.authenticatedContext('alice-uid');
+    await assertSucceeds(setDoc(doc(alice.firestore(), entryPath(DRAFT, 'e2')), entry(DRAFT, 'e2')));
+  });
+
+  it('allows text-only and photo-only entries', async () => {
+    const alice = testEnv.authenticatedContext('alice-uid');
+    await assertSucceeds(setDoc(doc(alice.firestore(), entryPath(DRAFT, 't1')),
+      entry(DRAFT, 't1', { layout: 'textOnly', images: [] })));
+    await assertSucceeds(setDoc(doc(alice.firestore(), entryPath(DRAFT, 'c1')),
+      entry(DRAFT, 'c1', { layout: 'collage', title: '', description: '',
+        images: [photo(DRAFT, 'c1', 'a.webp'), null, photo(DRAFT, 'c1', 'c.jpg')] })));
+  });
+
+  it('rejects writes from other users and signed-out visitors', async () => {
+    const bob = testEnv.authenticatedContext('bob-uid');
+    const anon = testEnv.unauthenticatedContext();
+    await assertFails(setDoc(doc(bob.firestore(), entryPath(DRAFT, 'e3')), entry(DRAFT, 'e3')));
+    await assertFails(setDoc(doc(anon.firestore(), entryPath(DRAFT, 'e3')), entry(DRAFT, 'e3')));
+    await assertFails(updateDoc(doc(bob.firestore(), entryPath(DRAFT, 'e1')), { title: 'hacked', updatedAt: serverTimestamp() }));
+    await assertFails(deleteDoc(doc(bob.firestore(), entryPath(DRAFT, 'e1'))));
+  });
+
+  it('rejects malformed entries', async () => {
+    const alice = testEnv.authenticatedContext('alice-uid');
+    const db = alice.firestore();
+    // photo stored in ANOTHER wedding's folder
+    await assertFails(setDoc(doc(db, entryPath(DRAFT, 'x1')), entry(DRAFT, 'x1', { images: [photo('wedding-bob', 'x1')] })));
+    // more photos than the layout allows
+    await assertFails(setDoc(doc(db, entryPath(DRAFT, 'x2')),
+      entry(DRAFT, 'x2', { images: [photo(DRAFT, 'x2', 'a.webp'), photo(DRAFT, 'x2', 'b.webp')] })));
+    // unknown layout / extra field / oversized text / wrong id / bad order
+    await assertFails(setDoc(doc(db, entryPath(DRAFT, 'x3')), entry(DRAFT, 'x3', { layout: 'grid' })));
+    await assertFails(setDoc(doc(db, entryPath(DRAFT, 'x4')), entry(DRAFT, 'x4', { secret: true })));
+    await assertFails(setDoc(doc(db, entryPath(DRAFT, 'x5')), entry(DRAFT, 'x5', { description: 'x'.repeat(1001) })));
+    await assertFails(setDoc(doc(db, entryPath(DRAFT, 'x6')), entry(DRAFT, 'other-id')));
+    await assertFails(setDoc(doc(db, entryPath(DRAFT, 'x7')), entry(DRAFT, 'x7', { order: -1 })));
+    // photo larger than 5 MB
+    await assertFails(setDoc(doc(db, entryPath(DRAFT, 'x8')),
+      entry(DRAFT, 'x8', { images: [{ ...photo(DRAFT, 'x8'), bytes: 6 * 1024 * 1024 }] })));
+  });
+
+  it('accepts a saved photo position/zoom and rejects invalid ones', async () => {
+    const alice = testEnv.authenticatedContext('alice-uid');
+    const db = alice.firestore();
+    const withAdjust = (id, adjust) => entry(DRAFT, id, { images: [{ ...photo(DRAFT, id), adjust }] });
+    await assertSucceeds(setDoc(doc(db, entryPath(DRAFT, 'a1')), withAdjust('a1', { x: 12.5, y: 80, zoom: 1.75 })));
+    await assertSucceeds(setDoc(doc(db, entryPath(DRAFT, 'a2')), withAdjust('a2', { x: 0, y: 100, zoom: 3 })));
+    await assertFails(setDoc(doc(db, entryPath(DRAFT, 'a3')), withAdjust('a3', { x: 120, y: 50, zoom: 1 })));
+    await assertFails(setDoc(doc(db, entryPath(DRAFT, 'a4')), withAdjust('a4', { x: 50, y: 50, zoom: 5 })));
+    await assertFails(setDoc(doc(db, entryPath(DRAFT, 'a5')), withAdjust('a5', { x: 50, y: 50, zoom: 0.5 })));
+    await assertFails(setDoc(doc(db, entryPath(DRAFT, 'a6')), withAdjust('a6', { x: 50, y: 50 })));
+    await assertFails(setDoc(doc(db, entryPath(DRAFT, 'a7')), withAdjust('a7', { x: '50', y: 50, zoom: 1 })));
+    await assertFails(setDoc(doc(db, entryPath(DRAFT, 'a8')), withAdjust('a8', { x: 50, y: 50, zoom: 1, rotate: 90 })));
+  });
+
+  it('lets the owner update and delete, but not rewrite createdAt', async () => {
+    const alice = testEnv.authenticatedContext('alice-uid');
+    const ref = doc(alice.firestore(), entryPath(DRAFT, 'e1'));
+    await assertSucceeds(updateDoc(ref, { order: 3, layout: 'textOnly', images: [], updatedAt: serverTimestamp() }));
+    await assertFails(updateDoc(ref, { createdAt: serverTimestamp(), updatedAt: serverTimestamp() }));
+    await assertSucceeds(deleteDoc(ref));
+  });
+
+  it('keeps unpublished Story content private', async () => {
+    const anon = testEnv.unauthenticatedContext();
+    const bob = testEnv.authenticatedContext('bob-uid');
+    const alice = testEnv.authenticatedContext('alice-uid');
+    await assertFails(getDoc(doc(anon.firestore(), entryPath(DRAFT, 'e1'))));
+    await assertFails(getDoc(doc(bob.firestore(), entryPath(DRAFT, 'e1'))));
+    await assertFails(getDocs(collection(anon.firestore(), `invitations/${DRAFT}/storyEntries`)));
+    await assertSucceeds(getDoc(doc(alice.firestore(), entryPath(DRAFT, 'e1'))));
+  });
+
+  it('lets guests read Story content once the invitation is published', async () => {
+    const anon = testEnv.unauthenticatedContext();
+    await assertSucceeds(getDoc(doc(anon.firestore(), entryPath(LIVE, 'e1'))));
+    await assertSucceeds(getDocs(collection(anon.firestore(), `invitations/${LIVE}/storyEntries`)));
+  });
+});
+
+
+/*
+ * ============================================================
+ * INVITATION COLOR THEME — save / load round trip
+ * ============================================================
+ * The Color Theme fields are plain fields on invitations/{weddingId}; the
+ * existing owner-only update rule and public read rule cover them.
+ */
+describe('invitation color theme persistence', () => {
+
+  beforeEach(async () => {
+    await seed(async (context) => {
+      await setDoc(doc(context.firestore(), 'invitations/wedding-alice'), invitationAlice);
+    });
+  });
+
+  const savedTheme = () => normalizeThemeSettings({
+    ...applyColorPreset('Navy'),
+    ...applyFontPair('Timeless'),
+    colorButton: '#7a1f3d',
+    sectionBackgrounds: { story: 'main', rsvp: '#ffffff' },
+  });
+
+  it('lets the owner save the theme and a guest read back the same settings', async () => {
+    const alice = testEnv.authenticatedContext('alice-uid');
+    const theme = savedTheme();
+    await assertSucceeds(updateDoc(doc(alice.firestore(), 'invitations/wedding-alice'), theme));
+
+    const anon = testEnv.unauthenticatedContext();
+    const snap = await assertSucceeds(getDoc(doc(anon.firestore(), 'invitations/wedding-alice')));
+    expect(normalizeThemeSettings(snap.data())).toEqual(theme);
+    // Unrelated fields are untouched
+    expect(snap.data().location).toBe('Dallas');
+  });
+
+  it('replaces section overrides, so a removed override stays removed', async () => {
+    const alice = testEnv.authenticatedContext('alice-uid');
+    const ref = doc(alice.firestore(), 'invitations/wedding-alice');
+    await updateDoc(ref, savedTheme());
+    await updateDoc(ref, { sectionBackgrounds: { rsvp: '#ffffff' } });
+    const snap = await getDoc(ref);
+    expect(snap.data().sectionBackgrounds).toEqual({ rsvp: '#ffffff' });
+  });
+
+  it('gives an invitation saved before the Color Theme tab its defaults', async () => {
+    const anon = testEnv.unauthenticatedContext();
+    const snap = await getDoc(doc(anon.firestore(), 'invitations/wedding-alice'));
+    expect(normalizeThemeSettings(snap.data())).toMatchObject({
+      themePreset: 'Garden', colorBackground: '#fafaf5', font1: 'Playfair Display', sectionBackgrounds: {},
+    });
+  });
+
+  it("rejects another user changing the theme", async () => {
+    const bob = testEnv.authenticatedContext('bob-uid');
+    await assertFails(updateDoc(doc(bob.firestore(), 'invitations/wedding-alice'), { colorBackground: '#000000' }));
+  });
+});
+
+
+/*
+ * ============================================================
+ * WEDDING PARTY
+ * ============================================================
+ *   invitations/{weddingId}.partyMembers              — public member cards
+ *     (plain field on the invitation doc; existing owner-only update rule)
+ *   invitations/{weddingId}/private/weddingPartyContacts — owner-only
+ *     phone numbers / emails, never readable by guests
+ */
+describe('wedding party rules', () => {
+
+  const DRAFT = 'wedding-draft';
+  const LIVE = 'wedding-live';
+  const contactsPath = (weddingId) => `invitations/${weddingId}/private/weddingPartyContacts`;
+  const contactsDoc = (overrides = {}) => ({
+    contacts: { m1: { phone: '(214) 555-0123', email: 'jordan@example.com' } },
+    updatedAt: serverTimestamp(),
+    ...overrides,
+  });
+  const member = {
+    id: 'm1', name: 'Jordan Lee', role: 'bestMan', customRole: '', side: 'groom',
+    description: '', photo: null, isPointOfContact: true,
+    showContact: false, publicPhone: '', publicEmail: '',
+  };
+
+  beforeEach(async () => {
+    await seed(async (context) => {
+      const db = context.firestore();
+      await setDoc(doc(db, `invitations/${DRAFT}`), { userId: 'alice-uid', isPublished: false });
+      await setDoc(doc(db, `invitations/${LIVE}`), { userId: 'alice-uid', isPublished: true });
+      await setDoc(doc(db, contactsPath(LIVE)), { ...contactsDoc(), updatedAt: new Date() });
+    });
+  });
+
+  it('lets the owner save members and section settings on the invitation', async () => {
+    const alice = testEnv.authenticatedContext('alice-uid');
+    const ref = doc(alice.firestore(), `invitations/${DRAFT}`);
+    await assertSucceeds(updateDoc(ref, {
+      partyMembers: [member], partyShowOnInvitation: true, partyGroupBySide: false,
+    }));
+    const snap = await getDoc(ref);
+    expect(snap.data().partyMembers).toEqual([member]);
+  });
+
+  it('rejects another user changing the wedding party', async () => {
+    const bob = testEnv.authenticatedContext('bob-uid');
+    await assertFails(updateDoc(doc(bob.firestore(), `invitations/${DRAFT}`), { partyMembers: [] }));
+  });
+
+  it('lets the owner read and write private contact details', async () => {
+    const alice = testEnv.authenticatedContext('alice-uid');
+    await assertSucceeds(setDoc(doc(alice.firestore(), contactsPath(DRAFT)), contactsDoc()));
+    await assertSucceeds(getDoc(doc(alice.firestore(), contactsPath(DRAFT))));
+    await assertSucceeds(setDoc(doc(alice.firestore(), contactsPath(DRAFT)), contactsDoc({ contacts: {} })));
+  });
+
+  it('never lets guests or other users read contact details — even once published', async () => {
+    const anon = testEnv.unauthenticatedContext();
+    const bob = testEnv.authenticatedContext('bob-uid');
+    await assertFails(getDoc(doc(anon.firestore(), contactsPath(LIVE))));
+    await assertFails(getDoc(doc(bob.firestore(), contactsPath(LIVE))));
+    await assertFails(getDocs(collection(anon.firestore(), `invitations/${LIVE}/private`)));
+  });
+
+  it('rejects contact writes from other users and signed-out visitors', async () => {
+    const bob = testEnv.authenticatedContext('bob-uid');
+    const anon = testEnv.unauthenticatedContext();
+    await assertFails(setDoc(doc(bob.firestore(), contactsPath(DRAFT)), contactsDoc()));
+    await assertFails(setDoc(doc(anon.firestore(), contactsPath(DRAFT)), contactsDoc()));
+    await assertFails(deleteDoc(doc(bob.firestore(), contactsPath(LIVE))));
+  });
+
+  it('rejects malformed contact documents and unknown private doc ids', async () => {
+    const alice = testEnv.authenticatedContext('alice-uid');
+    const db = alice.firestore();
+    await assertFails(setDoc(doc(db, contactsPath(DRAFT)), contactsDoc({ extra: true })));
+    await assertFails(setDoc(doc(db, contactsPath(DRAFT)), contactsDoc({ contacts: 'not-a-map' })));
+    await assertFails(setDoc(doc(db, contactsPath(DRAFT)), { contacts: {}, updatedAt: new Date(0) }));
+    const tooMany = Object.fromEntries(Array.from({ length: 41 }, (_, i) => [`m${i}`, { phone: '', email: 'a@b.co' }]));
+    await assertFails(setDoc(doc(db, contactsPath(DRAFT)), contactsDoc({ contacts: tooMany })));
+    await assertFails(setDoc(doc(db, `invitations/${DRAFT}/private/somethingElse`), contactsDoc()));
   });
 });

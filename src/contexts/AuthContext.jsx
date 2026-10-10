@@ -66,10 +66,17 @@ export const AuthProvider = ({ children }) => {
         setUser(firebaseUser);
 
         // pull data from firebase db, idexing from user id (using api call => async)
-        const docRef = doc(db, "bethrothed", firebaseUser.uid); // TODO bethrothed
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          setUserProfile(docSnap.data());
+        // Collection is `betrothed` — the one Signup writes (createUserProfile)
+        // and the only one firestore.rules lets the owner read. A failed read
+        // must not escape this callback (unhandled rejection) or skip
+        // setLoading(false) below (stuck loading spinner); the profile is optional.
+        try {
+          const docRef = doc(db, "betrothed", firebaseUser.uid);
+          const docSnap = await getDoc(docRef);
+          setUserProfile(docSnap.exists() ? docSnap.data() : null);
+        } catch (err) {
+          console.error("Failed to load user profile:", err);
+          setUserProfile(null);
         }
       }
       else {
@@ -105,7 +112,7 @@ export const AuthProvider = ({ children }) => {
     // Step 2: Save their name to their Firebase Auth profile
     await updateProfile(credential.user, { displayName: name });
 
-    // Return the uid so Signup.jsx can create the bethrothed Firestore doc
+    // Return the uid so Signup.jsx can create the betrothed Firestore doc
     return { uid: credential.user.uid };
   };
 
