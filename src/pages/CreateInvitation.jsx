@@ -16,14 +16,16 @@
 //                   Date, Music, Our Story, Wedding Party, Venue, Travel & Stay,
 //                   RSVP, Registry, Q&A (see SECTIONS)
 //                   (the former Privacy tab was removed — it never controlled
-//                   access; publishing is the header's Publish button)
+//                   access). The header has Save and View Invitation (the
+//                   former Publish button — see "VIEW INVITATION" below).
 //   Center panel  → active section's controls/settings
 //   Right panel   → live phone mockup preview showing real wedding data
 //
 // DATA FLOW:
 //   1. Loads existing invitation from Firestore (couple names, date, venue)
 //   2. Loads/saves invitation customization settings to Firestore
-//   3. All preview updates happen locally — only saved on "Save" or "Publish"
+//   3. All preview updates happen locally — only saved on "Save" (or "Save and
+//      View" in the View Invitation dialog, which runs the same Save)
 //   4. Hero Photo + Our Story photos are uploaded to Cloud Storage on Save
 //      (see src/lib/storySave.js and docs/STORY_AND_MEDIA.md). Story blocks
 //      live in invitations/{weddingId}/storyEntries, NOT in `settings`.
@@ -37,17 +39,28 @@
 //      the invitation doc) SAVES IMMEDIATELY from its tab, exactly like the
 //      former dashboard Registry page (src/hooks/useRegistries.js). The main
 //      Save button never writes those fields, so it can't overwrite them.
+//      (Exception: "Save and View" also saves an unsaved Registry MESSAGE
+//      through that hook's own saveMessage, so the preview matches.)
 //   7. Q&A (qaItems / qaShowOnInvitation / qaStartersCreated on the invitation
 //      doc) also SAVES IMMEDIATELY from its tab (src/hooks/useQa.js), and the
 //      main Save never writes those fields either. Suggested questions are
 //      added once, the first time the Q&A tab is opened.
+//
+// VIEW INVITATION (Phase 3 — replaces the former Publish button):
+//   Opens the couple's LAST SAVED invitation (/invitation/preview) in a new
+//   tab. With unsaved changes it asks: Save and View / View Last Saved /
+//   Cancel (src/hooks/useViewInvitation.js). "Unsaved changes" = Save would
+//   write something different (src/lib/builderChanges.js).
+//   The builder no longer writes `isPublished` at all — neither Save nor
+//   viewing can flip it to true, so they can never trigger the guest
+//   invitation emails (functions/index.js → sendInvitesOnPublish).
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
-  Heart, Palette, Music, Sparkles,
-  BookOpen, Calendar, Image, MapPin, BookHeart, CheckSquare,
+  Palette, Music, Sparkles,
+  BookOpen, Calendar, MapPin, BookHeart, CheckSquare,
   Users, Gift, MessageCircle, ArrowLeft, Save, ChevronRight,
   Eye, Volume2, Info, Loader2, Hotel, Plus, Trash2, Utensils, ExternalLink,
   AlertCircle, X,
@@ -57,7 +70,6 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthContext";
 import { getInvitationByUser, saveInvitation } from "@/lib/firestore";
-import GoogleMapEmbed, { buildMapQuery, mapLinkUrl } from "@/components/GoogleMapEmbed";
 import {
   normalizeMealOptions,
   cleanMealOptionsForSave,
@@ -66,14 +78,11 @@ import {
 import {
   TRAVEL_CATEGORIES,
   TRAVEL_MESSAGE_MAX,
-  getTravelCategoryLabel,
   createTravelItem,
   normalizeTravelItems,
   validateTravelItems,
   cleanTravelItemsForSave,
-  getVisibleTravelItems,
   getTravelShowOnInvitation,
-  shouldShowTravelSection,
 } from "@/lib/travelStay";
 import { CANVAS, BUILDER_UI, BUILDER_FONT, ERROR_COLOR } from "@/components/invitation/builderTheme";
 import ColorThemePanel from "@/components/invitation/ColorThemePanel";
@@ -82,47 +91,40 @@ import {
   THEME_FIELDS,
   normalizeThemeSettings,
   resolveInvitationTheme,
-  buildGuestThemeStyle,
 } from "@/lib/invitationTheme";
 import { useGoogleFonts } from "@/hooks/useGoogleFonts";
 import HeroPhotoField from "@/components/invitation/HeroPhotoField";
 import StoryPanel from "@/components/invitation/StoryPanel";
-import StorySection from "@/components/invitation/StorySection";
-import WeddingDaySection from "@/components/invitation/WeddingDaySection";
 import {
   DEFAULT_DATE_SETTINGS,
   DATE_SETTING_FIELDS,
   normalizeDateSettings,
   parseWeddingDate,
-  shouldShowWeddingDaySection,
 } from "@/lib/weddingDate";
 import { DEFAULT_STORY_TITLE, normalizeStoryTitle } from "@/lib/storyBlocks";
-import { photoSrc } from "@/lib/imageProcessing";
-import { photoImageStyle } from "@/lib/photoAdjust";
 import { useInvitationMedia } from "@/hooks/useInvitationMedia";
 import {
   DEFAULT_VENUE_SETTINGS,
   VENUE_SETTING_FIELDS,
   normalizeVenueSettings,
-  getVenueDisplay,
 } from "@/lib/venueDisplay";
 import { getInviteDeadlineError } from "@/lib/rsvpDeadline";
 import WeddingPartyPanel from "@/components/invitation/WeddingPartyPanel";
-import WeddingPartySection from "@/components/invitation/WeddingPartySection";
 import { useWeddingPartyContacts } from "@/hooks/useWeddingPartyContacts";
 import {
   DEFAULT_PARTY_SETTINGS,
   PARTY_SETTING_FIELDS,
   normalizePartySettings,
   validatePartyMembers,
-  shouldShowPartySection,
 } from "@/lib/weddingParty";
 import RegistryPanel from "@/components/invitation/RegistryPanel";
-import RegistrySection from "@/components/registry/RegistrySection";
 import { useRegistries } from "@/hooks/useRegistries";
-import { hasRegistryContent } from "@/lib/registry";
 import QaPanel from "@/components/invitation/QaPanel";
-import QaSection from "@/components/qa/QaSection";
+import InvitationContent from "@/components/invitation/InvitationContent";
+import { getInvitationSectionIds, VIEW_MODES } from "@/lib/invitationView";
+import { settingsSaveSnapshot } from "@/lib/builderChanges";
+import ViewInvitationDialog from "@/components/invitation/ViewInvitationDialog";
+import { useViewInvitation, PREVIEW_PATH, PREVIEW_WINDOW_NAME } from "@/hooks/useViewInvitation";
 import { scrollToSectionWithin } from "@/components/qa/qaNavigation";
 import { useQa } from "@/hooks/useQa";
 import { getGuestQaItems } from "@/lib/qa";
@@ -151,20 +153,10 @@ const SECTIONS = [
 
 // ── Sections that are actually shown in the phone preview ─────────────────────
 // Used by Q&A "link to section" answers: a link only counts (and is only shown)
-// when its destination is really on the invitation. Mirrors each section's own
-// show/hide rule below in <PhonePreview>.
-const getPreviewSectionIds = ({
-  settings, storyBlocks = [], partyMembers = [], registries = [], registryMessage = "", registryShown = true,
-}) => {
-  const ids = new Set(["rsvp"]);
-  if (shouldShowWeddingDaySection(settings)) ids.add("date");
-  if (getVenueDisplay(settings).section) ids.add("venue");
-  if (shouldShowTravelSection(settings)) ids.add("travel");
-  if (settings.storyShowOnInvitation !== false && storyBlocks.length > 0) ids.add("story");
-  if (shouldShowPartySection(settings, partyMembers)) ids.add("party");
-  if (registryShown && hasRegistryContent(registries, registryMessage)) ids.add("registry");
-  return ids;
-};
+// when its destination is really on the invitation. The show/hide rules now
+// live in src/lib/invitationView.js, shared with <InvitationContent> and the
+// standalone invitation page (same results as before for the preview).
+const getPreviewSectionIds = (ctx) => getInvitationSectionIds(ctx, VIEW_MODES.PREVIEW);
 
 // Older links to the former Color / Font tabs open the combined Color Theme tab.
 // The former Privacy tab's only working control (RSVP deadline) is now in RSVP.
@@ -558,7 +550,7 @@ const MusicPanel = ({ settings, onChange }) => {
 // ── Center Panel: Travel & Stay ───────────────────────────────────────────────
 // Host enters places manually (like Music's pasted Spotify link): category,
 // name, a pasted Google Maps link and a description. Saved on the invitation
-// doc as travelItems / travelMessage / travelShowOnInvitation on Save/Publish.
+// doc as travelItems / travelMessage / travelShowOnInvitation on Save.
 // `errors` = { [itemId]: { name?, mapUrl? } } from the parent's validation.
 const TravelPanel = ({ settings, onChange, errors, setErrors }) => {
   const items = settings.travelItems || [];
@@ -993,6 +985,8 @@ const VenuePanel = ({ invitation, settings, onChange }) => {
 
 // ── Phone Preview ─────────────────────────────────────────────────────────────
 // Renders a live phone mockup showing the invitation with current settings.
+// The phone frame, scroll box and overlay live here; the invitation sections
+// themselves are rendered by the shared <InvitationContent> component.
 // `hero` and `storyBlocks` are the builder's local (possibly unsaved) state, so
 // photo and Story edits show up here before they are saved.
 // Colors and fonts come from the Color Theme settings (resolveInvitationTheme):
@@ -1003,28 +997,9 @@ const PhonePreview = ({
   registryShown = true, qaEntries = [],
 }) => {
   const screenRef = useRef(null);
-  const theme        = resolveInvitationTheme(settings);
-  const sec          = theme.sections;
-  const heroUrl      = photoSrc(hero);
-  // Builder preview: show the section as soon as a block exists (empty photo
-  // slots render as placeholders) unless the couple hid it.
-  const showStory    = settings.storyShowOnInvitation !== false && storyBlocks.length > 0;
-
-  // Invitation buttons: same pill shape, size and label as before, now solid
-  // so the white label stays readable (the old 70% opacity fell below 4.5:1).
-  const btnStyle = { backgroundColor: theme.button, color: theme.buttonLabel };
-
-  const groomFirst = invitation?.groomName?.first || "Groom";
-  const brideFirst = invitation?.brideName?.first || "Bride";
-  const venueQuery = buildMapQuery(invitation?.venueName, invitation?.venueAddress);
-  // Venue tab switches (all ON for older invitations)
-  const venueDisplay = getVenueDisplay(settings);
-
-  const formattedDate = invitation?.weddingDate
-    ? new Date(invitation.weddingDate + "T00:00:00").toLocaleDateString("en-US", {
-        month: "long", day: "numeric", year: "numeric",
-      })
-    : "Wedding Date";
+  // Only the screen background + overlay icon need the theme here; every
+  // section's own colors are resolved inside <InvitationContent>.
+  const theme = resolveInvitationTheme(settings);
 
   return (
     // Phone frame — dark body with rounded corners
@@ -1040,265 +1015,14 @@ const PhonePreview = ({
         style={{ backgroundColor: theme.background, fontFamily: theme.bodyFont, color: theme.bodyText }}>
         <div ref={screenRef} className="h-full overflow-y-auto" style={{ scrollbarWidth: "none" }}>
 
-          {/* Hero header */}
-          <div className="p-6 text-center" data-section="header" style={{ backgroundColor: sec.header }}>
-            <p className="text-[9px] uppercase tracking-widest mb-1"
-              style={{ color: theme.bodyText }}>
-              {settings.greetingTitle || "Together with their families"}
-            </p>
-            <h1 className="text-2xl mb-1"
-              style={{ fontFamily: theme.headingFont, color: theme.headingText }}>
-              {groomFirst} & {brideFirst}
-            </h1>
-            <p className="text-[9px] uppercase tracking-widest"
-              style={{ color: theme.bodyText }}>
-              {formattedDate}
-              {venueDisplay.section && invitation?.venueName && ` · ${invitation.venueName}`}
-            </p>
-          </div>
-
-          {/* Hero image — fills the frame using the couple's position/zoom
-              (same style as the editor); placeholder until one is added.
-              h-96 (384px) = twice the former h-48 — keep HERO_FRAME_ASPECT in
-              HeroPhotoField.jsx in sync. */}
-          <div className="relative w-full h-96 flex items-center justify-center overflow-hidden"
-            style={{ backgroundColor: CANVAS.surfaceHigh }}>
-            {heroUrl ? (
-              <img src={heroUrl} alt="Hero" decoding="async" draggable={false}
-                className="absolute inset-0 w-full h-full" style={photoImageStyle(hero)} />
-            ) : (
-              <div className="text-center">
-                <Image size={28} style={{ color: CANVAS.outline, margin: "0 auto 8px" }} />
-                <p className="text-[9px]" style={{ color: CANVAS.outline }}>Hero Photo</p>
-              </div>
-            )}
-            {/* RSVP overlay button */}
-            <div className="absolute bottom-4 left-4 right-4 text-center">
-              <button className="w-full py-2 rounded-full text-white text-[9px] font-bold uppercase tracking-widest"
-                style={{ backgroundColor: `${theme.button}cc`, color: theme.buttonLabel }}>
-                RSVP
-              </button>
-            </div>
-          </div>
-
-          {/* Greetings */}
-          <div className="p-8 text-center" data-section="greetings" style={{ backgroundColor: sec.greetings }}>
-            <h2 className="text-base mb-3"
-              style={{ fontFamily: theme.headingFont, color: theme.headingText }}>
-              Greetings
-            </h2>
-            <p className="text-[9px] leading-relaxed" style={{ color: theme.bodyText }}>
-              {settings.greetingMessage ||
-                "The stars aligned when we met, and now we're getting married! Your presence at our wedding would make our special day even more memorable."}
-            </p>
-          </div>
-
-          {/* ── Content order matches the sidebar tabs (SECTIONS): Greetings
-              (header + hero + greetings), Date, Music, Our Story, Wedding
-              Party, Venue, Travel & Stay, RSVP, Registry — then the closing.
-              Color Theme has no section of its own; it styles everything. ── */}
-
-          {/* Wedding Day (Date tab) — right after Greetings; only when Calendar View and/or Countdown is on (Date tab).
-              The hero date above is always shown regardless of these settings. */}
-          {shouldShowWeddingDaySection(settings) && (
-            <WeddingDaySection invitation={invitation} settings={settings}
-              theme={theme} backgroundColor={sec.date} />
-          )}
-
-          {/* Music player — only shown once a real Spotify song is selected
-              AND the host has "Show music on invitation" enabled. No fake
-              placeholder song info is ever displayed. */}
-          {settings.musicTrackId && settings.musicShowOnInvitation && (
-            <div className="p-6 text-center" data-section="music" style={{ backgroundColor: sec.music }}>
-              <h2 className="text-base mb-4"
-                style={{ fontFamily: theme.headingFont, color: theme.headingText }}>
-                Music
-              </h2>
-              <iframe
-                title="Spotify song"
-                src={`https://open.spotify.com/embed/track/${settings.musicTrackId}`}
-                width="100%"
-                height="80"
-                style={{ borderRadius: "12px", border: "none" }}
-                allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-                loading="lazy"
-              />
-            </div>
-          )}
-
-          {/* Our Story — after Music, before Wedding Party */}
-          {showStory && (
-            <StorySection
-              title={settings.storyTitle}
-              blocks={storyBlocks}
-              headingFont={theme.headingFont}
-              bodyFont={theme.bodyFont}
-              accentColor={theme.secondary}
-              backgroundColor={sec.story}
-              textColor={theme.headingText}
-              mutedColor={theme.bodyText}
-              showPlaceholders
-            />
-          )}
-
-          {/* Wedding Party — after Our Story. Only when the switch is on AND at
-              least one member has a name. Contact details appear only for
-              members whose "Show contact details" is on. */}
-          {shouldShowPartySection(settings, partyMembers) && (
-            <WeddingPartySection
-              members={partyMembers}
-              groupBySide={settings.partyGroupBySide === true}
-              headingFont={theme.headingFont}
-              bodyFont={theme.bodyFont}
-              backgroundColor={sec.party}
-              textColor={theme.headingText}
-              mutedColor={theme.bodyText}
-              accentColor={theme.secondary}
-              linkColor={theme.button}
-            />
-          )}
-
-          {/* Venue — name/address/link from Wedding Details; which parts show
-              is controlled by the Venue tab (src/lib/venueDisplay.js) */}
-          {venueDisplay.section && (
-            <div className="p-6 text-center" data-section="venue" style={{ backgroundColor: sec.venue }}>
-              <h2 className="text-base mb-4"
-                style={{ fontFamily: theme.headingFont, color: theme.headingText }}>
-                Wedding Venue
-              </h2>
-              {venueDisplay.map && (
-                <div className="mb-3" data-testid="venue-map">
-                  <GoogleMapEmbed query={venueQuery} heightClass="h-28" interactive={false}
-                    title="Venue map preview" />
-                </div>
-              )}
-              <p className="text-[10px] font-bold" style={{ color: theme.headingText }}>
-                {invitation?.venueName || "Venue Name"}
-              </p>
-              {venueDisplay.address && (
-                <p className="text-[9px]" data-testid="venue-address" style={{ color: theme.bodyText }}>
-                  {invitation?.venueAddress || "Venue Address"}
-                </p>
-              )}
-              {venueDisplay.directions && (venueQuery ? (
-                <a
-                  href={invitation?.venueURL || mapLinkUrl(venueQuery)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block w-full mt-3 py-2 rounded-full text-white text-[9px] font-bold"
-                  style={btnStyle}
-                >
-                  Get directions
-                </a>
-              ) : (
-                <button className="w-full mt-3 py-2 rounded-full text-white text-[9px] font-bold"
-                  style={btnStyle}>
-                  Get directions
-                </button>
-              ))}
-            </div>
-          )}
-
-          {/* Travel & Stay — only when the toggle is on AND at least one place
-              has a name. Links are re-checked so only http(s) URLs render. */}
-          {shouldShowTravelSection(settings) && (
-            <div className="p-6" data-section="travel" style={{ backgroundColor: sec.travel }}>
-              <h2 className="text-base mb-2 text-center"
-                style={{ fontFamily: theme.headingFont, color: theme.headingText }}>
-                Travel &amp; Stay
-              </h2>
-              {settings.travelMessage?.trim() && (
-                <p className="text-[9px] leading-relaxed text-center mb-4" style={{ color: theme.bodyText }}>
-                  {settings.travelMessage.trim()}
-                </p>
-              )}
-              <div className="space-y-3">
-                {getVisibleTravelItems(settings.travelItems).map(item => (
-                  <div key={item.id} className="rounded-xl p-3 text-left"
-                    style={{ border: `1px solid ${CANVAS.outline}` }}>
-                    <p className="text-[8px] font-bold uppercase tracking-widest mb-0.5"
-                      style={{ color: theme.button }}>
-                      {getTravelCategoryLabel(item.category)}
-                    </p>
-                    <p className="text-[10px] font-bold" style={{ color: theme.headingText }}>
-                      {item.name}
-                    </p>
-                    {item.description && (
-                      <p className="text-[9px] leading-relaxed mt-1" style={{ color: theme.bodyText }}>
-                        {item.description}
-                      </p>
-                    )}
-                    {item.mapUrl && (
-                      <a
-                        href={item.mapUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="mt-2 inline-flex items-center gap-1 text-[9px] font-bold"
-                        style={{ color: theme.button }}
-                      >
-                        View on Google Maps <ExternalLink size={9} />
-                      </a>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* RSVP section */}
-          <div className="p-6 text-center" data-section="rsvp" style={{ backgroundColor: sec.rsvp }}>
-            <h2 className="text-base mb-4"
-              style={{ fontFamily: theme.headingFont, color: theme.headingText }}>
-              RSVP
-            </h2>
-            <p className="text-[9px] mb-4" style={{ color: theme.bodyText }}>
-              {settings.inviteDeadline
-                ? `Kindly reply by ${new Date(settings.inviteDeadline + "T00:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric" })}`
-                : "Kindly reply at your earliest convenience"}
-            </p>
-            <button className="w-full py-2 rounded-full text-white text-[9px] font-bold"
-              style={btnStyle}>
-              RSVP Now
-            </button>
-          </div>
-
-          {/* Gift Registry — the SAME component the guest RSVP page renders,
-              wrapped in the same theme styling, so this is exactly what guests
-              see: the message plus only links with isVisible === true. Shows
-              nothing when "Show Registry on Invitation" is off, or when there's
-              no message and no visible link. */}
-          <div className="tg-invite-theme" data-section="registry"
-            style={{ ...buildGuestThemeStyle(settings), backgroundColor: theme.background }}>
-            <div className={registryShown && hasRegistryContent(registries, registryMessage) ? "p-4" : undefined}>
-              <RegistrySection registries={registries} registryMessage={registryMessage}
-                showOnInvitation={registryShown} compact />
-            </div>
-          </div>
-
-          {/* Q&A — after Registry, before the closing. Same component as the
-              guest RSVP page: only questions that are switched on and fully
-              answered, in the couple's order. Section links scroll this
-              preview to that section. Hidden while the Q&A switch is off. */}
-          <div className="tg-invite-theme" data-section="qa"
-            style={{ ...buildGuestThemeStyle(settings), backgroundColor: theme.background }}>
-            <div className={qaEntries.length ? "p-4" : undefined}>
-              <QaSection entries={qaEntries} compact
-                onNavigate={id => scrollToSectionWithin(screenRef.current, id)} />
-            </div>
-          </div>
-
-          {/* Closure */}
-          <div className="p-10 text-center" data-section="closure" style={{ backgroundColor: sec.closure }}>
-            <h2 className="text-base mb-3"
-              style={{ fontFamily: theme.headingFont, color: theme.headingText }}>
-              {settings.closureTitle || "We can't wait to celebrate with you"}
-            </h2>
-            <div className="flex items-center justify-center gap-2 mt-4">
-              <div className="h-px w-10" style={{ backgroundColor: theme.accent }} />
-              <Heart size={12} style={{ color: theme.primary }} />
-              <div className="h-px w-10" style={{ backgroundColor: theme.accent }} />
-            </div>
-          </div>
+          {/* The invitation itself — shared with the owner preview and guest
+              website (src/components/invitation/InvitationContent.jsx). Q&A
+              section links scroll only this phone screen. */}
+          <InvitationContent invitation={invitation} settings={settings} hero={hero}
+            storyBlocks={storyBlocks} partyMembers={partyMembers}
+            registries={registries} registryMessage={registryMessage} registryShown={registryShown}
+            qaEntries={qaEntries}
+            onNavigate={id => scrollToSectionWithin(screenRef.current, id)} />
 
         </div>
 
@@ -1337,7 +1061,7 @@ const CreateInvitation = () => {
   );
 
   // Settings state — these are the invitation customization options
-  // They are saved back to the `invitations` Firestore doc on Save/Publish
+  // They are saved back to the `invitations` Firestore doc on Save
   const [settings, setSettings] = useState({
     // Color Theme: colorPalette1/2 (primary/secondary), font1/2 (heading/body)
     // plus background, button, accent, text colors and section backgrounds.
@@ -1398,6 +1122,11 @@ const CreateInvitation = () => {
 
   // Notice shown when photos/Story couldn't be saved (local edits are kept)
   const [saveNotice, setSaveNotice] = useState(null); // { kind: "error" | "warning", text }
+
+  // What Save last wrote from `settings` (settingsSaveSnapshot), set once the
+  // invitation has loaded and after every successful save. Comparing against
+  // it tells the View Invitation button whether there are unsaved changes.
+  const [savedSettingsSnapshot, setSavedSettingsSnapshot] = useState(null);
 
   // ── Hero Photo + Our Story state, loading and saving ───────────────────────
   // See src/hooks/useInvitationMedia.js — kept out of `settings` on purpose.
@@ -1482,6 +1211,14 @@ const CreateInvitation = () => {
     })();
   }, [user]);
 
+  // ── Unsaved-changes baseline = the settings as just loaded ───────────────
+  useEffect(() => {
+    if (!loading && savedSettingsSnapshot === null) {
+      setSavedSettingsSnapshot(settingsSaveSnapshot(settings));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading]);
+
   // ── Q&A: add the suggested questions the first time the tab is opened ────
   // (once per invitation — the transaction checks qaStartersCreated)
   useEffect(() => {
@@ -1516,8 +1253,11 @@ const CreateInvitation = () => {
   };
 
   // ── Save to Firestore ──────────────────────────────────────────────────────
-  const handleSave = async (publish = false) => {
-    if (!user) return;
+  // Resolves true only when EVERYTHING was saved (settings, photos/Story/
+  // Wedding Party, private contacts) — "Save and View" relies on that. The Save
+  // button ignores the result; its behavior and validation are unchanged.
+  const handleSave = async () => {
+    if (!user) return false;
 
     // Travel & Stay: block the save if a place is missing its name or has an
     // unsafe link, and jump to that section so the host can fix it.
@@ -1526,7 +1266,7 @@ const CreateInvitation = () => {
       setTravelErrors(travelValidation);
       setActiveSection("travel");
       alert("Please fix the highlighted Travel & Stay places before saving.");
-      return;
+      return false;
     }
 
     // Wedding Party: every member that has any details needs a name and a
@@ -1536,7 +1276,7 @@ const CreateInvitation = () => {
       setPartyErrors(partyValidation);
       setActiveSection("party");
       alert("Please fix the highlighted Wedding Party members before saving.");
-      return;
+      return false;
     }
 
     // RSVP deadline: same rule as Wedding Details (on or before the wedding
@@ -1550,15 +1290,16 @@ const CreateInvitation = () => {
       setDeadlineError(deadlineProblem);
       setActiveSection("rsvp");
       alert("Please fix the RSVP deadline before saving.");
-      return;
+      return false;
     }
 
     setSaveNotice(null);
     setSaving(true);
+    // The settings being saved (edits made while saving stay "unsaved")
+    const settingsAtSave = settings;
     try {
       const dataToSave = {
         ...settings,
-        isPublished: publish ? true : settings.isPublished,
         groomName:    invitation?.groomName    || { first: "", middle: "", last: "" },
         brideName:    invitation?.brideName    || { first: "", middle: "", last: "" },
         weddingDate:  invitation?.weddingDate  || "",
@@ -1637,11 +1378,18 @@ const CreateInvitation = () => {
       delete dataToSave.qaItems;
       delete dataToSave.qaShowOnInvitation;
       delete dataToSave.qaStartersCreated;
+      // isPublished is never written by the builder (there is no Publish
+      // button any more). The stored value is left exactly as it is, so a save
+      // can never flip it to true and trigger the guest invitation emails
+      // (sendInvitesOnPublish). New invitations still start unpublished
+      // (saveInvitation sets isPublished: false on create).
+      delete dataToSave.isPublished;
 
       const id = await saveInvitation(user.uid, dataToSave, weddingId);
+      // These settings are now what's saved (even if photos fail below)
+      setSavedSettingsSnapshot(settingsSaveSnapshot(settingsAtSave));
       if (travelLoaded) setSettings(prev => ({ ...prev, travelItems: cleanedTravelItems }));
       if (!weddingId) setWeddingId(id);
-      if (publish) setSettings(prev => ({ ...prev, isPublished: true }));
       if (mealOptionsLoaded) setSettings(prev => ({ ...prev, mealOptions: cleanedMealOptions }));
       if (storySettingsLoaded) setSettings(prev => ({ ...prev, storyTitle: dataToSave.storyTitle }));
 
@@ -1649,7 +1397,7 @@ const CreateInvitation = () => {
       const mediaResult = await media.save(id);
       if (!mediaResult.ok) {
         setSaveNotice(mediaResult.notice);
-        return;
+        return false;
       }
 
       // Wedding Party private contact details (owner-only doc). Skipped unless
@@ -1657,18 +1405,56 @@ const CreateInvitation = () => {
       const contactsResult = await partyContacts.save(id, mediaResult.partyMembers);
       if (!contactsResult.ok) {
         setSaveNotice(contactsResult.notice);
-        return;
+        return false;
       }
 
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
+      return true;
     } catch (err) {
       console.error("Save error:", err);
       alert("Save failed: " + err.message);
+      return false;
     } finally {
       setSaving(false);
     }
   };
+
+  // ── View Invitation ────────────────────────────────────────────────────────
+  // Unsaved changes = Save would write something different: settings, photos /
+  // Story / Wedding Party, or a Registry message typed but not yet saved
+  // (Registry links and Q&A save immediately, so they are never unsaved).
+  const settingsChanged = savedSettingsSnapshot !== null &&
+    settingsSaveSnapshot(settings) !== savedSettingsSnapshot;
+  const hasUnsavedChanges = settingsChanged || media.hasUnsavedChanges || registry.messageDirty;
+
+  // "Save and View": the normal Save, plus the unsaved Registry message.
+  // true only if everything was saved — otherwise no preview is shown.
+  const saveChangesForView = async () => {
+    const saveMessageToo = registry.messageDirty;
+    const ok = await handleSave();
+    if (!ok) return false;
+    if (saveMessageToo) {
+      const messageSaved = await registry.saveMessage();
+      if (!messageSaved) {
+        setSaveNotice({
+          kind: "error",
+          text: "Your other changes were saved, but your Registry message couldn't be saved. Open the Registry tab and click Save Message to try again.",
+        });
+        return false;
+      }
+    }
+    return true;
+  };
+
+  const view = useViewInvitation({
+    hasSavedInvitation: Boolean(weddingId),
+    hasUnsavedChanges,
+    saveChanges: saveChangesForView,
+    disabled: loading || saving,
+  });
+  // Nothing saved yet and nothing to save → nothing to view
+  const viewUnavailable = !weddingId && !hasUnsavedChanges;
 
   // ── Clear one Wedding Party field error once the couple edits it ──────────
   const clearPartyError = (id, field) =>
@@ -1771,7 +1557,7 @@ const CreateInvitation = () => {
           )}
 
           {/* Save button */}
-          <button onClick={() => handleSave(false)}
+          <button onClick={() => handleSave()}
             disabled={saving}
             className="px-5 py-2 text-sm font-semibold transition-colors hover:opacity-80 flex items-center gap-2"
             style={{ color: BUILDER_UI.primary }}>
@@ -1783,14 +1569,21 @@ const CreateInvitation = () => {
               : <><Save size={14} /> Save</>}
           </button>
 
-          {/* Publish button */}
-          <button onClick={() => handleSave(true)}
-            disabled={saving}
-            className="px-6 py-2 text-sm font-semibold rounded-lg text-white shadow-sm transition-all active:scale-95"
+          {/* View Invitation — replaces the former Publish button. Opens the
+              last SAVED invitation in a new tab (asks first if there are
+              unsaved changes). Never publishes or sends anything. */}
+          <button type="button" onClick={view.requestView}
+            disabled={saving || view.savingForView || viewUnavailable}
+            title={viewUnavailable
+              ? "Save your invitation first, then you can view it"
+              : "Open your saved invitation in a new tab"}
+            className="px-6 py-2 text-sm font-semibold rounded-lg text-white shadow-sm transition-all active:scale-95 flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed disabled:active:scale-100"
             style={{
               background: `linear-gradient(135deg, ${BUILDER_UI.primary} 0%, ${BUILDER_UI.primaryLight} 100%)`,
             }}>
-            {settings.isPublished ? "Published ✓" : "Publish"}
+            {view.savingForView
+              ? <><Loader2 size={14} className="animate-spin" /> Saving…</>
+              : <><ExternalLink size={14} /> View Invitation</>}
           </button>
         </div>
       </header>
@@ -1865,6 +1658,25 @@ const CreateInvitation = () => {
           style={{ backgroundColor: BUILDER_UI.surface }}>
           <div className="max-w-2xl mx-auto">
 
+            {/* The browser blocked the preview tab — offer a normal link */}
+            {view.popupBlocked && (
+              <div role="status" className="mb-6 flex items-start gap-3 p-4 rounded-lg text-sm"
+                style={{ backgroundColor: BUILDER_UI.selected, color: BUILDER_UI.onSurface }}>
+                <Info size={16} className="mt-0.5 flex-shrink-0" style={{ color: BUILDER_UI.primary }} />
+                <p className="flex-1">
+                  Your browser blocked the new tab.{" "}
+                  <a href={PREVIEW_PATH} target={PREVIEW_WINDOW_NAME} onClick={view.dismissPopupBlocked}
+                    className="underline font-semibold" style={{ color: BUILDER_UI.primary }}>
+                    Open your invitation preview
+                  </a>
+                </p>
+                <button type="button" onClick={view.dismissPopupBlocked} aria-label="Dismiss message"
+                  className="flex-shrink-0 hover:opacity-70" style={{ color: BUILDER_UI.onSurfaceVar }}>
+                  <X size={14} />
+                </button>
+              </div>
+            )}
+
             {/* Save problems (photos/Story) — local edits are kept */}
             {saveNotice && (
               <div role="alert" className="mb-6 flex items-start gap-3 p-4 rounded-lg text-sm"
@@ -1922,6 +1734,16 @@ const CreateInvitation = () => {
         </aside>
 
       </div>
+
+      {/* View Invitation with unsaved changes: Save and View / View Last Saved / Cancel */}
+      <ViewInvitationDialog
+        open={view.dialogOpen}
+        canViewLastSaved={Boolean(weddingId)}
+        savesRegistryMessage={registry.messageDirty}
+        onSaveAndView={view.saveAndView}
+        onViewLastSaved={view.viewLastSaved}
+        onCancel={view.cancel}
+      />
     </div>
   );
 };

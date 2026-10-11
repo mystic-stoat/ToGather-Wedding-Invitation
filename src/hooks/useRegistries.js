@@ -100,10 +100,12 @@ export const useRegistries = ({ userId, weddingId }) => {
     setMessageError("");
   };
 
+  // Resolves true when the message was saved, false otherwise (the builder's
+  // "Save and View" uses this; the Save Message button ignores it).
   const saveMessage = async () => {
     if (!weddingId) {
       setMessageError(NEED_WEDDING);
-      return;
+      return false;
     }
     setMessageSaving(true);
     setMessageError("");
@@ -113,10 +115,12 @@ export const useRegistries = ({ userId, weddingId }) => {
       await saveInvitation(userId, { registryMessage: text }, weddingId);
       setSavedMessage(text);
       setMessageSaved(true);
+      return true;
     } catch (err) {
       console.error("Registry message save error:", err);
       // `message` state is untouched — the user's text stays in the textarea
       setMessageError("Couldn't save your message. Please try again.");
+      return false;
     } finally {
       setMessageSaving(false);
     }

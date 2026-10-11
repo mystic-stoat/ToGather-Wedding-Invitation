@@ -87,8 +87,9 @@ describe("RSVP page — invitation theme", () => {
     expect(area.style.getPropertyValue("--primary")).toBe(hexToHslTriplet("#9b3a5a"));
     expect(area.style.getPropertyValue("--background")).toBe(hexToHslTriplet("#fdf5f7")); // Rose bg
     expect(area.style.getPropertyValue("--tg-heading-font")).toBe('"Great Vibes", cursive');
-    // No custom header background → no extra panel
-    expect(screen.getByTestId("invitation-header").getAttribute("style")).toBeNull();
+    // No custom header background → the header uses the main background
+    // (Phase 4: the guest page is the full invitation, header included)
+    expect(screen.getByTestId("invitation-header").style.backgroundColor).toBe(rgb("#fdf5f7"));
   });
 
   it("uses Garden + Classic for an invitation with no theme fields at all", async () => {
