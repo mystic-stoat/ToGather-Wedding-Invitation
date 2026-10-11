@@ -18,6 +18,8 @@ Colten Mikulastik:
 * Full emulator Runtime for Testing configured: added configuration to allow running full app on local emulators
 * ENV configuration: adding google maps API key
 
+
+
 Keiran Indraanei:
 
 * Created the Forgot Password page and password reset
@@ -27,6 +29,8 @@ interface
 * Added the Wedding Assistant as a protected application route
 * Implemented section selection and a guided Wedding Details conversation flow
 * Added message input, conversation history, and completion response functionality
+
+
 
 Christopher Nguyen:
 
@@ -61,6 +65,14 @@ Christopher Nguyen:
 * Invitation Builder: Improved the tab order, phone preview, and sidebar styling.
 * Hero Photo: Doubled the hero photo height and updated its editing frame.
 * Header Cleanup: Removed the unused Preview, Share, and Settings links.
+* Developed a responsive wedding invitation page for desktop, tablet, and mobile devices.
+* Refactored the Invitation Builder preview into reusable components.
+* Added the View Invitation button, allowing hosts to view their saved invitation in a separate tab.
+* Implemented save confirmation options when viewing an invitation with unsaved changes.
+* Integrated personalized guest invitation links with the full wedding invitation and RSVP form.
+* Added RSVP functionality that allows guests to submit their responses and revisit their invitation afterward.
+* Added unit tests for invitation rendering, guest RSVP functionality, and saved invitation handling.
+* Tested the invitation page and RSVP functionality using Firebase emulators and verified that all 678 automated tests passed.
 
 
 
