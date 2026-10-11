@@ -79,3 +79,20 @@ Kris Pritchett:
 Jesus Zambrano:
 
 - Change Color Palette
+* Worked on updating the application's color palette and overall UI consistency.
+* Developed the Wedding Gift Registry page (`Registry.jsx`), including the protected `/gift-registry` route and navigation through the application sidebar.
+* Implemented functionality to add, edit, delete, and manage the visibility of wedding gift registries.
+* Integrated the Gift Registry with Firebase Firestore, including persistent storage, unique registry IDs, and transactional updates.
+* Connected the Gift Registry to the guest RSVP page, allowing guests to view available registries and access external registry links.
+* Added URL validation, error handling, loading states, confirmation messages, and empty-state handling to the Registry feature.
+* Created automated unit tests for the Gift Registry and verified Firebase data persistence and functionality (PR #41).
+* Integrated Google Maps and Google Places Autocomplete into the Wedding Details page for wedding ceremony and reception locations.
+* Developed reusable `PlaceAutocompleteInput.jsx` and `GoogleMapEmbed.jsx` components for address suggestions and interactive map previews.
+* Implemented automatic address selection, Google Maps URL generation, and storage of venue addresses, coordinates, and Google Place IDs in Firebase Firestore.
+* Added support for keyboard navigation, mobile responsiveness, debounced address suggestions, and manual address entry when Google Places is unavailable.
+* Updated the Invitation Builder to display saved Google Maps directions links for wedding and reception locations.
+* Created automated tests for Google Places Autocomplete and Google Maps embeds, verified Firestore persistence, and tested mobile compatibility (PR #44).
+* Updated the Invitation Builder's phone preview to use a generic smartphone frame instead of an iPhone-style notch while maintaining responsive behavior (PR #42).
+* Performed functional testing, verified production builds, and addressed integration issues during development of assigned features.
+* Created and submitted feature branches and pull requests for code review and integration into the shared development branch.
+
