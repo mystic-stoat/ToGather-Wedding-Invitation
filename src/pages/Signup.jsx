@@ -99,6 +99,9 @@ const Signup = () => {
       } else {
         setErrors({ general: `Something went wrong: ${err.message}` });
       }
+    } finally {
+      //prevent infinite loading state
+      setLoading(false);
     }
   };
 

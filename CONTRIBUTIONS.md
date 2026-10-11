@@ -27,13 +27,13 @@ Colten Mikulastik:
 
 Keiran Indraanei:
 
-* Created the Forgot Password page and password reset
-interface
-* Integrated the existing Firebase password reset functionality into the Forgot Password workflow
-* Created the initial AI Wedding Assistant chat interface
-* Added the Wedding Assistant as a protected application route
-* Implemented section selection and a guided Wedding Details conversation flow
-* Added message input, conversation history, and completion response functionality
+- Created the Forgot Password page and password reset
+  interface
+- Integrated the existing Firebase password reset functionality into the Forgot Password workflow
+- Created the initial AI Wedding Assistant chat interface
+- Added the Wedding Assistant as a protected application route
+- Implemented section selection and a guided Wedding Details conversation flow
+- Added message input, conversation history, and completion response functionality
 
 
 
@@ -83,20 +83,21 @@ Christopher Nguyen:
 
 Kris Pritchett:
 
-* Setup links for social media
-* Updated icon package for the socials because of
-deprecation
-* Changed how the placeholders work to better accomodate future links
-* Now using react-icons/si to handle the icon display and deprecation of the instagram library.
-* 9/23/2026
-* Reduced the database tables from 4 to 3
-* Moved elements from RSVP table into Invitee table
-* Updated Firestore local rules for potential use as production rules
-* Updated firestore.js to reflect updated rules and tables
-* Updated the Betrothed document name for readability
+- Setup links for social media
+- Updated icon package for the socials because of deprecation
+- Changed how the placeholders work to better accomodate future links
+- Now using react-icons/si to handle the icon display and deprecation of the instagram library.
+- 9/23/2026
+- Reduced the database tables from 4 to 3
+- Moved elements from RSVP table into Invitee table
+- Updated Firestore local rules for potential use as production rules
+- Updated firestore.js to reflect updated rules and tables
+- Updated the Betrothed document name for readability
+- Fixed the infinite loop for the signup button after entering duplicate information
 
 Jesus Zambrano:
 
+- Change Color Palette
 * Worked on updating the application's color palette and overall UI consistency.
 * Developed the Wedding Gift Registry page (`Registry.jsx`), including the protected `/gift-registry` route and navigation through the application sidebar.
 * Implemented functionality to add, edit, delete, and manage the visibility of wedding gift registries.
