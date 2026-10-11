@@ -6,6 +6,9 @@
 //     and scrolls only the phone screen.
 //   - Guest RSVP page       → scrollToGuestSection(id) scrolls the page to the
 //     element with id="tg-section-<id>".
+//   - Standalone invitation → scrollToSectionInPage(pageRoot, id) finds the
+//     section the same way as the preview, then scrolls the whole page to it
+//     (sections carry scroll-margin-top so a sticky bar never covers them).
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** The element for a Q&A section id inside the builder preview (or null). */
@@ -22,6 +25,14 @@ export const scrollToSectionWithin = (container, sectionId) => {
   const top = container.scrollTop + el.getBoundingClientRect().top - container.getBoundingClientRect().top;
   if (typeof container.scrollTo === "function") container.scrollTo({ top, behavior: "smooth" });
   else container.scrollTop = top;
+  return true;
+};
+
+/** Scroll the browser page so that invitation section is at the top. */
+export const scrollToSectionInPage = (root, sectionId) => {
+  const el = findPreviewSection(root, sectionId);
+  if (!el) return false;
+  if (typeof el.scrollIntoView === "function") el.scrollIntoView({ behavior: "smooth", block: "start" });
   return true;
 };
 
