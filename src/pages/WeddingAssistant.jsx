@@ -1,40 +1,83 @@
 // src/pages/WeddingAssistant.jsx
 // AI Wedding Assistant chat interface.
 //
-// Provides a conversational interface for helping hosts enter and update
-// wedding information. LLM, Firestore, and voice integration will be
-// connected separately after the interface and conversation flow are reviewed.
+// One continuous conversation between the host and Claude. This page only
+// WRITES the user's message and LISTENS for new messages. It never calls the
+// Claude API: a Cloud Function (functions/index.js) fires when a user message
+// is created, talks to Claude, and writes the reply back as a new message
+// document, which the live listener below picks up. Voice integration will be
+// connected separately.
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Send, Mic } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { getInvitationByUser } from "@/lib/firestore";
+import {
+  getInvitationByUser,
+  subscribeToMessages,
+  sendUserMessage,
+  retryUserMessage,
+  clearMessages,
+  messageText,
+} from "@/lib/firestore";
 import Sidebar from "@/components/Sidebar";
 import { useNavigate } from "react-router-dom";
+import ChatBubble from "@/components/ChatBubble";
 
+// Optional starter prompts. Leave empty for now: nothing renders when empty.
+// If you add strings here later, each one shows up as a button that sends
+// that text as a normal message, exactly as if the user had typed it.
+const STARTER_PROMPTS = [];
 
 const WeddingAssistant = () => {
-  const { user, userProfile, logout } = useAuth();
+  const { user, logout } = useAuth();
 
   const navigate = useNavigate();
 
-  const [loading, setLoading]  = useState(true);
-  const [invitation, setInvitation] = useState(null);
+  // chat state: `messages` is the live copy of betrothed/{uid}/messages
+  const [messages, setMessages] = useState([]);
+  const [chatLoaded, setChatLoaded] = useState(false);
+  const [error, setError] = useState(null);
   const [message, setMessage] = useState("");
-  const [selectedSection, setSelectedSection] = useState(null);
-  const [weddingStep, setWeddingStep] = useState(0);
-  const [answers, setAnswers] = useState([]);
-  const weddingQuestions = [
-    "Wonderful! 💍 First things first — when are you two planning to tie the knot?",
-    "Perfect! Where will the celebration be taking place?",
-    "Lovely! What time should everyone arrive?",
-  ];
+  const bottomRef = useRef(null);
 
-  // useEffect load invitation data on mount
+  // page state
+  const [loading, setLoading] = useState(true);
+  const [invitation, setInvitation] = useState(null);
+
+  // ── Derived chat state ─────────────────────────────────────────────────────
+  // There is no separate "loading" flag for the API call: if the newest user
+  // message is still "pending", the Cloud Function hasn't replied yet.
+  const lastUserMessage = [...messages].reverse().find((m) => m.role === "user");
+  const replyPending = lastUserMessage?.status === "pending";
+  // the function sets status "error" on the user message when it can't reply
+  const failedMessage = lastUserMessage?.status === "error" ? lastUserMessage : null;
+
+  // ── Load on mount ──────────────────────────────────────────────────────────
   useEffect(() => {
     if (!user) return;
     loadData();
+
+    // live listener: fires with the saved history, then again for every new doc
+    const unsubscribe = subscribeToMessages(
+      user.uid,
+      (docs) => {
+        setMessages(docs);
+        setChatLoaded(true);
+      },
+      (err) => {
+        console.error("messages listener error", err);
+        setError("Couldn't load your chat. Please refresh and try again.");
+      }
+    );
+
+    // stop listening when the page unmounts or the user changes
+    return unsubscribe;
   }, [user]);
+
+  // keep the newest message in view
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, replyPending]);
 
   const loadData = async () => {
     setLoading(true);
@@ -46,37 +89,63 @@ const WeddingAssistant = () => {
     } finally {
       setLoading(false);
     }
-  }
-    // Handles the user's answer and advances to the next wedding question.
-  const handleSend = () => {
+  };
+
+  // ── Sending ────────────────────────────────────────────────────────────────
+  // The write IS the request: no API call here, the Cloud Function takes over.
+  const sendMessage = async (text) => {
+    setError(null);
+    try {
+      await sendUserMessage(user.uid, text);
+      return true;
+    } catch (err) {
+      console.error("send message error", err);
+      setError("Couldn't send your message. Please try again.");
+      return false;
+    }
+  };
+
+  const handleSend = async () => {
     const trimmedMessage = message.trim();
 
-    // Do nothing if the message box is empty.
-    if (!trimmedMessage) return;
+    // Do nothing if the box is empty, a reply is pending, or the chat isn't loaded yet.
+    if (!trimmedMessage || replyPending || !chatLoaded) return;
 
-    // For now, only Wedding Details uses the guided question flow.
-    if (selectedSection === "Wedding Details") {
-      setAnswers((currentAnswers) => [
-        ...currentAnswers,
-        trimmedMessage,
-      ]);
-
-      setWeddingStep((currentStep) => currentStep + 1);
-    }
-
-    // Clear the input after sending.
     setMessage("");
+    const sent = await sendMessage(trimmedMessage);
+    // put the text back so a failed send isn't lost
+    if (!sent) setMessage(trimmedMessage);
   };
-  // Starts one of the guided wedding-planning sections.
-  const startSection = (section) => {
-    setSelectedSection(section);
+
+  // re-sends a message the function failed to answer (see retryUserMessage)
+  const handleRetry = async () => {
+    if (!failedMessage) return;
+    setError(null);
+    try {
+      await retryUserMessage(user.uid, failedMessage);
+    } catch (err) {
+      console.error("retry error", err);
+      setError("Couldn't retry. Please try again.");
+    }
+  };
+
+  // wipes every saved message; the listener then empties the screen on its own
+  const handleClearChat = async () => {
+    try {
+      await clearMessages(user.uid);
+      setError(null);
+      setMessage("");
+    } catch (err) {
+      console.error("clear chat error", err);
+      setError("Couldn't clear the chat. Please try again.");
+    }
   };
 
   // ── Logout ─────────────────────────────────────────────────────────────────
   const handleLogout = async () => {
     await logout();
     navigate("/login");
-  }
+  };
 
   const StatusCard = ({ label, value, isComplete }) => (
     <div className={`rounded-lg p-4 border transition-colors ${isComplete
@@ -100,160 +169,135 @@ const WeddingAssistant = () => {
 
       {/* Main chat bot and review columns */}
       <main className="flex-1 min-w-0 min-h-0 px-6 lg:px-10 py-8">
-        <div className="max-w-6xl mx-auto h-full flex gap-6"> {/* <== centering wrapper */}
+        <div className="max-w-6xl mx-auto h-full flex gap-6">
           {/* Conversation section */}
-            <div className="flex-1 min-w-0 min-h-0 bg-card rounded-2xl shadow-xl shadow-foreground/5 border border-border/40 p-8 sm:p-10 flex flex-col">
-              {/* Section header */}
-              <div className="flex mb-6">
-                <h1 className="font-heading-3 text-2xl font-semibold text-foreground">
-                  Wedding Assistant
-                </h1>
-                <button className="ml-auto p-2 rounded-lg border-2 hover:bg-muted"> clear chat </button>
-              </div>
-              {/* chat section */}
-              <div className="flex-1 overflow-y-auto min-h-0 mb-6 pr-4 space-y-5">
+          <div className="flex-1 min-w-0 min-h-0 bg-card rounded-2xl shadow-xl shadow-foreground/5 border border-border/40 p-8 sm:p-10 flex flex-col">
+            {/* Section header */}
+            <div className="flex mb-6">
+              <h1 className="font-heading-3 text-2xl font-semibold text-foreground">
+                Wedding Assistant
+              </h1>
+              <button
+                type="button"
+                onClick={handleClearChat}
+                disabled={replyPending || !chatLoaded}
+                className="ml-auto p-2 rounded-lg border-2 hover:bg-muted disabled:opacity-50"
+              >
+                clear chat
+              </button>
+            </div>
 
-                {/* Opening assistant message */}
-                <div className="flex justify-start">
-                  <div className="max-w-lg rounded-2xl rounded-bl-md bg-muted px-5 py-4">
-                    <p>
-                      Let's begin planning! What would you like to work on?
-                    </p>
-                  </div>
+            {/* chat section */}
+            <div className="flex-1 overflow-y-auto min-h-0 mb-6 pr-4 space-y-5">
+
+              {/* Greeting (UI only, not saved to the conversation) */}
+              <ChatBubble
+                message="Hi! I'm your wedding assistant. Tell me what you'd like help with and we'll get started."
+                isUser={false}
+              />
+
+              {/* Optional starter prompts: renders nothing while STARTER_PROMPTS is empty */}
+              {STARTER_PROMPTS.length > 0 && messages.length === 0 && (
+                <div className="flex flex-wrap gap-3">
+                  {STARTER_PROMPTS.map((prompt) => (
+                    <button
+                      key={prompt}
+                      onClick={() => sendMessage(prompt)}
+                      disabled={replyPending || !chatLoaded}
+                      className="border rounded-full px-4 py-2 hover:bg-muted transition disabled:opacity-50"
+                    >
+                      {prompt}
+                    </button>
+                  ))}
                 </div>
+              )}
 
-                {/* Show section choices until the user selects one */}
-                {!selectedSection && (
-                  <div className="flex flex-wrap gap-3">
-                    <button
-                      onClick={() => startSection("Wedding Details")}
-                      className="border rounded-full px-4 py-2 hover:bg-muted transition"
-                    >
-                      Wedding Details
-                    </button>
-
-                    <button
-                      onClick={() => startSection("Guest List")}
-                      className="border rounded-full px-4 py-2 hover:bg-muted transition"
-                    >
-                      Guest List
-                    </button>
-
-                    <button
-                      onClick={() => startSection("Invitations")}
-                      className="border rounded-full px-4 py-2 hover:bg-muted transition"
-                    >
-                      Invitations
-                    </button>
-
-                    <button
-                      onClick={() => startSection("Gift Registry")}
-                      className="border rounded-full px-4 py-2 hover:bg-muted transition"
-                    >
-                      Gift Registry
-                    </button>
-                  </div>
-                )}
-
-                {/* User's selected section */}
-                {selectedSection && (
-                  <div className="flex justify-end">
-                    <div className="max-w-lg rounded-2xl rounded-br-md bg-primary text-primary-foreground px-5 py-4">
-                      <p>{selectedSection}</p>
-                    </div>
-                  </div>
-                )}
-
-                {/* Wedding Details conversation history */}
-                {selectedSection === "Wedding Details" && (
-                  <>
-                    {answers.map((answer, index) => (
-                      <div key={index} className="flex flex-col gap-5">
-
-                        {/* Assistant question */}
-                        <div className="flex justify-start">
-                          <div className="max-w-lg rounded-2xl rounded-bl-md bg-muted px-5 py-4">
-                            <p>{weddingQuestions[index]}</p>
-                          </div>
-                        </div>
-
-                        {/* User answer */}
-                        <div className="flex justify-end">
-                          <div className="max-w-lg rounded-2xl rounded-br-md bg-primary text-primary-foreground px-5 py-4">
-                            <p>{answer}</p>
-                          </div>
-                        </div>
-
-                      </div>
-                    ))}
-
-                    {/* Current unanswered question */}
-                    {weddingStep < weddingQuestions.length && (
-                      <div className="flex justify-start">
-                        <div className="max-w-lg rounded-2xl rounded-bl-md bg-muted px-5 py-4">
-                          <p>{weddingQuestions[weddingStep]}</p>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Wedding Details section completed */}
-                    {weddingStep >= weddingQuestions.length && (
-                      <div className="flex justify-start">
-                        <div className="max-w-lg rounded-2xl rounded-bl-md bg-muted px-5 py-4">
-                          <p>
-                            Perfect! I've got the basic details for your wedding.
-                          </p>
-                        </div>
-                      </div>
-                    )}
-                  </>
-                )}
-
-              </div>
-
-              {/* Message composer */}
-              <div className="flex bg-background items-center gap-2 border rounded-2xl px-4 py-2 flex-shrink-0">
-
-                <input
-                  type="text"
-                  value={message}
-                  onChange={(event) => setMessage(event.target.value)}
-                  placeholder="Message your wedding assistant..."
-                  className="flex-1 bg-transparent outline-none py-2"
+              {/* Full conversation history (user + Claude), streamed from Firestore */}
+              {messages.map((msg) => (
+                <ChatBubble
+                  key={msg.id}
+                  message={messageText(msg)}
+                  isUser={msg.role === "user"}
                 />
+              ))}
 
-                {/* Voice button - UI only for now */}
-                <button
-                  type="button"
-                  className="p-2 rounded-full hover:bg-muted"
-                  aria-label="Talk to wedding assistant"
-                >
-                  <Mic size={20} />
-                </button>
+              {/* Waiting on the Cloud Function: newest user message is still "pending" */}
+              {replyPending && (
+                <ChatBubble message="Thinking…" isUser={false} />
+              )}
 
-                <button
-                  type="button"
-                  onClick={handleSend}
-                  className="p-2 rounded-full hover:bg-muted"
-                  aria-label="Send message"
-                >
-                  <Send size={20} />
-                </button>
+              {/* The function couldn't reply: offer a retry */}
+              {failedMessage && (
+                <div className="flex items-center gap-3">
+                  <p className="text-sm text-destructive">
+                    ⚠️ {failedMessage.errorMessage || "The assistant couldn't reply."}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleRetry}
+                    className="text-sm border rounded-full px-3 py-1 hover:bg-muted"
+                  >
+                    Retry
+                  </button>
+                </div>
+              )}
 
-              </div>
+              {/* Client-side errors (send, load, clear) */}
+              {error && (
+                <p className="text-sm text-destructive">⚠️ {error}</p>
+              )}
+
+              <div ref={bottomRef} />
+            </div>
+
+            {/* Message composer */}
+            <div className="flex bg-background items-center gap-2 border rounded-2xl px-4 py-2 flex-shrink-0">
+
+              <input
+                type="text"
+                value={message}
+                onChange={(event) => setMessage(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") handleSend();
+                }}
+                disabled={replyPending || !chatLoaded}
+                placeholder="Message your wedding assistant..."
+                className="flex-1 bg-transparent outline-none py-2"
+              />
+
+              {/* Voice button - UI only for now */}
+              <button
+                type="button"
+                className="p-2 rounded-full hover:bg-muted"
+                aria-label="Talk to wedding assistant"
+              >
+                <Mic size={20} />
+              </button>
+
+              <button
+                type="button"
+                onClick={handleSend}
+                disabled={replyPending || !chatLoaded}
+                className="p-2 rounded-full hover:bg-muted disabled:opacity-50"
+                aria-label="Send message"
+              >
+                <Send size={20} />
+              </button>
 
             </div>
 
-            {/*Review Changes Column*/}
-            <div className="w-96 shrink-0 self-start max-h-full overflow-y-auto bg-card rounded-2xl shadow-xl shadow-foreground/5 border border-border/40 p-8 sm:p-10 space-y-6">
-              <h2 className="text-xl font-semibold text-foreground">Wedding Details</h2>
+          </div>
 
-              {/* Status cards go here */}
-              <StatusCard label="Date" />
-              <StatusCard label="Location" />
-              <StatusCard label="Time" />
-            </div>
-            </div>
+          {/*Review Changes Column*/}
+          <div className="w-96 shrink-0 self-start max-h-full overflow-y-auto bg-card rounded-2xl shadow-xl shadow-foreground/5 border border-border/40 p-8 sm:p-10 space-y-6">
+            <h2 className="text-xl font-semibold text-foreground">Wedding Details</h2>
+
+            {/* Status cards go here */}
+            <StatusCard label="Date" />
+            <StatusCard label="Location" />
+            <StatusCard label="Time" />
+          </div>
+        </div>
       </main>
     </div>
   );

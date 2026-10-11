@@ -17,6 +17,11 @@ Colten Mikulastik:
 * AI-Chat Interface: integrated more into project, and worked with the position and layout of components
 * Full emulator Runtime for Testing configured: added configuration to allow running full app on local emulators
 * ENV configuration: adding google maps API key
+* wedding assistant protoype conversion
+* wedding assistant chat feature development
+* AI API connection to chat feature
+* Cloud function development, for handling AI API calls and requests
+* Database adjustments to persistant chat storage
 
 Keiran Indraanei:
 
