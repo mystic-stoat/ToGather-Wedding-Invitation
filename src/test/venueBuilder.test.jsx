@@ -116,17 +116,21 @@ describe("Privacy tab removal", () => {
     await openVenueTab();
     const saved = await saveAndGet();
     expect(saved).not.toHaveProperty("privacy");
-    expect(saved.isPublished).toBe(true);
+    // Phase 3: Save never writes isPublished, so the stored value can't change
+    expect(saved).not.toHaveProperty("isPublished");
   });
 
-  it("Publish still sets isPublished", async () => {
+  it("View Invitation replaces Publish and never sets isPublished", async () => {
     fs.getInvitationByUser.mockResolvedValue({ ...BASE, isPublished: false });
     renderBuilder();
     await openVenueTab();
-    fireEvent.click(screen.getByRole("button", { name: "Publish" }));
+    expect(screen.queryByRole("button", { name: /Publish/ })).toBeNull();
+    fireEvent.click(screen.getByRole("switch", { name: "Show Map" })); // unsaved change
+    vi.spyOn(window, "open").mockReturnValue(null);
+    fireEvent.click(screen.getByRole("button", { name: "View Invitation" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Save and View" }));
     await waitFor(() => expect(fs.saveInvitation).toHaveBeenCalled());
-    expect(fs.saveInvitation.mock.calls.at(-1)[1].isPublished).toBe(true);
-    expect(await screen.findByRole("button", { name: "Published ✓" })).toBeTruthy();
+    expect(fs.saveInvitation.mock.calls.at(-1)[1]).not.toHaveProperty("isPublished");
   });
 });
 

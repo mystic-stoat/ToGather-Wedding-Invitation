@@ -2,7 +2,7 @@
 // older invitations look the same, and the RSVP flow is unaffected.
 // Firestore is mocked — no emulator needed.
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 
 const db = vi.hoisted(() => ({ docs: {} }));
@@ -50,24 +50,32 @@ describe("RSVP page — venue display settings", () => {
     fsHelpers.submitRSVP.mockClear();
   });
 
+  // Phase 4: the guest page is the full invitation — the venue is in the
+  // header's date line and in its own Venue section (as in the builder).
+  const venueSection = () => document.querySelector('[data-section="venue"]');
+
   it("an older invitation shows the venue name and address as before", async () => {
     renderPage({ ...INVITATION });
     await screen.findByText("Sam & Alex");
-    expect(screen.getByTestId("invitation-venue")).toHaveTextContent("Rose Hall, 1 Garden Way, Dallas, TX");
-    // Deadline display is unchanged
+    expect(screen.getByTestId("invitation-header")).toHaveTextContent("Rose Hall");
+    expect(venueSection()).toHaveTextContent("Rose Hall");
+    expect(within(venueSection()).getByTestId("venue-address")).toHaveTextContent("1 Garden Way, Dallas, TX");
+    // Deadline display is unchanged (with the year)
     expect(screen.getByText(/Kindly reply by/)).toHaveTextContent("May 1, 2026");
   });
 
   it("hides the address when the Address switch is off", async () => {
     renderPage({ ...INVITATION, venueShowAddress: false });
     await screen.findByText("Sam & Alex");
-    expect(screen.getByTestId("invitation-venue").textContent).toBe("Rose Hall");
+    expect(venueSection()).toHaveTextContent("Rose Hall");
+    expect(within(venueSection()).queryByTestId("venue-address")).toBeNull();
+    expect(screen.queryByText(/1 Garden Way/)).toBeNull();
   });
 
   it("hides all venue info (header and confirmation) when the section is off, and RSVP still works", async () => {
     renderPage({ ...INVITATION, venueShowOnInvitation: false });
     await screen.findByText("Sam & Alex");
-    expect(screen.queryByTestId("invitation-venue")).toBeNull();
+    expect(venueSection()).toBeNull();
     expect(screen.queryByText(/Rose Hall/)).toBeNull();
 
     await acceptAndSubmit();

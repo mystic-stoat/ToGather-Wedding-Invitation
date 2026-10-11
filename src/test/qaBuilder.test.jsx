@@ -363,7 +363,7 @@ describe("Q&A — custom questions", () => {
 });
 
 describe("Q&A — builder main Save compatibility", () => {
-  it("Save and Publish never write Q&A fields", async () => {
+  it("Save and Save and View never write Q&A fields", async () => {
     server.doc.qaShowOnInvitation = true;
     server.doc.qaStartersCreated = true;
     server.doc.qaItems = [createQaItem({ question: "Dress code?", text: "Cocktail", isVisible: true })];
@@ -372,7 +372,14 @@ describe("Q&A — builder main Save compatibility", () => {
 
     fireEvent.click(screen.getAllByText(/^Save$/)[0]);
     await waitFor(() => expect(fs.saveInvitation).toHaveBeenCalled());
-    fireEvent.click(screen.getByText(/^Publish$/));
+    // Make an unsaved change, then View Invitation → "Save and View" (the
+    // former Publish button's place) — it runs the same Save.
+    vi.spyOn(window, "open").mockReturnValue(null); // no real tab in jsdom
+    fireEvent.click(within(screen.getByRole("navigation", { name: "Invitation sections" }))
+      .getByRole("button", { name: /Greetings/ }));
+    fireEvent.change(await screen.findByPlaceholderText("Together with their families..."), { target: { value: "Join us" } });
+    fireEvent.click(screen.getByRole("button", { name: "View Invitation" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Save and View" }));
     await waitFor(() => expect(fs.saveInvitation).toHaveBeenCalledTimes(2));
     for (const [, data] of fs.saveInvitation.mock.calls) {
       expect(data).not.toHaveProperty("qaItems");
@@ -426,7 +433,7 @@ describe("Q&A on the guest RSVP page", () => {
     const section = await screen.findByTestId("qa-section");
     const questions = within(section).getAllByTestId("qa-guest-item").map(i => i.querySelector("button").textContent);
     expect(questions).toEqual(["When is the wedding?", "Do you have a wedding registry?", "How do I RSVP?"]);
-    // Travel & Stay isn't on the guest page yet → no broken link
+    // No Travel & Stay places → no Travel section on the page → no broken link
     expect(within(section).queryByText("Where should I stay?")).toBeNull();
     expect(within(section).queryByText("Secret?")).toBeNull();
     expect(within(section).queryByText("Unanswered?")).toBeNull();
@@ -448,7 +455,9 @@ describe("Q&A on the guest RSVP page", () => {
     fireEvent.click(within(section).getByRole("button", { name: "How do I RSVP?" }));
     fireEvent.click(within(section).getByRole("button", { name: /View RSVP/ }));
     expect(scrollIntoView).toHaveBeenCalledTimes(1);
-    expect(scrollIntoView.mock.contexts[0].id).toBe("tg-section-rsvp");
+    // Phase 4: the guest page is the full invitation; sections are found by
+    // data-section, like the builder preview and the owner preview
+    expect(scrollIntoView.mock.contexts[0].getAttribute("data-section")).toBe("rsvp");
   });
 
   it("answers expand and collapse", async () => {

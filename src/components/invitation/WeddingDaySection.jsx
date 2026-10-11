@@ -12,6 +12,12 @@
 //
 //   Date math lives in src/lib/weddingDate.js. The countdown target comes only
 //   from getWeddingStartTime(), which is where venue time zone support goes.
+//
+//   variant="compact" (default) — the builder's phone preview, unchanged.
+//   variant="page"              — the standalone invitation website: sizes come
+//     from invitationContent.css, and the unfinished "Add to calendar" button is
+//     not shown. (On the page the parent only renders this section when a valid
+//     date is set — see getSectionVisibility in src/lib/invitationView.js.)
 // ─────────────────────────────────────────────────────────────────────────────
 import { useEffect, useState } from "react";
 import {
@@ -45,15 +51,60 @@ export const useCountdown = (target, enabled = true) => {
   return target == null ? null : getCountdownParts(target, now);
 };
 
-const CalendarView = ({ date, theme }) => {
+// ── Sizing per variant ────────────────────────────────────────────────────────
+// compact = exactly the classes the phone preview has always used.
+// page    = classes from src/components/invitation/invitationContent.css.
+const SIZES = {
+  compact: {
+    section:        "p-6 text-center",
+    heading:        "text-base mb-3",
+    calendar:       "mb-4",
+    month:          "text-[11px] mb-2",
+    table:          "w-full text-[9px] border-collapse",
+    day:            "inline-flex w-5 h-5 items-center justify-center rounded-full",
+    countdown:      "mb-4",
+    countdownGrid:  "grid grid-cols-4 gap-1.5",
+    countdownCell:  "rounded-lg py-1.5",
+    countdownValue: "text-sm leading-none",
+    countdownUnit:  "text-[7px] uppercase tracking-widest mt-1",
+    note:           "text-[8px] mt-1.5",
+    doneTitle:      "text-sm",
+    doneText:       "text-[9px] mt-1",
+    date:           "text-[9px] mb-4",
+  },
+  page: {
+    section:        "tg-inv-section text-center",
+    heading:        "tg-inv-h2",
+    calendar:       "tg-inv-date__calendar",
+    month:          "tg-inv-strong tg-inv-date__month",
+    table:          "w-full tg-inv-small border-collapse",
+    day:            "tg-inv-date__day inline-flex items-center justify-center rounded-full",
+    countdown:      "tg-inv-date__countdown",
+    countdownGrid:  "grid grid-cols-4 tg-inv-date__countdown-grid",
+    countdownCell:  "rounded-xl tg-inv-date__countdown-cell",
+    countdownValue: "tg-inv-date__countdown-value leading-none",
+    countdownUnit:  "tg-inv-eyebrow uppercase tracking-widest mt-1",
+    note:           "tg-inv-small mt-2",
+    doneTitle:      "tg-inv-strong",
+    doneText:       "tg-inv-body mt-1",
+    date:           "tg-inv-body",
+  },
+};
+
+// Page variant: keep the content in the invitation's centered column.
+// Compact variant: no wrapper at all, so the preview's DOM is unchanged.
+const InnerWrap = ({ page, children }) =>
+  (page ? <div className="tg-inv-inner">{children}</div> : <>{children}</>);
+
+const CalendarView = ({ date, theme, sz }) => {
   const weeks = buildCalendarMonth(date.year, date.month);
   const monthLabel = `${MONTH_NAMES[date.month - 1]} ${date.year}`;
   return (
-    <div className="mb-4" data-testid="wedding-calendar">
-      <p className="text-[11px] mb-2" style={{ fontFamily: theme.headingFont, color: theme.headingText }}>
+    <div className={sz.calendar} data-testid="wedding-calendar">
+      <p className={sz.month} style={{ fontFamily: theme.headingFont, color: theme.headingText }}>
         {monthLabel}
       </p>
-      <table className="w-full text-[9px] border-collapse" aria-label={`${monthLabel} calendar`}>
+      <table className={sz.table} aria-label={`${monthLabel} calendar`}>
         <thead>
           <tr>
             {WEEKDAY_LABELS.map((d, i) => (
@@ -70,7 +121,7 @@ const CalendarView = ({ date, theme }) => {
                   <td key={di} className="py-0.5 text-center">
                     {day && (
                       <span
-                        className="inline-flex w-5 h-5 items-center justify-center rounded-full"
+                        className={sz.day}
                         data-wedding-day={isWedding ? "true" : undefined}
                         aria-label={isWedding ? `Wedding day, ${MONTH_NAMES[date.month - 1]} ${day}` : undefined}
                         style={isWedding
@@ -97,17 +148,17 @@ const COUNTDOWN_UNITS = [
   { key: "seconds", label: "Sec" },
 ];
 
-const Countdown = ({ target, theme, hasTime }) => {
+const Countdown = ({ target, theme, hasTime, sz }) => {
   const parts = useCountdown(target);
   if (!parts) return null;
 
   if (parts.isComplete) {
     return (
-      <div className="mb-4" data-testid="wedding-countdown" data-complete="true">
-        <p className="text-sm" style={{ fontFamily: theme.headingFont, color: theme.headingText }}>
+      <div className={sz.countdown} data-testid="wedding-countdown" data-complete="true">
+        <p className={sz.doneTitle} style={{ fontFamily: theme.headingFont, color: theme.headingText }}>
           Just married! 🎉
         </p>
-        <p className="text-[9px] mt-1" style={{ color: theme.bodyText }}>
+        <p className={sz.doneText} style={{ color: theme.bodyText }}>
           Thank you for celebrating with us.
         </p>
       </div>
@@ -115,22 +166,22 @@ const Countdown = ({ target, theme, hasTime }) => {
   }
 
   return (
-    <div className="mb-4" data-testid="wedding-countdown" role="timer" aria-live="off">
-      <div className="grid grid-cols-4 gap-1.5">
+    <div className={sz.countdown} data-testid="wedding-countdown" role="timer" aria-live="off">
+      <div className={sz.countdownGrid}>
         {COUNTDOWN_UNITS.map(u => (
-          <div key={u.key} className="rounded-lg py-1.5" style={{ border: `1px solid ${theme.accent}` }}>
-            <p className="text-sm leading-none" data-testid={`countdown-${u.key}`}
+          <div key={u.key} className={sz.countdownCell} style={{ border: `1px solid ${theme.accent}` }}>
+            <p className={sz.countdownValue} data-testid={`countdown-${u.key}`}
               style={{ fontFamily: theme.headingFont, color: theme.headingText }}>
               {parts[u.key]}
             </p>
-            <p className="text-[7px] uppercase tracking-widest mt-1" style={{ color: theme.bodyText }}>
+            <p className={sz.countdownUnit} style={{ color: theme.bodyText }}>
               {u.label}
             </p>
           </div>
         ))}
       </div>
       {!hasTime && (
-        <p className="text-[8px] mt-1.5" style={{ color: theme.bodyText }}>
+        <p className={sz.note} style={{ color: theme.bodyText }}>
           Counting down to the start of the day.
         </p>
       )}
@@ -138,7 +189,9 @@ const Countdown = ({ target, theme, hasTime }) => {
   );
 };
 
-const WeddingDaySection = ({ invitation, settings, theme, backgroundColor }) => {
+const WeddingDaySection = ({ invitation, settings, theme, backgroundColor, variant = "compact" }) => {
+  const page = variant === "page";
+  const sz = page ? SIZES.page : SIZES.compact;
   const { dateShowCalendar, dateShowCountdown } = normalizeDateSettings(settings);
   const date   = parseWeddingDate(invitation?.weddingDate);
   const target = getWeddingStartTime(invitation);
@@ -146,34 +199,40 @@ const WeddingDaySection = ({ invitation, settings, theme, backgroundColor }) => 
   const btnStyle = { backgroundColor: theme.button, color: theme.buttonLabel };
 
   return (
-    <div className="p-6 text-center" data-section="date" style={{ backgroundColor }}>
-      <h2 className="text-base mb-3"
-        style={{ fontFamily: theme.headingFont, color: theme.headingText }}>
-        Wedding Day
-      </h2>
+    <div className={sz.section} data-section="date" style={{ backgroundColor }}>
+      <InnerWrap page={page}>
+        <h2 className={sz.heading}
+          style={{ fontFamily: theme.headingFont, color: theme.headingText }}>
+          Wedding Day
+        </h2>
 
-      {date ? (
-        <>
-          {dateShowCalendar && <CalendarView date={date} theme={theme} />}
-          {dateShowCountdown && (
-            <Countdown target={target} theme={theme} hasTime={parseCeremonyTime(invitation?.ceremonyTime) !== null} />
-          )}
-          <p className="text-[9px] mb-4" style={{ color: theme.bodyText }}>
-            {`${MONTH_NAMES[date.month - 1]} ${date.day}, ${date.year}`}
-            {time && ` · ${time}`}
+        {date ? (
+          <>
+            {dateShowCalendar && <CalendarView date={date} theme={theme} sz={sz} />}
+            {dateShowCountdown && (
+              <Countdown target={target} theme={theme} sz={sz}
+                hasTime={parseCeremonyTime(invitation?.ceremonyTime) !== null} />
+            )}
+            <p className={sz.date} style={{ color: theme.bodyText }}>
+              {`${MONTH_NAMES[date.month - 1]} ${date.day}, ${date.year}`}
+              {time && ` · ${time}`}
+            </p>
+          </>
+        ) : (
+          <p className="text-[9px] mb-4" data-testid="wedding-date-missing" style={{ color: theme.bodyText }}>
+            The wedding date hasn't been set yet.
           </p>
-        </>
-      ) : (
-        <p className="text-[9px] mb-4" data-testid="wedding-date-missing" style={{ color: theme.bodyText }}>
-          The wedding date hasn't been set yet.
-        </p>
-      )}
+        )}
 
-      {/* Existing button — calendar file (ICS) export is a separate task */}
-      <button type="button" className="w-full py-2 rounded-full text-white text-[9px] font-bold"
-        style={btnStyle}>
-        Add to calendar
-      </button>
+        {/* Existing button — calendar file (ICS) export is a separate task, so
+            the standalone page doesn't show it until it works. */}
+        {!page && (
+          <button type="button" className="w-full py-2 rounded-full text-white text-[9px] font-bold"
+            style={btnStyle}>
+            Add to calendar
+          </button>
+        )}
+      </InnerWrap>
     </div>
   );
 };

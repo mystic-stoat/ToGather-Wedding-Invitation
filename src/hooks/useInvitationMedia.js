@@ -26,6 +26,7 @@ import {
 import { releasePhoto, releaseIfReplaced } from "@/lib/imageProcessing";
 import { loadAllStoryEntries } from "@/lib/storyStore";
 import { saveStoryMedia, retryPendingDeletes, MediaSaveError } from "@/lib/storySave";
+import { hasUnsavedMediaChanges } from "@/lib/builderChanges";
 import {
   normalizePartyMembers, toStoredPartyMember, collectPartyPhotos, partyPhotoBytes,
 } from "@/lib/weddingParty";
@@ -217,7 +218,16 @@ export const useInvitationMedia = ({ saving = false } = {}) => {
     }
   };
 
+  // True when Save would upload/change the Hero Photo, Our Story or Wedding
+  // Party (used by the builder's View Invitation button).
+  const hasUnsavedChanges = hasUnsavedMediaChanges({
+    hero, savedHero,
+    blocks: storyBlocks, savedEntriesById, storyReady: storyStatus === "ready",
+    partyMembers, savedPartyMembers, partyLoaded,
+  });
+
   return {
+    hasUnsavedChanges,
     hero, setHeroPhoto,
     storyBlocks, setStoryBlocks,
     storyStatus, storyLoadedCount,

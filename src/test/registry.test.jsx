@@ -643,11 +643,18 @@ describe('Registry — builder main Save', () => {
     expect(deleteRegistry).not.toHaveBeenCalled();
   });
 
-  it('Publish does not touch registry data either', async () => {
+  it('Save and View does not touch registry data either', async () => {
     mockLoad();
     renderRegistry();
     await findInEditor('Amazon Wedding Registry');
-    fireEvent.click(screen.getByText('Publish'));
+    // Make an unsaved change, then View Invitation → 'Save and View' (the
+    // former Publish button's place) — it runs the same Save.
+    vi.spyOn(window, 'open').mockReturnValue(null); // no real tab in jsdom
+    fireEvent.click(within(screen.getByRole('navigation', { name: 'Invitation sections' }))
+      .getByRole('button', { name: /Greetings/ }));
+    fireEvent.change(await screen.findByPlaceholderText('Together with their families...'), { target: { value: 'Join us' } });
+    fireEvent.click(screen.getByRole('button', { name: 'View Invitation' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Save and View' }));
     await waitFor(() => expect(saveInvitation).toHaveBeenCalled());
     expect(saveInvitation.mock.calls[0][1]).not.toHaveProperty('registries');
     expect(saveInvitation.mock.calls[0][1]).not.toHaveProperty('registryMessage');

@@ -107,19 +107,19 @@ describe("Wedding Party tab", () => {
     expect(screen.queryByRole("button", { name: "Guestbook" })).toBeNull();
   });
 
-  it("is optional: saving and publishing with no members works and writes no members", async () => {
+  it("is optional: saving with no members works and writes no members", async () => {
     renderBuilder();
     await openParty();
     expect(screen.getByText("No wedding party members yet")).toBeTruthy();
     expect(partySection()).toBeNull();
 
-    fireEvent.click(screen.getByText("Publish"));
+    fireEvent.click(screen.getAllByText(/^Save$/)[0]);
     await waitFor(() => expect(fs.saveInvitation).toHaveBeenCalled());
     const data = fs.saveInvitation.mock.calls[0][1];
-    expect(data.isPublished).toBe(true);
+    expect(data).not.toHaveProperty("isPublished"); // the builder never writes it (Phase 3)
     expect(data).toMatchObject({ partyShowOnInvitation: true, partyGroupBySide: false });
     expect(data).not.toHaveProperty("partyMembers");
-    await screen.findByText("Published ✓");
+    await screen.findAllByText(/Saved ✓/);
     expect(story.commitMediaChanges).not.toHaveBeenCalled();
     expect(contacts.savePartyContacts).not.toHaveBeenCalled();
   });

@@ -31,6 +31,7 @@ import Dashboard        from "./pages/Dashboard.jsx";
 import WeddingDetails   from "./pages/WeddingDetails.jsx";
 import WeddingAssistant from "./pages/WeddingAssistant.jsx";
 import CreateInvitation from "./pages/CreateInvitation.jsx";
+import InvitationPreview from "./pages/InvitationPreview.jsx";
 import RSVP             from "./pages/RSVP.jsx";
 import GuestList        from "./pages/GuestList.jsx";
 import Registry         from "./pages/Registry.jsx";
@@ -141,6 +142,9 @@ const App = () => (
               element={<ProtectedRoute><WeddingAssistant /></ProtectedRoute>} />
             <Route path="/create-invitation"
               element={<ProtectedRoute><CreateInvitation /></ProtectedRoute>} />
+            {/* Full-page preview of the couple's own SAVED invitation (owner only) */}
+            <Route path="/invitation/preview"
+              element={<ProtectedRoute><InvitationPreview /></ProtectedRoute>} />
             <Route path="/guest-list"
               element={<ProtectedRoute><GuestList /></ProtectedRoute>} />
             <Route path="/gift-registry"
