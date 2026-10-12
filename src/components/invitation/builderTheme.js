@@ -41,7 +41,7 @@ export const BUILDER_UI = {
   primaryLight:     "#5F8D6B", // --secondary          softer green — hover/secondary emphasis
   selected:         "#FCEBEF", // --accent             subtle blush tint — selected card/section background
   surface:          "#FBF9F7", // --background         light warm ivory — top bar, workspace & preview stage
-  sidebar:          "#F0EAE5", // --sidebar-background warm beige — left section-nav background
+  sidebar:          "#E7DED4", // --sidebar-background warm tan — left section-nav background
   surfaceContainer: "#FFFFFF", // --card               white — panel cards & input backgrounds
   surfaceHigh:      "#EEE9E2", // --muted              warm neutral — icon wells, dropzones, toggle-off track
   onSurface:        "#2C2C2C", // --foreground         charcoal — primary text
