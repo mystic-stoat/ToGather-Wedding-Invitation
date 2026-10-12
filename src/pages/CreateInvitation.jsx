@@ -62,7 +62,7 @@ import {
   Palette, Music, Sparkles,
   BookOpen, Calendar, MapPin, BookHeart, CheckSquare,
   Users, Gift, MessageCircle, ArrowLeft, Save, ChevronRight,
-  Eye, Volume2, Info, Loader2, Hotel, Plus, Trash2, Utensils, ExternalLink,
+  Eye, Pencil, Volume2, Info, Loader2, Hotel, Plus, Trash2, Utensils, ExternalLink,
   AlertCircle, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -1056,6 +1056,19 @@ const CreateInvitation = () => {
   const [searchParams] = useSearchParams();
   const rawSection = searchParams.get("section");
   const requestedSection = SECTION_ALIASES[rawSection] || rawSection;
+  // Below 1280px the settings and the phone preview share one column; this
+  // picks which one is visible. Both stay mounted, so nothing is lost.
+  const [builderView, setBuilderView] = useState("edit");
+  // Section tab strip (below 1024px): fades show there are more tabs to swipe to
+  const sectionNavRef = useRef(null);
+  const [tabFade, setTabFade] = useState({ left: false, right: false });
+  const updateTabFade = () => {
+    const el = sectionNavRef.current;
+    if (!el) return;
+    const max = el.scrollWidth - el.clientWidth;
+    setTabFade({ left: el.scrollLeft > 4, right: max > 4 && el.scrollLeft < max - 4 });
+  };
+
   const [activeSection, setActiveSection] = useState(
     SECTIONS.some(s => s.id === requestedSection) ? requestedSection : "greetings"
   );
@@ -1225,6 +1238,23 @@ const CreateInvitation = () => {
     if (activeSection === "qa") qa.ensureStarters();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSection, qa.status, qa.startersCreated, weddingId]);
+
+  // ── Any section change (a tab, or a save error jumping to a section) returns
+  // small screens to Edit, and keeps the active tab scrolled into view.
+  useEffect(() => {
+    setBuilderView("edit");
+    const el = sectionNavRef.current?.querySelector('[aria-current="page"]');
+    if (el && sectionNavRef.current.scrollWidth > sectionNavRef.current.clientWidth) {
+      el.scrollIntoView?.({ block: "nearest", inline: "center" });
+    }
+  }, [activeSection]);
+
+  // ── Recompute the tab-strip fades when the layout or window size changes
+  useEffect(() => {
+    updateTabFade();
+    window.addEventListener("resize", updateTabFade);
+    return () => window.removeEventListener("resize", updateTabFade);
+  }, [loading, builderView]);
 
   // ── Q&A answers resolve against the live builder state ───────────────────
   // Auto-fill reads Wedding Details (invitation) + the live Venue switches
@@ -1525,33 +1555,33 @@ const CreateInvitation = () => {
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div className="h-screen flex flex-col overflow-hidden"
+    <div className="h-screen supports-[height:100dvh]:h-dvh flex flex-col overflow-hidden"
       style={{ backgroundColor: BUILDER_UI.surface, fontFamily: BUILDER_FONT }}>
 
       {/* ── Top App Bar — ToGather style ── */}
-      <header className="w-full flex-shrink-0 sticky top-0 z-50 flex justify-between items-center px-8 h-16 border-b"
+      <header className="w-full flex-shrink-0 sticky top-0 z-50 flex justify-between items-center gap-2 px-3 sm:px-8 h-16 border-b"
         style={{ backgroundColor: BUILDER_UI.surface, borderColor: BUILDER_UI.outline }}>
-        <div className="flex items-center gap-6">
-          {/* Back to dashboard */}
+        <div className="flex items-center gap-3 sm:gap-6 min-w-0">
+          {/* Back to dashboard — always visible */}
           <Link to="/dashboard"
-            className="flex items-center gap-2 text-sm font-medium transition-colors hover:opacity-70"
+            className="flex items-center gap-2 min-h-11 px-1 sm:px-0 text-sm font-medium transition-colors hover:opacity-70 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
             style={{ color: BUILDER_UI.onSurfaceVar }}>
             <ArrowLeft size={16} />
             Dashboard
           </Link>
 
-          <div className="h-5 w-px" style={{ backgroundColor: BUILDER_UI.outline }} />
+          <div className="hidden md:block h-5 w-px" style={{ backgroundColor: BUILDER_UI.outline }} />
 
-          {/* Branding */}
-          <span className="font-heading text-xl font-semibold" style={{ color: BUILDER_UI.primary }}>
+          {/* Branding — hidden on small screens to make room for the actions */}
+          <span className="hidden md:inline font-heading text-xl font-semibold" style={{ color: BUILDER_UI.primary }}>
             ToGather
           </span>
         </div>
 
-        <div className="flex items-center gap-3">
-          {/* Draft saved indicator */}
+        <div className="flex items-center gap-1 sm:gap-3 flex-shrink-0">
+          {/* Draft saved indicator (the workspace shows "Draft Saved ✓" on phones) */}
           {saved && (
-            <span className="text-xs font-semibold" style={{ color: BUILDER_UI.primary }}>
+            <span className="hidden sm:inline text-xs font-semibold" style={{ color: BUILDER_UI.primary }}>
               Saved ✓
             </span>
           )}
