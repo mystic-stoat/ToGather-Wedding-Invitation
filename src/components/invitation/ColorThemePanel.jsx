@@ -27,7 +27,7 @@ const ALL_FONT_NAMES = INVITATION_FONTS.map(f => f.name);
 
 const headingCls = "text-xs font-bold tracking-widest uppercase mb-4";
 const labelCls   = "text-xs font-bold tracking-widest uppercase mb-2 block";
-const fieldStyle = { borderColor: BUILDER_UI.outline, backgroundColor: BUILDER_UI.surfaceContainer };
+const fieldStyle = { borderColor: BUILDER_UI.inputBorder, backgroundColor: BUILDER_UI.surfaceContainer };
 
 const SectionHeading = ({ children, right }) => (
   <div className="flex items-center justify-between mb-4">

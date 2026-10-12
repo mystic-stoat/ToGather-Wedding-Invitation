@@ -35,7 +35,7 @@ const ViewInvitationDialog = ({
       </AlertDialogHeader>
       <AlertDialogFooter className="gap-2">
         <AlertDialogCancel onClick={onCancel}
-          style={{ borderColor: BUILDER_UI.outline, color: BUILDER_UI.onSurface }}>
+          style={{ borderColor: BUILDER_UI.inputBorder, color: BUILDER_UI.onSurface }}>
           Cancel
         </AlertDialogCancel>
         {canViewLastSaved && (
