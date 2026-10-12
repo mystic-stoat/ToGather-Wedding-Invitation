@@ -1618,21 +1618,21 @@ const CreateInvitation = () => {
         </div>
       </header>
 
-      {/* ── Main Layout: Sidebar + Panel + Preview ── */}
-      <div className="flex flex-1 min-h-0 overflow-hidden">
+      {/* ── Main Layout: Sidebar + Panel + Preview ──
+          ≥1280px (xl): section sidebar | settings | phone preview (unchanged).
+          1024–1279px (lg): section sidebar | settings OR preview (toggle).
+          <1024px: scrollable section tabs, then settings OR preview (toggle). */}
+      <div className="flex flex-col lg:flex-row flex-1 min-h-0 overflow-hidden">
 
         {/* Left sidebar — section navigation */}
-        <aside className="w-64 flex-shrink-0 flex flex-col py-6 overflow-y-auto border-r"
+        <aside className={`${builderView === "preview" ? "hidden lg:flex" : "flex"} relative flex-shrink-0 flex-col border-b lg:border-b-0 lg:w-64 lg:py-6 lg:overflow-y-auto lg:border-r lg:h-[calc(100vh-4rem)] lg:sticky lg:top-16`}
           style={{
             backgroundColor: BUILDER_UI.sidebar,
             borderColor: BUILDER_UI.outline,
-            height: "calc(100vh - 4rem)",
-            position: "sticky",
-            top: "4rem",
           }}>
 
-          {/* Project info */}
-          <div className="px-6 mb-6">
+          {/* Project info (sidebar only) */}
+          <div className="hidden lg:block px-6 mb-6">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-full flex items-center justify-center"
                 style={{ backgroundColor: `${BUILDER_UI.primary}20` }}>
@@ -1658,7 +1658,9 @@ const CreateInvitation = () => {
               inactive labels charcoal (11.7:1 on the sidebar), icons solid dark
               green (6.0:1), a white hover; the active tab keeps the blush
               background with dark green text (6.2:1). */}
-          <nav className="flex flex-col gap-0.5" aria-label="Invitation sections">
+          <nav ref={sectionNavRef} onScroll={updateTabFade}
+            className="flex lg:flex-col gap-2 lg:gap-0.5 overflow-x-auto lg:overflow-visible px-3 py-2 lg:p-0"
+            aria-label="Invitation sections">
             {SECTIONS.map(sec => {
               const Icon    = sec.icon;
               const isActive = activeSection === sec.id;
@@ -1666,25 +1668,63 @@ const CreateInvitation = () => {
                 <button key={sec.id}
                   onClick={() => setActiveSection(sec.id)}
                   aria-current={isActive ? "page" : undefined}
-                  className={`px-6 py-3 flex items-center gap-3 text-left transition-all text-xs font-bold tracking-widest uppercase focus:outline-none focus-visible:ring-2 focus-visible:ring-[#3F5F47] focus-visible:ring-offset-2 focus-visible:ring-offset-[#F0EAE5]${isActive ? "" : " hover:bg-white"}`}
+                  // Below lg: a pill-shaped tab (44px tall). From lg: the original
+                  // sidebar row; the active row's indent + rounded right edge
+                  // (previously inline styles) are the lg: classes.
+                  className={`flex-shrink-0 whitespace-nowrap min-h-11 lg:min-h-0 rounded-full border lg:border-0 px-4 py-2 lg:px-6 lg:py-3 flex items-center gap-3 text-left transition-all text-xs font-bold tracking-widest uppercase focus:outline-none focus-visible:ring-2 focus-visible:ring-[#3F5F47] focus-visible:ring-offset-2 focus-visible:ring-offset-[#F0EAE5]${isActive ? " border-transparent lg:ml-4 lg:pl-4 lg:rounded-none lg:rounded-r-[2rem]" : " border-input bg-card lg:bg-transparent lg:rounded-none hover:bg-white lg:hover:bg-white"}`}
                   style={{
                     backgroundColor: isActive ? BUILDER_UI.selected : undefined,
                     color: isActive ? BUILDER_UI.primary : BUILDER_UI.onSurface,
-                    borderRadius: isActive ? "0 2rem 2rem 0" : undefined,
-                    marginLeft: isActive ? "1rem" : undefined,
-                    paddingLeft: isActive ? "1rem" : undefined,
                   }}>
                   <Icon size={16} className="flex-shrink-0" style={{ color: BUILDER_UI.primary }} />
                   {sec.label}
-                  {isActive && <ChevronRight size={12} className="ml-auto" />}
+                  {isActive && <ChevronRight size={12} className="hidden lg:block ml-auto" />}
                 </button>
               );
             })}
           </nav>
+
+          {/* Below lg: edge fades signal that the tab strip scrolls sideways */}
+          {tabFade.left && (
+            <div aria-hidden="true" className="lg:hidden pointer-events-none absolute inset-y-0 left-0 w-8"
+              style={{ background: `linear-gradient(to right, ${BUILDER_UI.sidebar}, transparent)` }} />
+          )}
+          {tabFade.right && (
+            <div aria-hidden="true" className="lg:hidden pointer-events-none absolute inset-y-0 right-0 w-10 flex items-center justify-end pr-1"
+              style={{ background: `linear-gradient(to left, ${BUILDER_UI.sidebar} 40%, transparent)` }}>
+              <ChevronRight size={16} style={{ color: BUILDER_UI.primary }} />
+            </div>
+          )}
         </aside>
 
+        {/* Settings + preview. Below xl, a toggle picks which one is shown. */}
+        <div className="flex-1 min-w-0 min-h-0 flex flex-col">
+
+        <div className="xl:hidden flex-shrink-0 px-3 sm:px-6 py-2 border-b"
+          style={{ backgroundColor: BUILDER_UI.surface, borderColor: BUILDER_UI.outline }}>
+          <div role="group" aria-label="Builder view"
+            className="flex w-full sm:w-auto sm:inline-flex rounded-xl border border-input bg-card p-1 gap-1">
+            {[
+              { id: "edit", label: "Edit", Icon: Pencil },
+              { id: "preview", label: "Preview invitation", Icon: Eye },
+            ].map(({ id, label, Icon }) => {
+              const on = builderView === id;
+              return (
+                <button key={id} type="button" aria-pressed={on}
+                  onClick={() => setBuilderView(id)}
+                  className={`flex-1 sm:flex-none min-h-11 px-2 sm:px-4 rounded-lg text-sm font-semibold whitespace-nowrap flex items-center justify-center gap-1.5 sm:gap-2 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                    on ? "bg-primary text-primary-foreground shadow-sm" : "text-foreground hover:bg-muted"}`}>
+                  <Icon size={15} /> {label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="flex-1 min-h-0 flex">
+
         {/* Center workspace — active section controls */}
-        <main className="flex-1 overflow-y-auto p-10"
+        <main className={`${builderView === "preview" ? "hidden xl:block" : ""} flex-1 min-w-0 overflow-y-auto p-4 pb-24 sm:p-6 sm:pb-24 lg:p-10`}
           style={{ backgroundColor: BUILDER_UI.surface }}>
           <div className="max-w-2xl mx-auto">
 
@@ -1722,9 +1762,9 @@ const CreateInvitation = () => {
             )}
 
             {/* Section header */}
-            <div className="flex justify-between items-end mb-10">
-              <div>
-                <h2 className="text-3xl font-semibold mb-1"
+            <div className="flex justify-between items-end gap-3 mb-6 sm:mb-10">
+              <div className="min-w-0">
+                <h2 className="text-2xl sm:text-3xl font-semibold mb-1"
                   style={{ color: BUILDER_UI.onSurface }}>
                   {SECTIONS.find(s => s.id === activeSection)?.label || "Settings"}
                 </h2>
@@ -1748,20 +1788,24 @@ const CreateInvitation = () => {
         {/* Right side — phone preview. This surrounding "stage" area is builder
             chrome; the <PhonePreview> component itself keeps the invitation's
             own CANVAS / user-selected colors untouched. */}
-        <aside className="w-[400px] flex-shrink-0 flex items-center justify-center border-l"
+        <aside aria-label="Invitation preview"
+          className={`${builderView === "preview" ? "flex" : "hidden xl:flex"} flex-1 xl:flex-none xl:w-[400px] flex-shrink-0 overflow-y-auto xl:overflow-visible py-6 xl:py-0 xl:border-l xl:h-[calc(100vh-4rem)] xl:sticky xl:top-16`}
           style={{
             backgroundColor: BUILDER_UI.surface,
             borderColor: BUILDER_UI.outline,
-            height: "calc(100vh - 4rem)",
-            position: "sticky",
-            top: "4rem",
           }}>
-          <PhonePreview invitation={invitation} settings={settings} hero={media.hero} storyBlocks={media.storyBlocks}
-            partyMembers={media.partyMembers}
-            registries={registry.registries} registryMessage={registry.message}
-            registryShown={registry.showOnInvitation}
-            qaEntries={qaEntries} />
+          {/* m-auto centers the phone, and lets it scroll on short screens */}
+          <div className="m-auto">
+            <PhonePreview invitation={invitation} settings={settings} hero={media.hero} storyBlocks={media.storyBlocks}
+              partyMembers={media.partyMembers}
+              registries={registry.registries} registryMessage={registry.message}
+              registryShown={registry.showOnInvitation}
+              qaEntries={qaEntries} />
+          </div>
         </aside>
+
+        </div>
+        </div>
 
       </div>
 

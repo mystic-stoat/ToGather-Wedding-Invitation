@@ -26,7 +26,7 @@ import {
   LayoutDashboard, Users, Gift, MapPin,
   CalendarCheck, Mail, Smartphone, ChevronRight,
   Share2, Pencil, Eye, Bell, Loader2,
-  Search, UserRound, LogOut,
+  Search, UserRound, LogOut, Heart,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
