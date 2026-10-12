@@ -7,13 +7,15 @@
 @layer base {
   :root {
     /* ── Page background ─────────────────────────────────────────────────────
-     * #F7F3ED — warm ivory. Sidebar has its own distinct surface — see
-     * --sidebar-background below — so the two no longer share this value.   */
-    --background:         22, 31%, 93%;
+     * #FBF9F7 — light warm ivory. Sidebar has its own distinct surface — see
+     * --sidebar-background below — so the two no longer share this value.
+     * All tokens use the space-separated "H S% L%" format so Tailwind opacity
+     * modifiers (e.g. bg-card/60 → hsl(var(--card) / 0.6)) produce valid CSS. */
+    --background:         30 33.3% 97.6%;  /* #FBF9F7 */
     --foreground:         0 0% 17.3%;     /* #2C2C2C charcoal text            */
 
     /* ── Cards — clean white panels ──────────────────────────────────────── */
-    --card:               12, 38%, 97%;
+    --card:               0 0% 100%;      /* #FFFFFF */
     --card-foreground:    0 0% 17.3%;
     --popover:            0 0% 100%;
     --popover-foreground: 0 0% 17.3%;
@@ -43,19 +45,22 @@
     --destructive-foreground: 0 0% 100%;
 
     /* ── Borders — #E7DED4 warm beige ──────────────────────────────────────── */
-    --border:             32 28.4% 86.9%;
+    --border:             27 27% 92%; /* #F0EAE5 */
     --input:              32 28.4% 86.9%;
     --ring:               135 20.3% 31%;  /* matches primary — green focus rings, not blue */
 
     --radius: 0.75rem;
 
     /* ── Sidebar — its own surface, distinct from the page background ─────── */
-    --sidebar-background:          27.3 26.8% 92%;      /* #F0EAE5 */
+    --sidebar-background:          27 27% 92%;          /* #E7DED4 warm tan */
     --sidebar-foreground:          0 0% 17.3%;
-    --sidebar-primary:             99.4 13.4% 53.3%;    /* #839878 active nav pill */
+    --sidebar-primary:             135 20.3% 31%;       /* #3F5F47 active nav pill */
     --sidebar-primary-foreground:  0 0% 100%;
-    --sidebar-accent:              146.7 27.3% 93.5%;   /* #EAF3EE couple-info card */
+    --sidebar-accent:              160 22% 92%;         /* #E6EFEC couple-info card */
     --sidebar-accent-foreground:   0 0% 17.3%;
+    /* Secondary text on the tan sidebar — darker than --muted-foreground so nav
+     * labels keep ≥4.5:1 contrast on #E7DED4 (#5F574F ≈ 5.3:1)              */
+    --sidebar-muted-foreground:    30 9% 34%;
     --sidebar-border:              32 28.4% 86.9%;
     --sidebar-ring:                135 20.3% 31%;
   }

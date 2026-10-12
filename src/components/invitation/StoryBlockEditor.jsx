@@ -29,7 +29,7 @@ const StoryBlockEditor = ({
   const showsText = layoutShowsText(block.layout);
   const hasText = Boolean(block.title.trim() || block.description.trim());
   const hiddenPhotos = countPhotosHiddenBy(block, block.layout);
-  const fieldStyle = { borderColor: BUILDER_UI.outline, backgroundColor: BUILDER_UI.surfaceContainer, color: BUILDER_UI.onSurface };
+  const fieldStyle = { borderColor: BUILDER_UI.inputBorder, backgroundColor: BUILDER_UI.surfaceContainer, color: BUILDER_UI.onSurface };
   const labelCls = "text-xs font-bold tracking-widest uppercase mb-2 block";
 
   const slot = (i, aspect, slotLabel) => {

@@ -69,7 +69,7 @@ const WeddingPartyMemberEditor = ({
   onMoveUp, onMoveDown, onDelete, progress, dragHandle, isDragging,
 }) => {
   const n = index + 1;
-  const fieldStyle = { borderColor: BUILDER_UI.outline, backgroundColor: BUILDER_UI.surfaceContainer, color: BUILDER_UI.onSurface };
+  const fieldStyle = { borderColor: BUILDER_UI.inputBorder, backgroundColor: BUILDER_UI.surfaceContainer, color: BUILDER_UI.onSurface };
   const errStyle = (msg) => (msg ? { borderColor: ERROR_COLOR } : {});
   const labelCls = "text-xs font-bold tracking-widest uppercase mb-2 block";
   const optional = <span className="normal-case tracking-normal font-normal">(optional)</span>;

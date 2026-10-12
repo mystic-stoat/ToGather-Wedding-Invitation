@@ -8,10 +8,18 @@ import Logo from "@/assets/logo.svg";
 import { useLocation } from "react-router-dom";
 
 // ── Sidebar ───────────────────────────────────────────────────────────────────
-// Same sidebar as Dashboard for consistent navigation
-const Sidebar = ({ invitation, onLogout }) => {
+// Same sidebar as Dashboard for consistent navigation.
+//
+// variant="desktop" (default): the persistent left column, shown at lg (≥1024px)
+//   and hidden below that.
+// variant="drawer": the same sidebar rendered inside MobileNav's slide-out
+//   drawer on tablets and phones. onNavigate is called when a link or Log out
+//   is chosen so the drawer can close.
+const Sidebar = ({ invitation, onLogout, variant = "desktop", onNavigate }) => {
   // grab our location rq
   const location = useLocation();
+
+  const isDrawer = variant === "drawer";
 
   const groomFirst  = invitation?.groomName?.first || "";
   const brideFirst  = invitation?.brideName?.first || "";
@@ -24,10 +32,12 @@ const Sidebar = ({ invitation, onLogout }) => {
 
   const NavItem = ({ to, icon: Icon, label, active }) => (
     <Link to={to}
-      className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-full text-sm transition-colors ${
+      onClick={onNavigate}
+      aria-current={active ? "page" : undefined}
+      className={`flex items-center gap-2.5 px-2.5 ${isDrawer ? "py-2.5" : "py-1.5"} rounded-full text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
         active
           ? "bg-sidebar-primary text-sidebar-primary-foreground font-medium"
-          : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+          : "text-sidebar-muted-foreground hover:bg-card/60 hover:text-foreground"
       }`}>
       <Icon size={14} />
       {label}
@@ -36,22 +46,24 @@ const Sidebar = ({ invitation, onLogout }) => {
   );
 
   return (
-    <aside className="hidden lg:flex flex-col w-52 min-h-screen bg-sidebar border-r border-border/50 px-3 py-6 flex-shrink-0">
+    <aside className={isDrawer
+      ? "flex flex-col w-full min-h-full bg-sidebar px-3 py-6"
+      : "hidden lg:flex flex-col w-52 min-h-screen bg-sidebar border-r border-border/50 px-3 py-6 flex-shrink-0"}>
       <div className="flex items-center gap-2 mb-1 px-1">
 
-        <img src={Logo} className="h-8 w-auto"/>
+        <img src={Logo} alt="" className="h-8 w-auto"/>
 
         <span className="font-heading text-lg font-semibold text-foreground">ToGather</span>
       </div>
-      <p className="text-xs text-muted-foreground px-1 mb-8">Plan the day. Share the joy.</p>
+      <p className="text-xs text-sidebar-muted-foreground px-1 mb-8">Plan the day. Share the joy.</p>
 
-      <nav className="flex-1 space-y-4">
+      <nav aria-label="Main navigation" className="flex-1 space-y-4">
         <div>
-          <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider px-2.5 mb-1.5">Overview</p>
+          <p className="text-[10px] font-medium text-sidebar-muted-foreground uppercase tracking-wider px-2.5 mb-1.5">Overview</p>
           <NavItem to="/dashboard"   icon={LayoutDashboard} label="Dashboard" active={location.pathname === "/dashboard"}/>
         </div>
         <div>
-          <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider px-2.5 mb-1.5">Planning</p>
+          <p className="text-[10px] font-medium text-sidebar-muted-foreground uppercase tracking-wider px-2.5 mb-1.5">Planning</p>
           <div className="space-y-0.5">
             <NavItem to="/wedding-details"    icon={Heart}        label="Wedding Details"   active={location.pathname === "/wedding-details"} />
             <NavItem to="/guest-list"         icon={Users}        label="Guest List"        active={location.pathname === "/guest-list"}/>
@@ -61,7 +73,7 @@ const Sidebar = ({ invitation, onLogout }) => {
           </div>
         </div>
         <div>
-          <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider px-2.5 mb-1.5">Invitations</p>
+          <p className="text-[10px] font-medium text-sidebar-muted-foreground uppercase tracking-wider px-2.5 mb-1.5">Invitations</p>
           <div className="space-y-0.5">
             <NavItem to="/dashboard"         icon={CalendarCheck} label="Save the Date"     active={location.pathname === "/save-the-date"}/>
             <NavItem to="/dashboard"         icon={Mail}          label="Paper Invitations" active={location.pathname === "/paper-invitation"}/>
@@ -74,11 +86,11 @@ const Sidebar = ({ invitation, onLogout }) => {
         {coupleNames && (
           <div className="bg-sidebar-accent rounded-xl px-3 py-3 border border-primary/15">
             <p className="text-sm font-semibold text-foreground">{coupleNames}</p>
-            {weddingDate && <p className="text-xs text-muted-foreground mt-0.5">{weddingDate}</p>}
+            {weddingDate && <p className="text-xs text-sidebar-muted-foreground mt-0.5">{weddingDate}</p>}
           </div>
         )}
-        <button onClick={onLogout}
-          className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-sm text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors">
+        <button onClick={() => { onNavigate?.(); onLogout?.(); }}
+          className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-sm text-sidebar-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors">
           <LogOut size={15} /> Log out
         </button>
       </div>

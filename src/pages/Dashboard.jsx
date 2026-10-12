@@ -23,10 +23,10 @@ import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts";
 import {
-  LayoutDashboard, Heart, Users, Gift, MapPin,
+  LayoutDashboard, Users, Gift, MapPin,
   CalendarCheck, Mail, Smartphone, ChevronRight,
   Share2, Pencil, Eye, Bell, Loader2,
-  Search, LogOut, UserRound,
+  Search, UserRound, LogOut, Heart,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,6 +38,7 @@ import {
 import { getMealLabel, getAttendanceStats } from "@/lib/rsvpOptions";
 import Logo from "@/assets/logo.svg";
 import Sidebar from "@/components/Sidebar"
+import MobileNav from "@/components/MobileNav";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -81,6 +82,27 @@ const statusBadge = (status) => {
   return map[status] || "bg-muted text-muted-foreground";
 };
 
+// Meal + Dietary / Allergies — kept as separate lines (table cell and mobile card)
+const MealDietary = ({ guest, mealOptions }) => {
+  const meal = getMealLabel(guest, mealOptions);
+  const dietary = (guest.dietaryRestrictions || "").trim();
+  if (!meal && !dietary) return "—";
+  return (
+    <div className="space-y-0.5 text-xs leading-snug">
+      {meal && <p><span className="text-muted-foreground/70">Meal: </span><span className={`text-foreground ${guest.mealId ? "" : "capitalize"}`}>{meal}</span></p>}
+      {dietary && <p><span className="text-muted-foreground/70">Dietary / Allergies: </span><span className="text-foreground">{dietary}</span></p>}
+    </div>
+  );
+};
+
+// Copy a guest's unique RSVP link — URL includes both inviteeId and token so
+// the RSVP page can do a direct doc lookup
+const copyRsvpLink = (guest) => {
+  const link = `${window.location.origin}/rsvp/${guest.inviteeId}/${guest.token}`;
+  navigator.clipboard.writeText(link);
+  alert(`Copied!\n${link}`);
+};
+
 // ── Main Dashboard ────────────────────────────────────────────────────────────
 const Dashboard = () => {
 
@@ -93,6 +115,7 @@ const Dashboard = () => {
   const [guests, setGuests]               = useState([]);
   const [loading, setLoading]             = useState(true);
   const [search, setSearch]               = useState("");
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   // ── Load invitation + guests on mount ──────────────────────────────────────
   useEffect(() => {
@@ -183,17 +206,31 @@ const Dashboard = () => {
     <div className="min-h-screen bg-background flex">
 
       {/* Sidebar — visible on desktop only */}
-      <Sidebar invitation={invitation} onLogout={handleLogout} />
+      <div className="hidden lg:flex">
+        <Sidebar invitation={invitation} onLogout={handleLogout} />
+      </div>
+
+      {/* Mobile nav drawer */}
+      <MobileNav
+        invitation={invitation}
+        onLogout={handleLogout}
+        open={mobileNavOpen}
+        onOpenChange={setMobileNavOpen}
+      />
 
       {/* Main content area */}
       <main className="flex-1 min-h-screen overflow-y-auto">
 
         {/* Mobile top bar — only shows when sidebar is hidden */}
         <div className="lg:hidden bg-card border-b border-border/50 px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Heart size={16} className="text-primary" />
-            <span className="font-heading text-lg font-semibold">ToGather</span>
-          </div>
+          <button
+            onClick={() => setMobileNavOpen(true)}
+            className="p-2 rounded-lg hover:bg-muted transition-colors"
+            aria-label="Open menu"
+          >
+            <Heart size={20} className="text-primary" />
+          </button>
+          <span className="font-heading text-lg font-semibold">ToGather</span>
           <button onClick={handleLogout}
             className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
             <LogOut size={15} /> Log out

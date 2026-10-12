@@ -164,7 +164,7 @@ const StoryPanel = ({
   const show = settings.storyShowOnInvitation !== false;
   const usagePct = Math.min(100, Math.round((mediaBytes / WEDDING_MEDIA_QUOTA_BYTES) * 100));
   const overQuota = mediaBytes > WEDDING_MEDIA_QUOTA_BYTES;
-  const fieldStyle = { borderColor: BUILDER_UI.outline, backgroundColor: BUILDER_UI.surfaceContainer };
+  const fieldStyle = { borderColor: BUILDER_UI.inputBorder, backgroundColor: BUILDER_UI.surfaceContainer };
   const sectionHeading = "text-xs font-bold tracking-widest uppercase mb-4";
   const editingLocked = disabled || status !== "ready";
 

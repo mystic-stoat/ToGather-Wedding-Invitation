@@ -31,17 +31,23 @@ export const CANVAS = {
 // left section nav, center settings panels, and Save/Publish actions. Selection
 // indicators (font pairing, layout, sidebar section, etc.) use a blush-tinted
 // background with a dark-green border/text instead of CANVAS's olive/lime.
+//
+// These are hex copies of the app theme tokens in src/index.css (inline styles
+// need concrete colors). Each key mirrors one CSS variable, noted on its line.
+// src/test/builderThemeSync.test.jsx fails if the two ever disagree — when you
+// change a color in index.css, update the matching value here too.
 export const BUILDER_UI = {
-  primary:          "#3F5F47", // dark green — active states, buttons, selected borders/text
-  primaryLight:     "#5F8D6B", // softer green — hover/secondary emphasis
-  selected:         "#FCEBEF", // subtle blush tint — selected card/section background
-  surface:          "#F7F3ED", // warm ivory — top bar, center workspace & preview stage background
-  sidebar:          "#F0EAE5", // warm beige — left section-nav background, distinct from the workspace
-  surfaceContainer: "#FFFFFF", // white — panel cards & input backgrounds
-  surfaceHigh:      "#F3EAE3", // warm beige — icon wells, dropzones, toggle-off track
-  onSurface:        "#2C2C2C", // charcoal — primary text
-  onSurfaceVar:     "#746B63", // softer warm gray — labels/secondary text
-  outline:          "#E7DED4", // borders/dividers
+  primary:          "#3F5F47", // --primary            dark green — active states, buttons, selected borders/text
+  primaryLight:     "#5F8D6B", // --secondary          softer green — hover/secondary emphasis
+  selected:         "#FCEBEF", // --accent             subtle blush tint — selected card/section background
+  surface:          "#FBF9F7", // --background         light warm ivory — top bar, workspace & preview stage
+  sidebar:          "#E7DED4", // --sidebar-background warm tan — left section-nav background
+  surfaceContainer: "#FFFFFF", // --card               white — panel cards & input backgrounds
+  surfaceHigh:      "#EEE9E2", // --muted              warm neutral — icon wells, dropzones, toggle-off track
+  onSurface:        "#2C2C2C", // --foreground         charcoal — primary text
+  onSurfaceVar:     "#746B63", // --muted-foreground   softer warm gray — labels/secondary text
+  outline:          "#F0EAE5", // --border             general borders/dividers
+  inputBorder:      "#E7DED4", // --input              form fields & outline buttons — visible on white
 };
 
 /**
