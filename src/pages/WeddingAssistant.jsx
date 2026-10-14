@@ -20,6 +20,7 @@ import {
   messageText,
 } from "@/lib/firestore";
 import Sidebar from "@/components/Sidebar";
+import MobileNav from "@/components/MobileNav";
 import { useNavigate } from "react-router-dom";
 import ChatBubble from "@/components/ChatBubble";
 
@@ -39,6 +40,8 @@ const WeddingAssistant = () => {
   const [error, setError] = useState(null);
   const [message, setMessage] = useState("");
   const bottomRef = useRef(null);
+  // the scrollable chat history box (scrolled directly, see effect below)
+  const chatScrollRef = useRef(null);
 
   // page state
   const [loading, setLoading] = useState(true);
@@ -76,7 +79,10 @@ const WeddingAssistant = () => {
 
   // keep the newest message in view
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    // Scroll only the chat box. scrollIntoView() would also scroll the whole
+    // page on phones/tablets, where the layout stacks and the page scrolls.
+    const box = chatScrollRef.current;
+    if (box) box.scrollTo?.({ top: box.scrollHeight, behavior: "smooth" });
   }, [messages, replyPending]);
 
   const loadData = async () => {
@@ -163,15 +169,23 @@ const WeddingAssistant = () => {
   );
 
   return (
-    <div className="h-screen bg-background flex overflow-hidden">
+    // Desktop (lg+): fixed-height app shell; chat scrolls inside its card.
+    // Tablet/phone: the page scrolls and the review panel stacks under the chat.
+    <div className="min-h-screen lg:h-screen bg-background flex lg:overflow-hidden">
       {/* sidebar to integrate with the rest of the web app */}
       <Sidebar invitation={invitation} onLogout={handleLogout} />
 
       {/* Main chat bot and review columns */}
-      <main className="flex-1 min-w-0 min-h-0 px-6 lg:px-10 py-8">
-        <div className="max-w-6xl mx-auto h-full flex gap-6">
-          {/* Conversation section */}
-          <div className="flex-1 min-w-0 min-h-0 bg-card rounded-2xl shadow-xl shadow-foreground/5 border border-border/40 p-8 sm:p-10 flex flex-col">
+      <main className="flex-1 min-w-0 lg:min-h-0 flex flex-col">
+        {/* Mobile / tablet top bar with the navigation drawer (below lg) */}
+        <MobileNav invitation={invitation} onLogout={handleLogout} />
+
+        <div className="flex-1 lg:min-h-0 px-4 sm:px-6 lg:px-10 py-6 sm:py-8">
+        <div className="max-w-6xl mx-auto h-full flex flex-col lg:flex-row gap-6">
+          {/* Conversation section: a fixed 75vh card on phones/tablets (flex-none,
+              so flex-1 can't stretch it to the whole history) so the chat
+              scrolls inside it and the composer stays on screen */}
+          <div className="h-[75vh] flex-none lg:flex-1 lg:h-auto min-w-0 min-h-0 bg-card rounded-2xl shadow-xl shadow-foreground/5 border border-border/40 p-5 sm:p-10 flex flex-col">
             {/* Section header */}
             <div className="flex mb-6">
               <h1 className="font-heading-3 text-2xl font-semibold text-foreground">
@@ -188,7 +202,7 @@ const WeddingAssistant = () => {
             </div>
 
             {/* chat section */}
-            <div className="flex-1 overflow-y-auto min-h-0 mb-6 pr-4 space-y-5">
+            <div ref={chatScrollRef} className="flex-1 overflow-y-auto min-h-0 mb-6 pr-4 space-y-5">
 
               {/* Greeting (UI only, not saved to the conversation) */}
               <ChatBubble
@@ -262,7 +276,7 @@ const WeddingAssistant = () => {
                 }}
                 disabled={replyPending || !chatLoaded}
                 placeholder="Message your wedding assistant..."
-                className="flex-1 bg-transparent outline-none py-2"
+                className="flex-1 min-w-0 bg-transparent outline-none py-2"
               />
 
               {/* Voice button - UI only for now */}
@@ -289,7 +303,7 @@ const WeddingAssistant = () => {
           </div>
 
           {/*Review Changes Column*/}
-          <div className="w-96 shrink-0 self-start max-h-full overflow-y-auto bg-card rounded-2xl shadow-xl shadow-foreground/5 border border-border/40 p-8 sm:p-10 space-y-6">
+          <div className="w-full lg:w-96 shrink-0 lg:self-start lg:max-h-full lg:overflow-y-auto bg-card rounded-2xl shadow-xl shadow-foreground/5 border border-border/40 p-5 sm:p-10 space-y-6">
             <h2 className="text-xl font-semibold text-foreground">Wedding Details</h2>
 
             {/* Status cards go here */}
@@ -297,6 +311,7 @@ const WeddingAssistant = () => {
             <StatusCard label="Location" />
             <StatusCard label="Time" />
           </div>
+        </div>
         </div>
       </main>
     </div>

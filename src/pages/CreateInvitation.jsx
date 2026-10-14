@@ -181,7 +181,7 @@ const GreetingsPanel = ({ settings, onChange, hero, onHeroChange, heroProgress, 
         placeholder="Together with their families..."
         className="h-12 rounded-lg border-0 border-b-2 italic"
         style={{
-          borderColor: BUILDER_UI.outline,
+          borderColor: BUILDER_UI.inputBorder,
           backgroundColor: BUILDER_UI.surfaceContainer,
           fontFamily: settings.font1 || "Playfair Display",
           fontSize: "1.1rem",
@@ -199,7 +199,7 @@ const GreetingsPanel = ({ settings, onChange, hero, onHeroChange, heroProgress, 
         placeholder="The stars aligned when we met, and now we're getting married! Your presence at our wedding would make our special day even more memorable."
         className="min-h-[140px] rounded-lg border-0 border-b-2 resize-none"
         style={{
-          borderColor: BUILDER_UI.outline,
+          borderColor: BUILDER_UI.inputBorder,
           backgroundColor: BUILDER_UI.surfaceContainer,
           color: BUILDER_UI.onSurface,
         }}
@@ -230,7 +230,7 @@ const RsvpPanel = ({ invitation, settings, onChange, deadlineError, onDeadlineEr
   const removeOption = (id) => onChange("mealOptions", options.filter(o => o.id !== id));
 
   const fieldStyle = {
-    borderColor: BUILDER_UI.outline,
+    borderColor: BUILDER_UI.inputBorder,
     backgroundColor: BUILDER_UI.surfaceContainer,
     color: BUILDER_UI.onSurface,
   };
@@ -251,7 +251,7 @@ const RsvpPanel = ({ invitation, settings, onChange, deadlineError, onDeadlineEr
           onChange={e => { onChange("inviteDeadline", e.target.value); onDeadlineErrorClear?.(); }}
           className="h-12 rounded-lg border-0 border-b-2"
           style={{
-            borderColor: deadlineError ? ERROR_COLOR : BUILDER_UI.outline,
+            borderColor: deadlineError ? ERROR_COLOR : BUILDER_UI.inputBorder,
             backgroundColor: BUILDER_UI.surfaceContainer,
           }}
         />
@@ -335,7 +335,7 @@ const RsvpPanel = ({ invitation, settings, onChange, deadlineError, onDeadlineEr
 
       <Button type="button" variant="outline" onClick={addOption}
         className="w-full rounded-lg gap-2"
-        style={{ borderColor: BUILDER_UI.outline, color: BUILDER_UI.primary }}>
+        style={{ borderColor: BUILDER_UI.inputBorder, color: BUILDER_UI.primary }}>
         <Plus size={15} /> Add meal option
       </Button>
 
@@ -459,7 +459,7 @@ const MusicPanel = ({ settings, onChange }) => {
                   onChange={e => { setLinkValue(e.target.value); if (error) setError(""); }}
                   placeholder="https://open.spotify.com/track/..."
                   className="h-11 rounded-lg border-0 border-b-2 flex-1"
-                  style={{ borderColor: BUILDER_UI.outline, backgroundColor: BUILDER_UI.surfaceContainer }}
+                  style={{ borderColor: BUILDER_UI.inputBorder, backgroundColor: BUILDER_UI.surfaceContainer }}
                 />
                 <button onClick={handleAddSong}
                   className="px-6 rounded-lg text-sm font-bold uppercase tracking-widest flex-shrink-0"
@@ -468,7 +468,7 @@ const MusicPanel = ({ settings, onChange }) => {
                 </button>
               </div>
               {error && (
-                <p className="text-xs mt-2" style={{ color: "#b3261e" }}>
+                <p className="text-xs mt-2" style={{ color: ERROR_COLOR }}>
                   {error}
                 </p>
               )}
@@ -590,10 +590,10 @@ const TravelPanel = ({ settings, onChange, errors, setErrors }) => {
     });
   };
 
-  const fieldStyle = { borderColor: BUILDER_UI.outline, backgroundColor: BUILDER_UI.surfaceContainer };
+  const fieldStyle = { borderColor: BUILDER_UI.inputBorder, backgroundColor: BUILDER_UI.surfaceContainer };
   const labelCls = "text-xs font-bold tracking-widest uppercase mb-2 block";
   const errorText = (msg) => msg && (
-    <p className="text-xs mt-1.5" style={{ color: "#b3261e" }}>{msg}</p>
+    <p className="text-xs mt-1.5" style={{ color: ERROR_COLOR }}>{msg}</p>
   );
 
   return (
@@ -717,7 +717,7 @@ const TravelPanel = ({ settings, onChange, errors, setErrors }) => {
                       placeholder="Hyatt Regency Dallas"
                       maxLength={100}
                       className="h-11 rounded-lg border-0 border-b-2"
-                      style={{ ...fieldStyle, ...(itemErrors.name ? { borderColor: "#b3261e" } : {}) }}
+                      style={{ ...fieldStyle, ...(itemErrors.name ? { borderColor: ERROR_COLOR } : {}) }}
                     />
                     {errorText(itemErrors.name)}
                   </div>
@@ -736,7 +736,7 @@ const TravelPanel = ({ settings, onChange, errors, setErrors }) => {
                       onBlur={() => checkItemLink(item)}
                       placeholder="https://maps.app.goo.gl/..."
                       className="h-11 rounded-lg border-0 border-b-2"
-                      style={{ ...fieldStyle, ...(itemErrors.mapUrl ? { borderColor: "#b3261e" } : {}) }}
+                      style={{ ...fieldStyle, ...(itemErrors.mapUrl ? { borderColor: ERROR_COLOR } : {}) }}
                     />
                     {errorText(itemErrors.mapUrl) || (
                       <p className="text-xs mt-1.5" style={{ color: BUILDER_UI.onSurfaceVar }}>
@@ -1589,12 +1589,16 @@ const CreateInvitation = () => {
           {/* Save button */}
           <button onClick={() => handleSave()}
             disabled={saving}
-            className="px-5 py-2 text-sm font-semibold transition-colors hover:opacity-80 flex items-center gap-2"
+            className="px-3 sm:px-5 py-2 min-h-11 sm:min-h-0 text-sm font-semibold transition-colors hover:opacity-80 flex items-center gap-2"
             style={{ color: BUILDER_UI.primary }}>
             {saving
               ? <><Loader2 size={14} className="animate-spin" />
                   {media.uploadProgress && media.uploadProgress.total > 0
-                    ? `Uploading ${Math.min(media.uploadProgress.done + 1, media.uploadProgress.total)}/${media.uploadProgress.total} · ${media.uploadProgress.percent}%`
+                    ? <>
+                        {/* Phones: percentage only, so the header never overflows */}
+                        <span className="sm:hidden">{media.uploadProgress.percent}%</span>
+                        <span className="hidden sm:inline">{`Uploading ${Math.min(media.uploadProgress.done + 1, media.uploadProgress.total)}/${media.uploadProgress.total} · ${media.uploadProgress.percent}%`}</span>
+                      </>
                     : "Saving..."}</>
               : <><Save size={14} /> Save</>}
           </button>
@@ -1603,17 +1607,18 @@ const CreateInvitation = () => {
               last SAVED invitation in a new tab (asks first if there are
               unsaved changes). Never publishes or sends anything. */}
           <button type="button" onClick={view.requestView}
+            aria-label={view.savingForView ? undefined : "View Invitation"}
             disabled={saving || view.savingForView || viewUnavailable}
             title={viewUnavailable
               ? "Save your invitation first, then you can view it"
               : "Open your saved invitation in a new tab"}
-            className="px-6 py-2 text-sm font-semibold rounded-lg text-white shadow-sm transition-all active:scale-95 flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed disabled:active:scale-100"
+            className="px-3 sm:px-6 py-2 min-h-11 sm:min-h-0 text-sm font-semibold rounded-lg text-white shadow-sm transition-all active:scale-95 flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed disabled:active:scale-100"
             style={{
               background: `linear-gradient(135deg, ${BUILDER_UI.primary} 0%, ${BUILDER_UI.primaryLight} 100%)`,
             }}>
             {view.savingForView
               ? <><Loader2 size={14} className="animate-spin" /> Saving…</>
-              : <><ExternalLink size={14} /> View Invitation</>}
+              : <><ExternalLink size={14} /> <span><span className="sm:hidden">View</span><span className="hidden sm:inline">View Invitation</span></span></>}
           </button>
         </div>
       </header>

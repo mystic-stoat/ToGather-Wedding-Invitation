@@ -41,13 +41,31 @@ export const BUILDER_UI = {
   primaryLight:     "#5F8D6B", // --secondary          softer green — hover/secondary emphasis
   selected:         "#FCEBEF", // --accent             subtle blush tint — selected card/section background
   surface:          "#FBF9F7", // --background         light warm ivory — top bar, workspace & preview stage
-  sidebar:          "#E7DED4", // --sidebar-background warm tan — left section-nav background
+  sidebar:          "#F0EAE5", // --sidebar-background warm beige — left section-nav background
   surfaceContainer: "#FFFFFF", // --card               white — panel cards & input backgrounds
   surfaceHigh:      "#EEE9E2", // --muted              warm neutral — icon wells, dropzones, toggle-off track
   onSurface:        "#2C2C2C", // --foreground         charcoal — primary text
   onSurfaceVar:     "#746B63", // --muted-foreground   softer warm gray — labels/secondary text
   outline:          "#F0EAE5", // --border             general borders/dividers
   inputBorder:      "#E7DED4", // --input              form fields & outline buttons — visible on white
+};
+
+/**
+ * Which CSS variable in src/index.css each BUILDER_UI key mirrors.
+ * Used by the sync guard test; not needed at runtime.
+ */
+export const BUILDER_UI_TOKENS = {
+  primary:          "--primary",
+  primaryLight:     "--secondary",
+  selected:         "--accent",
+  surface:          "--background",
+  sidebar:          "--sidebar-background",
+  surfaceContainer: "--card",
+  surfaceHigh:      "--muted",
+  onSurface:        "--foreground",
+  onSurfaceVar:     "--muted-foreground",
+  outline:          "--border",
+  inputBorder:      "--input",
 };
 
 /**
