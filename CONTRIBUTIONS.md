@@ -22,6 +22,8 @@ Colten Mikulastik:
 * AI API connection to chat feature
 * Cloud function development, for handling AI API calls and requests
 * Database adjustments to persistant chat storage
+* Current wedding details context added when messages sent to claude
+* tests functions created for the utilities, end to end tests with different users.
 
 
 
