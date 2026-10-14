@@ -39,7 +39,7 @@ const RegistryRow = ({ registry, onEdit, onDelete, onToggleVisible, busy, disabl
         </div>
       </div>
 
-      {/* Actions: visibility, edit, delete */}
+      {/* Actions: visibility, edit, delete (40px tap targets on phones) */}
       <div className="flex items-center gap-2.5 sm:gap-3 flex-shrink-0 ml-auto">
         {busy ? (
           <Loader2 size={16} className="animate-spin text-muted-foreground" />
@@ -59,7 +59,7 @@ const RegistryRow = ({ registry, onEdit, onDelete, onToggleVisible, busy, disabl
             <button
               onClick={onEdit}
               disabled={disabled}
-              className="text-muted-foreground hover:text-primary transition-colors disabled:opacity-40"
+              className="h-10 w-10 -mx-1.5 sm:h-auto sm:w-auto sm:mx-0 flex items-center justify-center rounded-lg text-muted-foreground hover:text-primary transition-colors disabled:opacity-40"
               title={`Edit ${registry.name}`}
               aria-label={`Edit ${registry.name}`}
             >
@@ -68,7 +68,7 @@ const RegistryRow = ({ registry, onEdit, onDelete, onToggleVisible, busy, disabl
             <button
               onClick={onDelete}
               disabled={disabled}
-              className="text-muted-foreground hover:text-destructive transition-colors disabled:opacity-40"
+              className="h-10 w-10 -mx-1.5 sm:h-auto sm:w-auto sm:mx-0 flex items-center justify-center rounded-lg text-muted-foreground hover:text-destructive transition-colors disabled:opacity-40"
               title={`Delete ${registry.name}`}
               aria-label={`Delete ${registry.name}`}
             >

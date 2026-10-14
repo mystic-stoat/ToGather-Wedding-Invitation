@@ -27,10 +27,11 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Save, CheckCircle2, Loader2, Menu, X } from "lucide-react";
+import { Save, CheckCircle2, Loader2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { getInvitationByUser, saveInvitation } from "@/lib/firestore";
 import Sidebar from "@/components/Sidebar";
+import MobileNav from "@/components/MobileNav";
 import GoogleMapEmbed, { buildMapQuery } from "@/components/GoogleMapEmbed";
 import PlaceAutocompleteInput from "@/components/PlaceAutocompleteInput";
 import { CHILDREN_POLICY, getWeddingChildrenPolicy } from "@/lib/rsvpOptions";
@@ -100,7 +101,6 @@ const WeddingDetails = () => {
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [fieldErrors, setFieldErrors] = useState({});
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   // ── Load existing invitation when the page mounts ──────────────────────────
   useEffect(() => {
@@ -269,38 +269,13 @@ const WeddingDetails = () => {
         <Sidebar invitation={invitationData} onLogout={handleLogout} />
       </div>
 
-      {/* Mobile nav drawer */}
-      {mobileNavOpen && (
-        <div className="fixed inset-0 z-50 flex lg:hidden">
-          <div className="w-72 h-full bg-card shadow-xl">
-            <div className="flex justify-end p-3">
-              <button onClick={() => setMobileNavOpen(false)} aria-label="Close menu">
-                <X size={22} />
-              </button>
-            </div>
-            <Sidebar invitation={invitationData} onLogout={handleLogout} />
-          </div>
-          <div className="flex-1 bg-black/30" onClick={() => setMobileNavOpen(false)} />
-        </div>
-      )}
-
       <main className="flex-1 overflow-y-auto">
-        {/* Mobile top bar */}
-        <div className="lg:hidden flex items-center justify-between border-b border-border/50 bg-card/60 px-4 py-3">
-          <button
-            onClick={() => setMobileNavOpen(true)}
-            className="p-2 rounded-lg hover:bg-muted"
-            aria-label="Open menu"
-          >
-            <Menu size={22} />
-          </button>
-          <h1 className="font-heading text-lg font-semibold text-foreground">Wedding Details</h1>
-          <Button variant="ghost" size="sm" onClick={handleLogout}>
-            Log out
-          </Button>
-        </div>
+        {/* Mobile / tablet top bar with the navigation drawer (below lg).
+            Replaces the previous custom drawer, which rendered <Sidebar />
+            below lg where Sidebar hid itself — so the drawer opened empty. */}
+        <MobileNav invitation={invitationData} onLogout={handleLogout} />
 
-        <div className="px-6 lg:px-10 py-8 max-w-5xl mx-auto space-y-10">
+        <div className="px-4 sm:px-6 lg:px-10 py-6 sm:py-8 max-w-5xl mx-auto space-y-10">
           {loadError && (
             <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
               {loadError}
