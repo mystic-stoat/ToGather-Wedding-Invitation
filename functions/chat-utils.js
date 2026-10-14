@@ -51,10 +51,67 @@ const extractReplyText = (response) =>
       .join("")
       .trim();
  
+// Invitation fields the assistant may see, in display order. An allowlist on
+// purpose: the invitation doc also holds URLs, coordinates, registries etc.
+const WEDDING_CONTEXT_FIELDS = [
+  ["groomName", "Partner one"],
+  ["brideName", "Partner two"],
+  ["weddingDate", "Wedding date"],
+  ["ceremonyTime", "Ceremony time"],
+  ["venueName", "Venue"],
+  ["venueAddress", "Venue address"],
+  ["receptionName", "Reception"],
+  ["receptionAddress", "Reception address"],
+  ["rsvpDeadline", "RSVP deadline"],
+  ["childrenPolicy", "Children policy"],
+];
+const WEDDING_CONTEXT_MAX_VALUE = 200; // user-typed text: cap what we forward
+
+
+const formatName = (name) =>
+  ["first", "middle", "last"]
+    .map((part) => typeof name[part] === "string" ? name[part].trim(): "")
+    .filter(Boolean)
+    .join(" ");
+
+// Firestore Timestamp, Date or string -> a short readable string ("" if unusable).
+const formatContextValue = (value) => {
+  if (value === null || value === undefined) return "";
+  let v = value;
+  if (typeof v.toDate === "function") v = v.toDate();
+  if (typeof v === "object" && !(v instanceof Date)) return formatName(v).slice(0, WEDDING_CONTEXT_MAX_VALUE);
+  if (v instanceof Date) {
+    return Number.isNaN(v.getTime()) ? "" : v.toISOString().slice(0, 10);
+  }
+  if (typeof v !== "string" && typeof v !== "number") return "";
+  return String(v).trim().slice(0, WEDDING_CONTEXT_MAX_VALUE);
+};
+
+// Builds the <wedding_details> block appended to the system prompt. Lists
+// what is filled in AND what is still missing, so the assistant only asks
+// about the gaps. `invitation` is null when the host has none yet.
+const buildWeddingContext = (invitation) => {
+  if (!invitation) {
+    return "<wedding_details>\nNo wedding details entered yet.\n" +
+      "</wedding_details>";
+  }
+  const known = [];
+  const missing = [];
+  for (const [key, label] of WEDDING_CONTEXT_FIELDS) {
+    const value = formatContextValue(invitation[key]);
+    if (value) known.push(`${label}: ${value}`);
+    else missing.push(label);
+  }
+  const lines = [...known];
+  if (missing.length) lines.push(`Not yet set: ${missing.join(", ")}`);
+  return `<wedding_details>\n${lines.join("\n")}\n</wedding_details>`;
+};
+
 module.exports = {
   isPlainText,
   newestUserMessageId,
   buildClaudeMessages,
   extractReplyText,
+  buildWeddingContext,
 };
  
