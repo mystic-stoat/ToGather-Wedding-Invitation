@@ -62,7 +62,7 @@ const WEDDING_CONTEXT_FIELDS = [
   ["venueAddress", "Venue address"],
   ["receptionName", "Reception"],
   ["receptionAddress", "Reception address"],
-  ["rsvpDeadline", "RSVP deadline"],
+  ["inviteDeadline", "RSVP deadline"],
   ["childrenPolicy", "Children policy"],
 ];
 const WEDDING_CONTEXT_MAX_VALUE = 200; // user-typed text: cap what we forward
