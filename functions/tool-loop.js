@@ -1,6 +1,8 @@
 // Drives one assistant turn: call Claude, and if it asks for tools or pauses,
 // keep going until it finishes or we hit the call cap. No Firebase and no
-// SDK here: `callClaude` is passed in, so tests can hand in a fake.
+// SDK here: `callClaude({messages, tools})` is passed in, so tests can hand in
+// a fake. `toolHandlers` covers CLIENT tools only; server tools (web_search)
+// run inside the API call and need no handler.
 
 const MAX_CALLS = 6;
 
@@ -43,6 +45,7 @@ const sumUsage = (trace) =>
 const runToolLoop = async ({
   callClaude,
   messages,
+  tools = [],
   toolHandlers = {},
   maxCalls = MAX_CALLS,
 }) => {
@@ -60,7 +63,8 @@ const runToolLoop = async ({
   for (let i = 0; i < maxCalls; i++) {
     // Pass a copy: we keep pushing onto `convo` below, and a caller holding
     // the array it was given would otherwise see it change afterwards.
-    const response = await callClaude([...convo]);
+    // `tools` is built once by the caller and sent unchanged every time.
+    const response = await callClaude({messages: [...convo], tools});
     trace.push(response);
 
     switch (response.stop_reason) {
@@ -85,6 +89,10 @@ const runToolLoop = async ({
         const toolBlocks = response.content.filter(
             (b) => b.type === "tool_use",
         );
+        // Nothing for us to answer would mean an empty user message (a 400).
+        if (toolBlocks.length === 0) {
+          throw new Error("stop_reason tool_use without a client tool_use.");
+        }
         const results = [];
         for (const block of toolBlocks) {
           results.push(await runOneTool(block, toolHandlers));

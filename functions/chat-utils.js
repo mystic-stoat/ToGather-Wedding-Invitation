@@ -2,7 +2,9 @@
 // Pure helpers for the wedding assistant chat function: no Firebase, no
 // network. Kept separate from index.js (like email-utils.js) so they can be
 // unit-tested without the emulator.
- 
+
+const {FIELD_REGISTRY} = require("./field-registry");
+
 // A message is sendable only if every block is non-empty text. Tool blocks
 // will need their own handling when tool use arrives.
 const isPlainText = (blocks) =>
@@ -129,7 +131,65 @@ const buildWeddingContext = (invitation) => {
   return `<wedding_details>\n${lines.join("\n")}\n</wedding_details>`;
 };
 
+// --- Proposals in Claude's context -----------------------------------------
+// Claude learns what the couple decided from the system prompt, never from a
+// chat message (a decision is not a message). Pending proposals plus recent
+// decisions, so it won't re-propose a pending or rejected value.
+
+const PROPOSAL_DECIDED_DAYS = 14;
+const PROPOSAL_DECIDED_MAX = 10;
+// Decisions the couple made. "superseded" was replaced by a newer proposal,
+// not decided, so it is left out.
+const COUPLE_DECISIONS = ["accepted", "rejected", "stale"];
+
+// Firestore Timestamp, Date, or millis -> millis (null if unusable).
+const toMillis = (v) => {
+  if (v && typeof v.toMillis === "function") return v.toMillis();
+  if (v instanceof Date) return v.getTime();
+  return typeof v === "number" ? v : null;
+};
+
+const describeValue = (field, value) => {
+  if (value === null || value === undefined) return "not set";
+  const text = FIELD_REGISTRY[field].format(value);
+  return `"${String(text).slice(0, WEDDING_CONTEXT_MAX_VALUE)}"`;
+};
+
+const describeProposal = (p, tail) =>
+  `- ${FIELD_REGISTRY[p.field].label}: ${describeValue(p.field, p.newValue)}` +
+  ` (was ${describeValue(p.field, p.oldValue)}) ${tail}`;
+
+// `pending`: all pending proposals. `recent`: proposals with a decidedAt,
+// any status, any order. Returns "" when there is nothing to say.
+// Only proposable fields are shown, so isPublished never appears here.
+const buildProposalsContext = ({pending = [], recent = [], now = new Date()}) => {
+  const known = (p) => FIELD_REGISTRY[p.field] && FIELD_REGISTRY[p.field].proposable;
+  const cutoff = now.getTime() - PROPOSAL_DECIDED_DAYS * 24 * 60 * 60 * 1000;
+
+  const decided = recent
+      .filter((p) => known(p) && COUPLE_DECISIONS.includes(p.status))
+      .filter((p) => (toMillis(p.decidedAt) ?? 0) >= cutoff)
+      .sort((a, b) => toMillis(b.decidedAt) - toMillis(a.decidedAt))
+      .slice(0, PROPOSAL_DECIDED_MAX);
+  const waiting = pending.filter(known);
+
+  if (!waiting.length && !decided.length) return "";
+  const lines = [];
+  if (waiting.length) {
+    lines.push("Waiting for the couple's answer:");
+    waiting.forEach((p) => lines.push(describeProposal(p, "- pending")));
+  }
+  if (decided.length) {
+    lines.push(`Decided in the last ${PROPOSAL_DECIDED_DAYS} days:`);
+    decided.forEach((p) => lines.push(describeProposal(p, `- ${p.status}`)));
+  }
+  return `<proposals>\n${lines.join("\n")}\n</proposals>`;
+};
+
 module.exports = {
+  buildProposalsContext,
+  PROPOSAL_DECIDED_DAYS,
+  COUPLE_DECISIONS,
   isPlainText,
   newestUserMessageId,
   buildClaudeMessages,

@@ -1346,6 +1346,85 @@ describe('children policy and meal options', () => {
  * ============================================================
  */
 
+describe('wedding assistant proposals', () => {
+  const path = 'betrothed/alice-uid/proposals/p1';
+  const pending = {
+    field: 'venueName',
+    oldValue: null,
+    newValue: 'The Barn',
+    reason: 'they said so',
+    status: 'pending',
+    messageId: 'm1',
+    weddingId: 'wedding-alice',
+    decidedAt: null,
+  };
+
+  const seedProposal = (data = pending) =>
+    seed((context) => setDoc(doc(context.firestore(), path), data));
+
+  it('lets the owner read their own proposal, not someone else\'s', async () => {
+    await seedProposal();
+    await assertSucceeds(
+      getDoc(doc(testEnv.authenticatedContext('alice-uid').firestore(), path))
+    );
+    await assertFails(
+      getDoc(doc(testEnv.authenticatedContext('bob-uid').firestore(), path))
+    );
+  });
+
+  it('never lets the client create or delete a proposal', async () => {
+    const alice = testEnv.authenticatedContext('alice-uid').firestore();
+    await assertFails(setDoc(doc(alice, 'betrothed/alice-uid/proposals/p2'), pending));
+    await seedProposal();
+    await assertFails(deleteDoc(doc(alice, path)));
+  });
+
+  it('lets the owner accept or reject a pending proposal', async () => {
+    await seedProposal();
+    const alice = testEnv.authenticatedContext('alice-uid').firestore();
+    await assertSucceeds(
+      updateDoc(doc(alice, path), { status: 'accepted', decidedAt: serverTimestamp() })
+    );
+  });
+
+  it('rejects changing anything except status and decidedAt', async () => {
+    await seedProposal();
+    const alice = testEnv.authenticatedContext('alice-uid').firestore();
+    await assertFails(
+      updateDoc(doc(alice, path), {
+        status: 'accepted', decidedAt: serverTimestamp(), newValue: 'Somewhere Else',
+      })
+    );
+  });
+
+  it('rejects a made-up status', async () => {
+    await seedProposal();
+    const alice = testEnv.authenticatedContext('alice-uid').firestore();
+    await assertFails(
+      updateDoc(doc(alice, path), { status: 'pending', decidedAt: serverTimestamp() })
+    );
+    await assertFails(
+      updateDoc(doc(alice, path), { status: 'superseded', decidedAt: serverTimestamp() })
+    );
+  });
+
+  it('rejects deciding a proposal that is already decided', async () => {
+    await seedProposal({ ...pending, status: 'rejected' });
+    const alice = testEnv.authenticatedContext('alice-uid').firestore();
+    await assertFails(
+      updateDoc(doc(alice, path), { status: 'accepted', decidedAt: serverTimestamp() })
+    );
+  });
+
+  it('rejects another user deciding it', async () => {
+    await seedProposal();
+    const bob = testEnv.authenticatedContext('bob-uid').firestore();
+    await assertFails(
+      updateDoc(doc(bob, path), { status: 'accepted', decidedAt: serverTimestamp() })
+    );
+  });
+});
+
 describe('default deny behavior', () => {
 
   it('rejects writes to an unknown collection', async () => {

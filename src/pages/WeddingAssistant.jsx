@@ -17,12 +17,15 @@ import {
   sendUserMessage,
   retryUserMessage,
   clearMessages,
+  subscribeToPendingProposals,
+  decideProposal,
   messageText,
 } from "@/lib/firestore";
 import Sidebar from "@/components/Sidebar";
 import MobileNav from "@/components/MobileNav";
 import { useNavigate } from "react-router-dom";
 import ChatBubble from "@/components/ChatBubble";
+import ProposalCard from "@/components/ProposalCard";
 
 // Optional starter prompts. Leave empty for now: nothing renders when empty.
 // If you add strings here later, each one shows up as a button that sends
@@ -39,6 +42,9 @@ const WeddingAssistant = () => {
   const [chatLoaded, setChatLoaded] = useState(false);
   const [error, setError] = useState(null);
   const [message, setMessage] = useState("");
+  // changes the assistant proposed that the couple hasn't answered yet
+  const [proposals, setProposals] = useState([]);
+  const [deciding, setDeciding] = useState(false);
   const bottomRef = useRef(null);
   // the scrollable chat history box (scrolled directly, see effect below)
   const chatScrollRef = useRef(null);
@@ -73,8 +79,18 @@ const WeddingAssistant = () => {
       }
     );
 
+    // proposals waiting for Accept / Reject
+    const unsubscribeProposals = subscribeToPendingProposals(
+      user.uid,
+      setProposals,
+      (err) => console.error("proposals listener error", err)
+    );
+
     // stop listening when the page unmounts or the user changes
-    return unsubscribe;
+    return () => {
+      unsubscribe();
+      unsubscribeProposals();
+    };
   }, [user]);
 
   // keep the newest message in view
@@ -132,6 +148,26 @@ const WeddingAssistant = () => {
     } catch (err) {
       console.error("retry error", err);
       setError("Couldn't retry. Please try again.");
+    }
+  };
+
+  // Accept / Reject. Not a chat message: the assistant hears about it on its
+  // next turn. The card disappears on its own when the listener sees the change.
+  const handleDecide = async (proposalId, decision) => {
+    setError(null);
+    setDeciding(true);
+    try {
+      const action = await decideProposal(user.uid, proposalId, decision);
+      if (action === "stale") {
+        setError("That detail was changed after the suggestion, so nothing was applied.");
+      } else if (decision === "accept") {
+        loadData(); // refresh the invitation behind the page
+      }
+    } catch (err) {
+      console.error("decide proposal error", err);
+      setError("Couldn't save your answer. Please try again.");
+    } finally {
+      setDeciding(false);
     }
   };
 
@@ -232,6 +268,16 @@ const WeddingAssistant = () => {
                   key={msg.id}
                   message={messageText(msg)}
                   isUser={msg.role === "user"}
+                />
+              ))}
+
+              {/* Changes the assistant proposed: nothing applies until Accept */}
+              {proposals.map((proposal) => (
+                <ProposalCard
+                  key={proposal.id}
+                  proposal={proposal}
+                  busy={deciding}
+                  onDecide={handleDecide}
                 />
               ))}
 
