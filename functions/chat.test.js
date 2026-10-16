@@ -6,6 +6,7 @@ const {
   buildClaudeMessages,
   newestUserMessageId,
   extractReplyText,
+  slimTrace,
   buildWeddingContext,
 } = require("./chat-utils");
 
@@ -69,6 +70,35 @@ test("extractReplyText joins text blocks and trims", () => {
   assert.equal(extractReplyText(res), "Hello there");
   assert.equal(extractReplyText({content: []}), "");
 });
+test("extractReplyText drops narration before the last search", () => {
+  const res = {content: [
+    {type: "text", text: "Let me look that up."},
+    {type: "server_tool_use", name: "web_search", input: {}},
+    {type: "web_search_tool_result", content: []},
+    {type: "text", text: "The Barn is "},
+    {type: "text", text: "open on Fridays.", citations: []},
+  ]};
+  assert.equal(extractReplyText(res), "The Barn is open on Fridays.");
+});
+
+test("slimTrace keeps stop reason, usage and block names only", () => {
+  const out = slimTrace([{
+    stop_reason: "end_turn",
+    usage: {input_tokens: 1, output_tokens: 2},
+    content: [
+      {type: "server_tool_use", name: "web_search", input: {query: "x"}},
+      {type: "web_search_tool_result", content: [{encrypted_content: "..."}]},
+      {type: "text", text: "hi"},
+    ],
+  }]);
+  assert.deepEqual(out[0].blocks, [
+    "server_tool_use:web_search",
+    "web_search_tool_result",
+    "text",
+  ]);
+  assert.equal(JSON.stringify(out).includes("encrypted_content"), false);
+});
+
 test("wedding context lists known fields and the missing ones", () => {
   const out = buildWeddingContext({
     groomName: {first: "Sam" , last:"Lee"},

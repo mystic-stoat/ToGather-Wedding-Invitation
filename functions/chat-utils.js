@@ -43,13 +43,35 @@ const buildClaudeMessages = (docsNewestFirst) => {
   }));
 };
  
-// Joins the text blocks of a Claude response.
-const extractReplyText = (response) =>
-  (response.content || [])
+// Joins the text blocks of a Claude response. After a web search, only the
+// text that follows the last search block is the answer; anything before it
+// is narration like "Let me look that up". Citations split a sentence into
+// several text blocks, so the pieces are joined with no separator.
+const extractReplyText = (response) => {
+  const content = response.content || [];
+  const lastSearch = content.reduce(
+      (last, b, i) =>
+        (b.type === "server_tool_use" || b.type === "web_search_tool_result" ?
+          i : last),
+      -1,
+  );
+  return content
+      .slice(lastSearch + 1)
       .filter((b) => b.type === "text")
       .map((b) => b.text)
       .join("")
       .trim();
+};
+
+// What we store on the reply doc: per response, the stop reason, usage, and
+// block types. Search results are large and would risk Firestore's 1 MiB
+// document limit, so their content is left out.
+const slimTrace = (trace) =>
+  trace.map((r) => ({
+    stop_reason: r.stop_reason,
+    usage: r.usage,
+    blocks: (r.content || []).map((b) => (b.name ? `${b.type}:${b.name}` : b.type)),
+  }));
  
 // Invitation fields the assistant may see, in display order. An allowlist on
 // purpose: the invitation doc also holds URLs, coordinates, registries etc.
@@ -112,6 +134,7 @@ module.exports = {
   newestUserMessageId,
   buildClaudeMessages,
   extractReplyText,
+  slimTrace,
   buildWeddingContext,
 };
  
