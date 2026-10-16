@@ -122,8 +122,15 @@ export const AuthProvider = ({ children }) => {
     const credential = await createUserWithEmailAndPassword(
       firebaseAuth, email, password
     );
-    // Step 2: Save their name to their Firebase Auth profile
-    await updateProfile(credential.user, { displayName: name });
+    // Step 2: Save their name to their Firebase Auth profile. A failure here
+    // must NOT fail the signup — the account already exists and the canonical
+    // name lives in the betrothed Firestore doc Signup writes next. Aborting
+    // would orphan a good account and a retry would hit email-already-in-use.
+    try {
+      await updateProfile(credential.user, { displayName: name });
+    } catch (err) {
+      console.error("Display name could not be saved:", err);
+    }
 
     // Step 3: Send the verification email. The continue URL returns the user
     // to this app's verify screen; the domain must be authorized in Firebase

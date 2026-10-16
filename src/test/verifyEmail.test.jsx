@@ -6,15 +6,19 @@ import { render, screen, fireEvent, act } from "@testing-library/react";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 
 const auth = vi.hoisted(() => ({ value: {} }));
+const firestore = vi.hoisted(() => ({ createUserProfile: vi.fn(async () => {}) }));
 vi.mock("@/contexts/AuthContext", () => ({
   useAuth: () => auth.value,
+}));
+vi.mock("@/lib/firestore", () => ({
+  createUserProfile: firestore.createUserProfile,
 }));
 // Footer pulls in links/icons — keep it simple.
 vi.mock("@/components/Footer", () => ({ default: () => <div /> }));
 
 import VerifyEmail from "@/pages/VerifyEmail.jsx";
 
-const pendingUser = { email: "new.user@example.com", emailVerified: false };
+const pendingUser = { uid: "uid-123", email: "new.user@example.com", emailVerified: false };
 
 const setAuth = (overrides = {}) => {
   auth.value = {
@@ -39,7 +43,7 @@ const renderPage = (state) =>
   );
 
 describe("VerifyEmail page", () => {
-  beforeEach(() => setAuth());
+  beforeEach(() => { setAuth(); firestore.createUserProfile.mockClear(); });
   afterEach(() => vi.useRealTimers());
 
   it("shows the heading, message and the user's email", () => {
@@ -54,6 +58,33 @@ describe("VerifyEmail page", () => {
   it("warns when signup reports the verification email failed to send", () => {
     renderPage({ verificationSendFailed: true });
     expect(screen.getByText(/couldn't be sent/i)).toBeInTheDocument();
+  });
+
+  it("tells the user their account exists when the profile write was deferred", () => {
+    renderPage({ profileSaveFailed: true, name: "Jane Smith", email: "jane@example.com" });
+    expect(screen.getByText(/account was created/i)).toBeInTheDocument();
+    expect(screen.getByText(/profile is still being saved/i)).toBeInTheDocument();
+  });
+
+  it("retries the deferred profile write when the user continues verified", async () => {
+    auth.value.reloadCurrentUser = vi.fn(async () => ({ ...pendingUser, emailVerified: true }));
+    renderPage({ profileSaveFailed: true, name: "Jane Smith", email: "jane@example.com" });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /i've verified my email/i }));
+    });
+    expect(firestore.createUserProfile).toHaveBeenCalledWith("uid-123", "Jane Smith", "jane@example.com");
+    expect(await screen.findByText("dashboard-page")).toBeInTheDocument();
+  });
+
+  it("still reaches /dashboard when the profile retry fails — never blocks entry", async () => {
+    auth.value.reloadCurrentUser = vi.fn(async () => ({ ...pendingUser, emailVerified: true }));
+    firestore.createUserProfile.mockRejectedValueOnce(new Error("firestore down"));
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    renderPage({ profileSaveFailed: true, name: "Jane Smith", email: "jane@example.com" });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /i've verified my email/i }));
+    });
+    expect(await screen.findByText("dashboard-page")).toBeInTheDocument();
   });
 
   it("'I've verified my email' reloads the user and continues to /dashboard when verified", async () => {

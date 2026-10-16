@@ -81,14 +81,26 @@ const Signup = () => {
       const { uid, verificationSent } = await signup(name.trim(), email, password);
 
       // Step 2: Create the Firestore profile document in `betrothed` collection
-      // We use the Firebase Auth uid as the document ID so it's easy to look up
-      await createUserProfile(uid, name.trim(), email);
+      // We use the Firebase Auth uid as the document ID so it's easy to look up.
+      // A failure here must NOT report "registration failed" — the account is
+      // already created, so continue to verification and let the verify page
+      // finish the profile write instead of recreating the account.
+      let profileSaved = true;
+      try {
+        await createUserProfile(uid, name.trim(), email);
+      } catch (err) {
+        console.error("Profile save deferred:", err);
+        profileSaved = false;
+      }
 
       // Step 3: New accounts must verify their email before using the app.
       // If the verification email itself failed to send, the account and
       // profile are still valid — the verify page lets them resend it.
       navigate("/verify-email", {
-        state: verificationSent ? undefined : { verificationSendFailed: true },
+        state: {
+          ...(verificationSent ? {} : { verificationSendFailed: true }),
+          ...(profileSaved ? {} : { profileSaveFailed: true, name: name.trim(), email }),
+        },
       });
 
     } catch (err) {

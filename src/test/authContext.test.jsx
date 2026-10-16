@@ -129,6 +129,17 @@ describe("AuthProvider signup + verification email", () => {
     expect(createUserWithEmailAndPassword).toHaveBeenCalledTimes(1);
   });
 
+  it("still resolves when updateProfile fails — the account already exists", async () => {
+    vi.mocked(updateProfile).mockRejectedValue(new Error("profile write failed"));
+    const result = {};
+    await runSignup(result);
+
+    // The email still goes out and signup resolves — the canonical name
+    // lives in the betrothed Firestore doc, not the Auth profile.
+    expect(result.current).toEqual({ uid: "new-uid", verificationSent: true });
+    expect(sendEmailVerification).toHaveBeenCalled();
+  });
+
   it("propagates account-creation failures and never sends an email", async () => {
     const err = Object.assign(new Error("exists"), { code: "auth/email-already-in-use" });
     vi.mocked(createUserWithEmailAndPassword).mockRejectedValue(err);
