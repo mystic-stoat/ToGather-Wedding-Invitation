@@ -22,6 +22,7 @@
 // adding libraries here to connect fire auth to firestore db
 import { doc, getDoc } from "firebase/firestore";
 import { firebaseAuth, db } from "@/lib/firebase";
+import { verificationActionCodeSettings } from "@/lib/emailVerification";
 
 import { createContext, useContext, useEffect, useState } from "react";
 import {
@@ -31,6 +32,8 @@ import {
   signOut,                      // log out
   sendPasswordResetEmail,       // send password reset email
   updateProfile,                // update display name / photo
+  sendEmailVerification,        // send the account verification email
+  reload,                       // refresh the user's auth record (emailVerified)
 } from "firebase/auth";
 
 // ── Step 1: Create the context ────────────────────────────────────────────────
@@ -98,12 +101,22 @@ export const AuthProvider = ({ children }) => {
   // If it fails (wrong password etc.), Firebase throws an error with a `code`
   // property that Login.jsx catches and shows a friendly message for.
   const login = async (email, password) => {
-    await signInWithEmailAndPassword(firebaseAuth, email, password);
+    return signInWithEmailAndPassword(firebaseAuth, email, password);
   };
 
   // ── signup ────────────────────────────────────────────────────────────────
-  // Creates a new Firebase Auth account and sets the user's display name.
-  // Returns { uid } so Signup.jsx can use it to create the Firestore profile.
+  // Creates a new Firebase Auth account, sets the display name, and sends the
+  // verification email. Returns { uid, verificationSent } so Signup.jsx can
+  // create the Firestore profile and the verify-email page can warn when the
+  // email could not be sent.
+  //
+  // PARTIAL-FAILURE HANDLING:
+  //   If the account is created but sending the verification email fails
+  //   (network error, Firebase rate limit), the account and profile still
+  //   exist — signup resolves with verificationSent: false instead of
+  //   throwing. The user lands on /verify-email where Resend is available.
+  //   We never retry createUserWithEmailAndPassword, which would throw
+  //   auth/email-already-in-use for a perfectly good account.
   const signup = async (name, email, password) => {
     // Step 1: Create the Firebase Auth account
     const credential = await createUserWithEmailAndPassword(
@@ -112,8 +125,40 @@ export const AuthProvider = ({ children }) => {
     // Step 2: Save their name to their Firebase Auth profile
     await updateProfile(credential.user, { displayName: name });
 
+    // Step 3: Send the verification email. The continue URL returns the user
+    // to this app's verify screen; the domain must be authorized in Firebase
+    // Console → Authentication → Settings → Authorized domains (localhost is
+    // allowed by default).
+    let verificationSent = true;
+    try {
+      await sendEmailVerification(credential.user, verificationActionCodeSettings());
+    } catch (err) {
+      console.error("Verification email could not be sent:", err);
+      verificationSent = false;
+    }
+
     // Return the uid so Signup.jsx can create the betrothed Firestore doc
-    return { uid: credential.user.uid };
+    return { uid: credential.user.uid, verificationSent };
+  };
+
+  // ── resendVerificationEmail ───────────────────────────────────────────────
+  // Sends another verification email to the currently signed-in user.
+  // Throws the Firebase error (auth/too-many-requests, etc.) so the
+  // verify-email page can show the right message.
+  const resendVerificationEmail = async () => {
+    if (!firebaseAuth.currentUser) throw new Error("No signed-in user");
+    await sendEmailVerification(firebaseAuth.currentUser, verificationActionCodeSettings());
+  };
+
+  // ── reloadCurrentUser ─────────────────────────────────────────────────────
+  // Re-fetches the signed-in user's auth record so `emailVerified` reflects
+  // the link they may have clicked in another tab/device. Returns the
+  // (possibly updated) Firebase User, or null when signed out.
+  const reloadCurrentUser = async () => {
+    const current = firebaseAuth.currentUser;
+    if (!current) return null;
+    await reload(current);
+    return current;
   };
 
   // ── logout ────────────────────────────────────────────────────────────────
@@ -141,7 +186,9 @@ export const AuthProvider = ({ children }) => {
       login,
       signup,
       logout,
-      resetPassword
+      resetPassword,
+      resendVerificationEmail,
+      reloadCurrentUser
     }}>
       {children}
     </AuthContext.Provider>

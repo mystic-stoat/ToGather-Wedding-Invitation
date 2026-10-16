@@ -76,16 +76,20 @@ const Signup = () => {
     setErrors({});
 
     try {
-      // Step 1: Create Firebase Auth account
-      // signup() is in AuthContext — calls Firebase and returns { uid }
-      const { uid } = await signup(name.trim(), email, password);
+      // Step 1: Create Firebase Auth account + send verification email.
+      // signup() is in AuthContext — returns { uid, verificationSent }.
+      const { uid, verificationSent } = await signup(name.trim(), email, password);
 
       // Step 2: Create the Firestore profile document in `betrothed` collection
       // We use the Firebase Auth uid as the document ID so it's easy to look up
       await createUserProfile(uid, name.trim(), email);
 
-      // Step 3: Go to dashboard
-      navigate("/dashboard");
+      // Step 3: New accounts must verify their email before using the app.
+      // If the verification email itself failed to send, the account and
+      // profile are still valid — the verify page lets them resend it.
+      navigate("/verify-email", {
+        state: verificationSent ? undefined : { verificationSendFailed: true },
+      });
 
     } catch (err) {
     // ADD THIS LINE so you can see the real error in the browser console

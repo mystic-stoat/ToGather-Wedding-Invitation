@@ -27,6 +27,8 @@ import Index            from "./pages/Index.jsx";
 import Login            from "./pages/Login.jsx";
 import ForgotPassword   from "./pages/ForgotPassword.jsx";
 import Signup           from "./pages/Signup.jsx";
+import VerifyEmail      from "./pages/VerifyEmail.jsx";
+import { requiresEmailVerification } from "./lib/emailVerification";
 import Dashboard        from "./pages/Dashboard.jsx";
 import WeddingDetails   from "./pages/WeddingDetails.jsx";
 import WeddingAssistant from "./pages/WeddingAssistant.jsx";
@@ -55,7 +57,7 @@ const queryClient = new QueryClient();
 //   b) Back-arrow after logout cannot re-enter protected pages — pressing back
 //      from /dashboard after logout lands on /login (not logged in), which
 //      stays there rather than bouncing into the app.
-const PublicRoute = ({ children }) => {
+export const PublicRoute = ({ children }) => {
   const { user, loading } = useAuth();
 
   if (loading) {
@@ -69,9 +71,12 @@ const PublicRoute = ({ children }) => {
     );
   }
 
-  // Already logged in — push them into the app instead of showing login/landing
+  // Already logged in — push them into the app instead of showing login/landing.
+  // New accounts that haven't verified yet go to the verification screen.
   if (user) {
-    return <Navigate to="/dashboard" replace />;
+    return requiresEmailVerification(user)
+      ? <Navigate to="/verify-email" replace />
+      : <Navigate to="/dashboard" replace />;
   }
 
   return children;
@@ -87,7 +92,7 @@ const PublicRoute = ({ children }) => {
 //
 // Usage in Routes below:
 //   <ProtectedRoute><Dashboard /></ProtectedRoute>
-const ProtectedRoute = ({ children }) => {
+export const ProtectedRoute = ({ children }) => {
   const { user, loading } = useAuth();
 
   // Still checking Firebase session — show spinner so page doesn't flash
@@ -108,7 +113,37 @@ const ProtectedRoute = ({ children }) => {
     return <Navigate to="/login" replace />;
   }
 
+  // Logged in but must verify their email first — typing /dashboard (or any
+  // other protected URL) directly can't skip the verification screen.
+  if (requiresEmailVerification(user)) {
+    return <Navigate to="/verify-email" replace />;
+  }
+
   // Logged in — render the actual page
+  return children;
+};
+
+// ── VerifyEmailRoute ─────────────────────────────────────────────────────────
+// Guards /verify-email itself:
+//   signed out            → /login (nothing to verify)
+//   verified or legacy    → /dashboard (nothing left to do)
+//   signed in + pending   → show the page
+export const VerifyEmailRoute = ({ children }) => {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+          <p className="text-sm text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) return <Navigate to="/login" replace />;
+  if (!requiresEmailVerification(user)) return <Navigate to="/dashboard" replace />;
   return children;
 };
 
@@ -128,6 +163,10 @@ const App = () => (
             <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
             <Route path="/forgot-password" element={<PublicRoute><ForgotPassword /></PublicRoute>} />
             <Route path="/signup" element={<PublicRoute><Signup /></PublicRoute>} />
+
+            {/* Verification screen for newly registered accounts.
+                Not inside PublicRoute — the user IS signed in while pending. */}
+            <Route path="/verify-email" element={<VerifyEmailRoute><VerifyEmail /></VerifyEmailRoute>} />
 
             {/* RSVP is fully public — guests don't have accounts */}
             {/* :token is a URL parameter — e.g. /rsvp/abc-123 */}
