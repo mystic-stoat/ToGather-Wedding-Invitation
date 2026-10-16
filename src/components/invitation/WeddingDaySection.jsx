@@ -20,6 +20,7 @@
 //     date is set — see getSectionVisibility in src/lib/invitationView.js.)
 // ─────────────────────────────────────────────────────────────────────────────
 import { useEffect, useState } from "react";
+import SaveTheDate from "@/components/SaveTheDate";
 import {
   MONTH_NAMES,
   WEEKDAY_LABELS,
@@ -224,9 +225,13 @@ const WeddingDaySection = ({ invitation, settings, theme, backgroundColor, varia
           </p>
         )}
 
-        {/* Existing button — calendar file (ICS) export is a separate task, so
-            the standalone page doesn't show it until it works. */}
-        {!page && (
+        {/* "Add to calendar". Compact/preview: an inert visual mock — it
+            represents the feature in the builder but never creates events.
+            Page: the real Save the Date action (same component the header
+            uses), shown when this section is on and a valid date is set. */}
+        {page ? (
+          date && <SaveTheDate invitation={invitation} variant="invitation" theme={theme} />
+        ) : (
           <button type="button" className="w-full py-2 rounded-full text-white text-[9px] font-bold"
             style={btnStyle}>
             Add to calendar
