@@ -32,6 +32,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { getInvitationByUser, saveInvitation } from "@/lib/firestore";
 import Sidebar from "@/components/Sidebar";
 import MobileNav from "@/components/MobileNav";
+import PublishedInvitationBanner from "@/components/PublishedInvitationBanner";
 import GoogleMapEmbed, { buildMapQuery } from "@/components/GoogleMapEmbed";
 import PlaceAutocompleteInput from "@/components/PlaceAutocompleteInput";
 import { CHILDREN_POLICY, getWeddingChildrenPolicy } from "@/lib/rsvpOptions";
@@ -299,6 +300,8 @@ const WeddingDetails = () => {
           {saveError}
             </div>
           )}
+
+          <PublishedInvitationBanner isPublished={invitationData?.isPublished} />
 
           <div className="bg-card rounded-2xl shadow-xl shadow-foreground/5 border border-border/40 p-8 sm:p-10 space-y-8">
             {/* Desktop title + save row */}
