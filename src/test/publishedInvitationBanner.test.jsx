@@ -83,6 +83,12 @@ describe("PublishedInvitationBanner component", () => {
     expect(banner()).toBeNull();
   });
 
+  it.each(["true", 1, "yes", {}])("renders nothing for truthy non-boolean isPublished=%s", (value) => {
+    const { container } = render(<PublishedInvitationBanner isPublished={value} />);
+    expect(container).toBeEmptyDOMElement();
+    expect(banner()).toBeNull();
+  });
+
   it("renders the title and default message when published", () => {
     render(<PublishedInvitationBanner isPublished={true} />);
     expect(screen.getByText(TITLE)).toBeInTheDocument();

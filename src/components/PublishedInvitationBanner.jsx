@@ -36,7 +36,9 @@ const DEFAULT_MESSAGE =
   "your guests are informed of important changes.";
 
 const PublishedInvitationBanner = ({ isPublished, title = DEFAULT_TITLE, message = DEFAULT_MESSAGE, className = "" }) => {
-  if (!isPublished) return null;
+  // Strict check: only the literal boolean true counts as published. Truthy
+  // strings/numbers ("true", 1) from malformed data must not show the warning.
+  if (isPublished !== true) return null;
 
   return (
     <div
