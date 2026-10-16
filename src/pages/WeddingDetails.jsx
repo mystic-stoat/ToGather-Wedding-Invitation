@@ -192,6 +192,15 @@ const WeddingDetails = () => {
   const handleSave = async () => {
     if (!user) return;
 
+    // Prevent saving if existing wedding details failed to load.
+    // This avoids accidentally creating a duplicate invitation.
+    if (loadingData || loadError) {
+      setSaveError(
+        "Unable to verify your existing wedding details. Please refresh the page and try again."
+      );
+      return;
+    }
+
     setSaveError("");
     setSaved(false);
 
@@ -202,7 +211,7 @@ const WeddingDetails = () => {
 
     setSaving(true);
     try {
-      const id = await saveInvitation(user.uid, { ...form, isPublished: false }, weddingId);
+      const id = await saveInvitation(user.uid, { ...form }, weddingId);
       if (!weddingId) setWeddingId(id);
 
       setSaved(true);
@@ -282,6 +291,15 @@ const WeddingDetails = () => {
             </div>
           )}
 
+          {saveError && (
+            <div
+              role="alert"
+              className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive"
+            >
+          {saveError}
+            </div>
+          )}
+
           <div className="bg-card rounded-2xl shadow-xl shadow-foreground/5 border border-border/40 p-8 sm:p-10 space-y-8">
             {/* Desktop title + save row */}
             <div className="hidden lg:flex items-center justify-between">
@@ -293,9 +311,9 @@ const WeddingDetails = () => {
 
             {/* Mobile save row (title lives in the top bar above) */}
             <div className="lg:hidden flex items-center justify-between">
-              <p className="text-xs text-muted-foreground">Core information that populatores your invitations</p>
+              <p className="text-xs text-muted-foreground">Core information that populates your invitations</p>
               <div className="flex items-center gap-3 ml-auto">
-                {saveError && <p className="text-xs text-destructive">{saveError}</p>}
+
                 {saveButton}
               </div>
             </div>
@@ -496,4 +514,4 @@ const WeddingDetails = () => {
   );
 };
 
-export default WeddingDetails;
+export default WeddingDetails;
