@@ -69,6 +69,7 @@ vi.mock("@/pages/Login.jsx",            () => ({ default: marker("page-login") }
 vi.mock("@/pages/ForgotPassword.jsx",   () => ({ default: marker("page-forgot") }));
 vi.mock("@/pages/Signup.jsx",           () => ({ default: marker("page-signup") }));
 vi.mock("@/pages/VerifyEmail.jsx",      () => ({ default: marker("page-verify-email") }));
+vi.mock("@/pages/FinishProfile.jsx",    () => ({ default: marker("page-finish-profile") }));
 vi.mock("@/pages/Dashboard.jsx",        () => ({ default: marker("page-dashboard") }));
 vi.mock("@/pages/WeddingDetails.jsx",   () => ({ default: marker("page-details") }));
 vi.mock("@/pages/WeddingAssistant.jsx", () => ({ default: marker("page-assistant") }));
@@ -87,9 +88,9 @@ import { PublicRoute, ProtectedRoute, VerifyEmailRoute } from "@/App.jsx";
 const Page = ({ name }) => <div data-testid={name} />;
 const P = (name) => <Page name={name} />;
 
-const renderGuards = (path, user) => {
+const renderGuards = (path, user, { profileMissing = false } = {}) => {
   auth.value = {
-    user, loading: false,
+    user, loading: false, profileMissing,
     login: vi.fn(), signup: vi.fn(), logout: vi.fn(),
     resetPassword: vi.fn(), resendVerificationEmail: vi.fn(), reloadCurrentUser: vi.fn(),
   };
@@ -98,6 +99,7 @@ const renderGuards = (path, user) => {
       <Routes>
         <Route path="/login" element={<PublicRoute>{P("page-login")}</PublicRoute>} />
         <Route path="/verify-email" element={<VerifyEmailRoute>{P("page-verify-email")}</VerifyEmailRoute>} />
+        <Route path="/finish-profile" element={<ProtectedRoute allowIncompleteProfile>{P("page-finish-profile")}</ProtectedRoute>} />
         <Route path="/dashboard" element={<ProtectedRoute>{P("page-dashboard")}</ProtectedRoute>} />
         <Route path="/wedding-details" element={<ProtectedRoute>{P("page-details")}</ProtectedRoute>} />
         <Route path="/guest-list" element={<ProtectedRoute>{P("page-guests")}</ProtectedRoute>} />
@@ -154,5 +156,41 @@ describe("App route guards", () => {
   it("shows the verification screen to a pending user on /verify-email", async () => {
     renderGuards("/verify-email", pendingUser);
     expect(await screen.findByTestId("page-verify-email")).toBeInTheDocument();
+  });
+});
+
+describe("Profile-recovery route guards", () => {
+  beforeEach(() => { auth.value = { user: null, loading: false, profileMissing: false }; });
+
+  it("sends a verified user with a missing profile to /finish-profile from protected pages", async () => {
+    renderGuards("/dashboard", verifiedUser, { profileMissing: true });
+    expect(await screen.findByTestId("page-finish-profile")).toBeInTheDocument();
+  });
+
+  it("keeps a pending user's verification gate ahead of profile recovery", async () => {
+    // Unverified AND missing profile — verification wins; recovery happens
+    // after they verify, when they next reach a protected page.
+    renderGuards("/dashboard", pendingUser, { profileMissing: true });
+    expect(await screen.findByTestId("page-verify-email")).toBeInTheDocument();
+  });
+
+  it("also sends a pending user on /finish-profile itself back to /verify-email", async () => {
+    renderGuards("/finish-profile", pendingUser, { profileMissing: true });
+    expect(await screen.findByTestId("page-verify-email")).toBeInTheDocument();
+  });
+
+  it("lets a verified user with a missing profile actually see /finish-profile", async () => {
+    renderGuards("/finish-profile", verifiedUser, { profileMissing: true });
+    expect(await screen.findByTestId("page-finish-profile")).toBeInTheDocument();
+  });
+
+  it("applies recovery to legacy accounts too — a missing doc is a missing doc", async () => {
+    renderGuards("/dashboard", legacyUser, { profileMissing: true });
+    expect(await screen.findByTestId("page-finish-profile")).toBeInTheDocument();
+  });
+
+  it("leaves a verified user with an intact profile on /dashboard", async () => {
+    renderGuards("/dashboard", verifiedUser, { profileMissing: false });
+    expect(await screen.findByTestId("page-dashboard")).toBeInTheDocument();
   });
 });

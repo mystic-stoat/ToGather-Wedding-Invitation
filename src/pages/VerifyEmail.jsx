@@ -22,7 +22,6 @@ import { Button } from "@/components/ui/button";
 import Footer from "@/components/Footer";
 import { MailCheck, Loader2, LogOut } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { createUserProfile } from "@/lib/firestore";
 import Logo from "@/assets/logo.svg";
 import { VERIFICATION_RESEND_COOLDOWN } from "@/lib/emailVerification";
 
@@ -48,24 +47,13 @@ const VerifyEmail = () => {
   const [message, setMessage]         = useState(null);  // { kind: "info"|"success"|"error", text }
   const cooldownTimer                 = useRef(null);
 
-  // Signup can land here when part of the follow-up work failed — the
-  // account itself always exists at this point, so the messages below say
-  // exactly what still needs finishing instead of implying a failed signup.
-  const pendingProfile = location.state?.profileSaveFailed
-    ? { name: location.state.name, email: location.state.email }
-    : null;
-
+  // Signup can land here even when the first verification email failed to send
+  // (account + profile still exist — the user just needs to resend it).
   useEffect(() => {
-    const { verificationSendFailed, profileSaveFailed } = location.state ?? {};
-    if (verificationSendFailed) {
+    if (location.state?.verificationSendFailed) {
       setMessage({
         kind: "error",
         text: "Your account was created, but the verification email couldn't be sent. Use the resend button below.",
-      });
-    } else if (profileSaveFailed) {
-      setMessage({
-        kind: "info",
-        text: "Your account was created — your profile is still being saved and will finish when you continue.",
       });
     }
   }, [location.state]);
@@ -90,15 +78,6 @@ const VerifyEmail = () => {
     try {
       const fresh = await reloadCurrentUser();
       if (fresh?.emailVerified) {
-        // Finish the deferred profile write from signup, if any. Best-effort —
-        // never block entry to the app on it.
-        if (pendingProfile) {
-          try {
-            await createUserProfile(fresh.uid, pendingProfile.name, pendingProfile.email);
-          } catch (err) {
-            console.error("Profile save retry failed:", err);
-          }
-        }
         navigate("/dashboard", { replace: true });
       } else {
         setMessage({

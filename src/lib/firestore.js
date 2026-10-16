@@ -82,6 +82,33 @@ export const createUserProfile = async (uid, name, email) => {
 };
 
 /**
+ * recoverUserProfile
+ * Repairs a missing betrothed/{uid} profile after a partial signup failure.
+ * Runs in a transaction so it is idempotent: if the document already exists
+ * (created since the read that noticed it missing, or by another tab) the
+ * existing data is returned untouched — a valid profile is never overwritten.
+ * Returns { created: boolean, profile }.
+ */
+export const recoverUserProfile = async (uid, name, email) => {
+  const ref = doc(db, "betrothed", uid);
+  return runTransaction(db, async (transaction) => {
+    const snap = await transaction.get(ref);
+    if (snap.exists()) {
+      return { created: false, profile: snap.data() };
+    }
+    const profile = {
+      userId: uid,
+      email,
+      name,
+      preferences: "",
+      joinDate: serverTimestamp(),
+    };
+    transaction.set(ref, profile);
+    return { created: true, profile };
+  });
+};
+
+/**
  * getUserProfile
  * Fetch a user's profile by their uid.
  * Returns null if they don't have a profile yet.

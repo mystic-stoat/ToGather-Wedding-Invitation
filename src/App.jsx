@@ -16,7 +16,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
+import { BrowserRouter, Route, Routes, Navigate, useLocation } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -28,6 +28,7 @@ import Login            from "./pages/Login.jsx";
 import ForgotPassword   from "./pages/ForgotPassword.jsx";
 import Signup           from "./pages/Signup.jsx";
 import VerifyEmail      from "./pages/VerifyEmail.jsx";
+import FinishProfile    from "./pages/FinishProfile.jsx";
 import { requiresEmailVerification } from "./lib/emailVerification";
 import Dashboard        from "./pages/Dashboard.jsx";
 import WeddingDetails   from "./pages/WeddingDetails.jsx";
@@ -92,8 +93,9 @@ export const PublicRoute = ({ children }) => {
 //
 // Usage in Routes below:
 //   <ProtectedRoute><Dashboard /></ProtectedRoute>
-export const ProtectedRoute = ({ children }) => {
-  const { user, loading } = useAuth();
+export const ProtectedRoute = ({ children, allowIncompleteProfile = false }) => {
+  const { user, loading, profileMissing } = useAuth();
+  const location = useLocation();
 
   // Still checking Firebase session — show spinner so page doesn't flash
   if (loading) {
@@ -114,9 +116,19 @@ export const ProtectedRoute = ({ children }) => {
   }
 
   // Logged in but must verify their email first — typing /dashboard (or any
-  // other protected URL) directly can't skip the verification screen.
+  // other protected URL) directly can't skip the verification screen. This
+  // check runs before profile recovery so a pending user can't bypass
+  // verification by aiming at /finish-profile.
   if (requiresEmailVerification(user)) {
     return <Navigate to="/verify-email" replace />;
+  }
+
+  // Verified, but their betrothed profile doc is missing (a partial signup
+  // failure that couldn't self-heal). Every protected page funnels to
+  // /finish-profile until it's repaired — that page is exempt via
+  // allowIncompleteProfile.
+  if (profileMissing && !allowIncompleteProfile) {
+    return <Navigate to="/finish-profile" replace state={{ from: location.pathname }} />;
   }
 
   // Logged in — render the actual page
@@ -167,6 +179,12 @@ const App = () => (
             {/* Verification screen for newly registered accounts.
                 Not inside PublicRoute — the user IS signed in while pending. */}
             <Route path="/verify-email" element={<VerifyEmailRoute><VerifyEmail /></VerifyEmailRoute>} />
+
+            {/* Repair screen for accounts missing their betrothed profile doc.
+                allowIncompleteProfile stops ProtectedRoute bouncing it back
+                here — it's the one protected page reachable while the flag is set. */}
+            <Route path="/finish-profile"
+              element={<ProtectedRoute allowIncompleteProfile><FinishProfile /></ProtectedRoute>} />
 
             {/* RSVP is fully public — guests don't have accounts */}
             {/* :token is a URL parameter — e.g. /rsvp/abc-123 */}
