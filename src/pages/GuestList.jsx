@@ -34,6 +34,7 @@ import {
 } from "@/lib/firestore";
 import Sidebar from "@/components/Sidebar"
 import MobileNav from "@/components/MobileNav";
+import PublishedInvitationBanner from "@/components/PublishedInvitationBanner";
 import {
   CHILDREN_OVERRIDE,
   CHILDREN_POLICY_LABELS,
@@ -1017,6 +1018,21 @@ const GuestList = () => {
               </Button>
             </div>
           </div>
+
+          {/* Published warning — invitation emails went out when the host
+              published; guests added after that moment are never queued for
+              an automatic email, and edits here don't update sent mail. */}
+          <PublishedInvitationBanner
+            isPublished={invitation?.isPublished}
+            message={
+              "Your wedding invitation has already been published, and guests may have " +
+              "received an email with the original details. Guests added now won't " +
+              "automatically receive an invitation email, and changes here will not " +
+              "update emails that have already been delivered. Please make sure your " +
+              "guests are informed of important changes."
+            }
+            className="mb-6"
+          />
 
           {/* Stats bar — quick summary above the table */}
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">

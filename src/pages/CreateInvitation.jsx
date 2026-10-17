@@ -70,6 +70,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthContext";
 import { getInvitationByUser, saveInvitation } from "@/lib/firestore";
+import PublishedInvitationBanner from "@/components/PublishedInvitationBanner";
 import {
   normalizeMealOptions,
   cleanMealOptionsForSave,
@@ -1765,6 +1766,11 @@ const CreateInvitation = () => {
                 </button>
               </div>
             )}
+
+            {/* Published warning — lives inside the edit pane so it never
+                overlaps the phone preview; hidden when Preview is toggled on
+                smaller screens, same as the rest of the settings UI. */}
+            <PublishedInvitationBanner isPublished={invitation?.isPublished} className="mb-6" />
 
             {/* Section header */}
             <div className="flex justify-between items-end gap-3 mb-6 sm:mb-10">

@@ -21,6 +21,7 @@ import {
 } from "@/lib/firestore";
 import Sidebar from "@/components/Sidebar";
 import MobileNav from "@/components/MobileNav";
+import PublishedInvitationBanner from "@/components/PublishedInvitationBanner";
 import { useNavigate } from "react-router-dom";
 import ChatBubble from "@/components/ChatBubble";
 
@@ -200,6 +201,11 @@ const WeddingAssistant = () => {
                 clear chat
               </button>
             </div>
+
+            {/* Published warning — sits between the header and the scrollable
+                history so it stays on screen without covering messages or
+                the composer; the chat box below simply gets a little shorter. */}
+            <PublishedInvitationBanner isPublished={invitation?.isPublished} className="flex-shrink-0 mb-4" />
 
             {/* chat section */}
             <div ref={chatScrollRef} className="flex-1 overflow-y-auto min-h-0 mb-6 pr-4 space-y-5">
