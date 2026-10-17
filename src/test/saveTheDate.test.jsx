@@ -27,6 +27,10 @@ vi.mock("@/components/GoogleMapEmbed", () => ({
   buildMapQuery: (name, address) => [name, address].filter(Boolean).join(", "),
   mapLinkUrl: (q) => `https://maps.example/?q=${encodeURIComponent(q)}`,
 }));
+// toGuestInvitation lives in guestInvitation.js, which transitively imports
+// firebase — stub it (and story loading) so the pure projection can be tested.
+vi.mock("@/lib/firebase", () => ({ db: {}, auth: {}, storage: {}, functions: {} }));
+vi.mock("@/lib/storyStore", () => ({ loadAllStoryEntries: vi.fn(async () => []) }));
 // recharts renders nothing inside jsdom — keep the DOM light for Dashboard.
 vi.mock("recharts", () => ({
   ResponsiveContainer: ({ children }) => <div>{children}</div>,
@@ -38,6 +42,7 @@ import {
   icsContent, icsFilename, googleCalendarUrl,
 } from "@/lib/saveTheDate";
 import SaveTheDate from "@/components/SaveTheDate";
+import { toGuestInvitation } from "@/lib/guestInvitation";
 import Dashboard from "@/pages/Dashboard";
 import Sidebar from "@/components/Sidebar";
 import InvitationContent from "@/components/invitation/InvitationContent";
@@ -115,6 +120,33 @@ describe("buildCalendarEvent", () => {
     const blob = JSON.stringify(e) + icsContent(e) + googleCalendarUrl(e);
     ["SECRET-TOKEN", "inv-secret", "Private Guest", "uid-secret", "emailStatus"]
       .forEach(s => expect(blob).not.toContain(s));
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+describe("event UID stability and uniqueness", () => {
+  it("different weddings produce different UIDs", () => {
+    const a = buildCalendarEvent(INVITATION).uid;
+    const b = buildCalendarEvent({ ...INVITATION, weddingId: "w2" }).uid;
+    expect(a).not.toBe(b);
+    // without ids, different public event data must not collide either
+    const { weddingId: _dropped, ...noId } = INVITATION;
+    const other = { ...noId, brideName: { first: "Riley" } };
+    expect(buildCalendarEvent(noId).uid).not.toBe(buildCalendarEvent(other).uid);
+  });
+
+  it("the same wedding exports a stable UID", () => {
+    expect(buildCalendarEvent(INVITATION).uid).toBe("w1-save-the-date@togather");
+    expect(buildCalendarEvent({ ...INVITATION }).uid)
+      .toBe(buildCalendarEvent(INVITATION).uid);
+  });
+
+  it("the guest-safe projection carries weddingId so guest exports get the real UID", () => {
+    const guest = toGuestInvitation({ ...INVITATION, token: "SECRET", userId: "u-secret" });
+    expect(guest.weddingId).toBe("w1");
+    expect(guest.token).toBeUndefined();
+    expect(guest.userId).toBeUndefined();
+    expect(buildCalendarEvent(guest).uid).toBe("w1-save-the-date@togather");
   });
 });
 
@@ -312,11 +344,11 @@ describe("Guest invitation page", () => {
 });
 
 describe("WeddingDaySection (page variant)", () => {
-  it("wires its Add to calendar button to the real action", async () => {
+  it("shows no duplicate action — the header owns the single live button", () => {
     render(<WeddingDaySection invitation={INVITATION}
       settings={{ dateShowCalendar: true }} theme={THEME} variant="page" />);
-    fireEvent.click(screen.getByRole("button", { name: /add to calendar/i }));
-    expect(await screen.findByTestId("save-the-date-options")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /add to calendar/i })).toBeNull();
+    expect(screen.queryByTestId("save-the-date-options")).toBeNull();
   });
 
   it("compact/preview variant keeps an inert visual button (no event actions)", () => {

@@ -70,18 +70,35 @@ const buildDescription = (invitation = {}, title) => {
 };
 
 /**
+ * Stable, unique-per-wedding event identity. Prefer the opaque Firestore
+ * document id; when it is unavailable (e.g. an unsaved preview object),
+ * fall back to a deterministic hash of PUBLIC event fields — never the
+ * constant "wedding", which would collide across different weddings.
+ */
+const eventUid = (invitation, title, date) => {
+  if (typeof invitation.weddingId === "string" && invitation.weddingId) {
+    return `${invitation.weddingId}-save-the-date@togather`;
+  }
+  const src = `${title}|${icsDate(date)}|${invitation.venueName || ""}`;
+  let h = 0;
+  for (let i = 0; i < src.length; i++) h = (h * 31 + src.charCodeAt(i)) >>> 0;
+  return `wedding-${h.toString(36)}-save-the-date@togather`;
+};
+
+/**
  * The calendar event, or null when the invitation has no valid wedding date —
  * callers disable/hide the action instead of creating a placeholder event.
  */
 export const buildCalendarEvent = (invitation = {}) => {
   const date = parseWeddingDate(invitation?.weddingDate);
   if (!date) return null;
+  const title = eventTitle(invitation);
   return {
-    title:       eventTitle(invitation),
-    description: buildDescription(invitation, eventTitle(invitation)),
+    title,
+    description: buildDescription(invitation, title),
     location:    joinParts(invitation.venueName, invitation.venueAddress),
     date, // { year, month, day } — all-day
-    uid: `${invitation.weddingId || "wedding"}-save-the-date@togather`,
+    uid: eventUid(invitation, title, date),
   };
 };
 
