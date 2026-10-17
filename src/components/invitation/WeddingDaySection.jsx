@@ -224,8 +224,10 @@ const WeddingDaySection = ({ invitation, settings, theme, backgroundColor, varia
           </p>
         )}
 
-        {/* Existing button — calendar file (ICS) export is a separate task, so
-            the standalone page doesn't show it until it works. */}
+        {/* "Add to calendar" mock — preview only, never creates events.
+            The single live action lives under the date line in the
+            invitation header (InvitationContent), so the public page
+            deliberately shows one Save the Date button, not two. */}
         {!page && (
           <button type="button" className="w-full py-2 rounded-full text-white text-[9px] font-bold"
             style={btnStyle}>
