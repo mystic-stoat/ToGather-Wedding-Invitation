@@ -76,7 +76,7 @@ const slimTrace = (trace) =>
   }));
  
 // Invitation fields the assistant may see, in display order. An allowlist on
-// purpose: the invitation doc also holds URLs, coordinates, registries etc.
+// purpose: the invitation doc also holds URLs, coordinates, user ids etc.
 const WEDDING_CONTEXT_FIELDS = [
   ["groomName", "Partner one"],
   ["brideName", "Partner two"],
@@ -91,6 +91,43 @@ const WEDDING_CONTEXT_FIELDS = [
 ];
 const WEDDING_CONTEXT_MAX_VALUE = 200; // user-typed text: cap what we forward
 
+// Proposable fields that are optional or about the design. Shown only when
+// set, and never listed as "Not yet set", so the assistant doesn't ask about
+// them unprompted. [key, label, cap]
+const WEDDING_CONTEXT_EXTRA_FIELDS = [
+  ["greetingTitle", "Greeting title", WEDDING_CONTEXT_MAX_VALUE],
+  ["greetingMessage", "Greeting message", 1000],
+  ["storyTitle", "Story title", WEDDING_CONTEXT_MAX_VALUE],
+  ["colorPalette1", "Primary color", WEDDING_CONTEXT_MAX_VALUE],
+  ["colorPalette2", "Secondary color", WEDDING_CONTEXT_MAX_VALUE],
+  ["font1", "Heading font", WEDDING_CONTEXT_MAX_VALUE],
+  ["font2", "Body font", WEDDING_CONTEXT_MAX_VALUE],
+];
+
+// List fields, shown as JSON (with ids) so a proposal can keep the existing
+// items. Only the item keys the registry knows are forwarded. A list too long
+// to show in full is NOT cut short: a cut list proposed back would delete the
+// missing items, so the assistant is told not to change it instead.
+const WEDDING_CONTEXT_LISTS = [
+  ["mealOptions", "Meal options", ["id", "name", "description"]],
+  ["travelItems", "Travel & stay",
+    ["id", "category", "name", "mapUrl", "description"]],
+  ["registries", "Gift registries", ["id", "name", "url", "isVisible"]],
+];
+const WEDDING_CONTEXT_MAX_LIST = 6000;
+
+const formatContextList = (list, keys) => {
+  if (!Array.isArray(list)) return "";
+  const items = list
+      .filter((item) => item && typeof item === "object")
+      .map((item) => Object.fromEntries(
+          keys.filter((k) => item[k] !== undefined).map((k) => [k, item[k]])));
+  if (!items.length) return "";
+  const json = JSON.stringify(items);
+  return json.length > WEDDING_CONTEXT_MAX_LIST ?
+    "(too long to show; don't propose changes to this list)" : json;
+};
+
 
 const formatName = (name) =>
   ["first", "middle", "last"]
@@ -99,7 +136,7 @@ const formatName = (name) =>
     .join(" ");
 
 // Firestore Timestamp, Date or string -> a short readable string ("" if unusable).
-const formatContextValue = (value) => {
+const formatContextValue = (value, cap = WEDDING_CONTEXT_MAX_VALUE) => {
   if (value === null || value === undefined) return "";
   let v = value;
   if (typeof v.toDate === "function") v = v.toDate();
@@ -108,7 +145,7 @@ const formatContextValue = (value) => {
     return Number.isNaN(v.getTime()) ? "" : v.toISOString().slice(0, 10);
   }
   if (typeof v !== "string" && typeof v !== "number") return "";
-  return String(v).trim().slice(0, WEDDING_CONTEXT_MAX_VALUE);
+  return String(v).trim().slice(0, cap);
 };
 
 // Builds the <wedding_details> block appended to the system prompt. Lists
@@ -125,6 +162,14 @@ const buildWeddingContext = (invitation) => {
     const value = formatContextValue(invitation[key]);
     if (value) known.push(`${label}: ${value}`);
     else missing.push(label);
+  }
+  for (const [key, label, cap] of WEDDING_CONTEXT_EXTRA_FIELDS) {
+    const value = formatContextValue(invitation[key], cap);
+    if (value) known.push(`${label}: ${value}`);
+  }
+  for (const [key, label, keys] of WEDDING_CONTEXT_LISTS) {
+    const value = formatContextList(invitation[key], keys);
+    if (value) known.push(`${label}: ${value}`);
   }
   const lines = [...known];
   if (missing.length) lines.push(`Not yet set: ${missing.join(", ")}`);

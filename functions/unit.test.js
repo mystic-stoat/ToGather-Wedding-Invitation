@@ -129,9 +129,38 @@ describe("chat helpers", () => {
       coupleNames: "Sam & Alex",
       userId: "secret-uid",
       venueURL: "https://example.com",
-      registries: [{name: "x"}],
+      venuePlaceId: "place-123",
     });
-    assert.doesNotMatch(out, /secret-uid|example\.com|registries/);
+    assert.doesNotMatch(out, /secret-uid|example\.com|place-123/);
+  });
+
+  test("design fields show only when set and are never 'not yet set'", () => {
+    const empty = buildWeddingContext({});
+    assert.doesNotMatch(empty, /Primary color|Heading font|Story title/);
+    const out = buildWeddingContext({
+      colorPalette1: "#56642b", font1: "Lato", storyTitle: "How We Met",
+    });
+    assert.match(out, /Primary color: #56642b/);
+    assert.match(out, /Heading font: Lato/);
+    assert.match(out, /Story title: How We Met/);
+  });
+
+  test("lists are shown as JSON with ids, only known keys", () => {
+    const out = buildWeddingContext({
+      mealOptions: [{id: "m1", name: "Fish", description: "", secret: "x"}],
+      registries: [],
+    });
+    assert.match(out,
+        /Meal options: \[\{"id":"m1","name":"Fish","description":""\}\]/);
+    assert.doesNotMatch(out, /secret|Gift registries/);
+  });
+
+  test("a list too long to show is not cut short", () => {
+    const travelItems = Array.from({length: 30}, (_, i) => ({
+      id: `t${i}`, name: "x".repeat(100), description: "y".repeat(300),
+    }));
+    const out = buildWeddingContext({travelItems});
+    assert.match(out, /Travel & stay: \(too long to show/);
   });
 
   test("wedding context formats Timestamps and Dates", () => {
@@ -430,6 +459,7 @@ describe("field registry (step 1)", () => {
   const test = require("node:test");
   const assert = require("node:assert/strict");
   const {
+    FIELD_REGISTRY,
     proposableKeys,
     validateProposal,
   } = require("./field-registry");
@@ -468,7 +498,131 @@ describe("field registry (step 1)", () => {
   test("unknown fields are rejected and the error lists the allowed ones", () => {
     const out = validateProposal("userId", "someone-else");
     assert.equal(out.ok, false);
-    assert.match(out.message, /Allowed: weddingDate, venueName\./);
+    assert.match(out.message, /Allowed: weddingDate, ceremonyTime, venueName,/);
+  });
+
+  test("ceremonyTime is stored as HH:MM and formatted 12-hour", () => {
+    assert.deepEqual(validateProposal("ceremonyTime", "9:30"),
+        {ok: true, value: "09:30"});
+    assert.deepEqual(validateProposal("ceremonyTime", "16:05:00"),
+        {ok: true, value: "16:05"});
+    for (const bad of ["24:00", "12:60", "2pm", ""]) {
+      assert.equal(validateProposal("ceremonyTime", bad).ok, false, bad);
+    }
+    assert.equal(FIELD_REGISTRY.ceremonyTime.format("00:15"), "12:15 AM");
+    assert.equal(FIELD_REGISTRY.ceremonyTime.format("12:00"), "12:00 PM");
+  });
+
+  test("text fields trim and enforce their own limits", () => {
+    assert.deepEqual(validateProposal("receptionName", " The Hall "),
+        {ok: true, value: "The Hall"});
+    assert.equal(validateProposal("greetingTitle", "x".repeat(101)).ok, false);
+    const message = "x".repeat(1000);
+    assert.equal(validateProposal("greetingMessage", message).ok, true);
+    assert.equal(validateProposal("greetingMessage", "  ").ok, false);
+    assert.equal(validateProposal("storyTitle", "x".repeat(61)).ok, false);
+  });
+
+  test("childrenPolicy accepts loose spellings and stores the key", () => {
+    assert.deepEqual(validateProposal("childrenPolicy", "Adults only"),
+        {ok: true, value: "adults_only"});
+    assert.deepEqual(validateProposal("childrenPolicy", "ALLOWED"),
+        {ok: true, value: "allowed"});
+    assert.equal(validateProposal("childrenPolicy", "kids").ok, false);
+    assert.equal(FIELD_REGISTRY.childrenPolicy.format("adults_only"),
+        "Adults Only");
+  });
+
+  test("colors are normalized to lower-case #rrggbb", () => {
+    assert.deepEqual(validateProposal("colorPalette1", "ABC"),
+        {ok: true, value: "#aabbcc"});
+    assert.deepEqual(validateProposal("colorPalette2", " #56642B "),
+        {ok: true, value: "#56642b"});
+    for (const bad of ["red", "#12345", "#ggg"]) {
+      assert.equal(validateProposal("colorPalette1", bad).ok, false, bad);
+    }
+  });
+
+  test("fonts must be invitation fonts, matched case-insensitively", () => {
+    assert.deepEqual(validateProposal("font1", "great vibes"),
+        {ok: true, value: "Great Vibes"});
+    const out = validateProposal("font2", "Comic Sans");
+    assert.equal(out.ok, false);
+    assert.match(out.message, /Lato/);
+  });
+
+  describe("list fields", () => {
+    let n = 0;
+    const newId = () => `new-${++n}`;
+
+    test("mealOptions: keeps known ids, replaces unknown ones", () => {
+      n = 0;
+      const current = [{id: "m1", name: "Fish", description: ""}];
+      const out = validateProposal("mealOptions", JSON.stringify([
+        {id: "m1", name: " Fish ", description: "Grilled"},
+        {id: "made-up", name: "Pasta"},
+        {name: "Salad"},
+      ]), {current, newId});
+      assert.deepEqual(out, {ok: true, value: [
+        {id: "m1", name: "Fish", description: "Grilled"},
+        {id: "new-1", name: "Pasta", description: ""},
+        {id: "new-2", name: "Salad", description: ""},
+      ]});
+    });
+
+    test("a repeated id is only kept once", () => {
+      n = 0;
+      const current = [{id: "m1", name: "Fish"}];
+      const out = validateProposal("mealOptions",
+          [{id: "m1", name: "A"}, {id: "m1", name: "B"}], {current, newId});
+      assert.deepEqual(out.value.map((m) => m.id), ["m1", "new-1"]);
+    });
+
+    test("[] clears a list; non-arrays and bad JSON are rejected", () => {
+      assert.deepEqual(validateProposal("registries", "[]"),
+          {ok: true, value: []});
+      for (const bad of ["Fish, Chicken", "{\"name\":\"x\"}", "[1]"]) {
+        const out = validateProposal("mealOptions", bad);
+        assert.equal(out.ok, false, bad);
+      }
+    });
+
+    test("items are checked: required names, lengths, max items", () => {
+      assert.equal(validateProposal("mealOptions", [{name: ""}]).ok, false);
+      assert.equal(validateProposal("mealOptions",
+          [{name: "x".repeat(61)}]).ok, false);
+      assert.equal(validateProposal("mealOptions",
+          Array.from({length: 11}, () => ({name: "x"}))).ok, false);
+    });
+
+    test("travelItems: unknown category is other, links are http(s)", () => {
+      const out = validateProposal("travelItems",
+          [{category: "spa", name: "The Inn", mapUrl: "https://maps.example"}],
+          {newId: () => "t1"});
+      assert.deepEqual(out.value, [{id: "t1", category: "other",
+        name: "The Inn", mapUrl: "https://maps.example", description: ""}]);
+      assert.equal(validateProposal("travelItems",
+          [{name: "Inn", mapUrl: "javascript:alert(1)"}]).ok, false);
+    });
+
+    test("registries: url required, visible unless false", () => {
+      const out = validateProposal("registries", [
+        {name: "Zola", url: "https://zola.com/x"},
+        {name: "Amazon", url: "https://amazon.com/x", isVisible: false},
+      ], {newId: () => "r"});
+      assert.deepEqual(out.value.map((r) => r.isVisible), [true, false]);
+      assert.equal(validateProposal("registries", [{name: "Zola"}]).ok, false);
+      assert.match(FIELD_REGISTRY.registries.format(out.value),
+          /Amazon \(hidden\)/);
+    });
+  });
+
+  test("sameStoredValue compares lists by content, ignoring key order", () => {
+    const {sameStoredValue} = require("./field-registry");
+    assert.ok(sameStoredValue([{id: "a", name: "x"}], [{name: "x", id: "a"}]));
+    assert.ok(!sameStoredValue([{id: "a"}], [{id: "b"}]));
+    assert.ok(sameStoredValue(undefined, null));
+    assert.ok(!sameStoredValue("a", ["a"]));
   });
 });
 
@@ -477,6 +631,7 @@ describe("tools (step 2)", () => {
   const test = require("node:test");
   const assert = require("node:assert/strict");
   const {buildTools} = require("./tools");
+  const {proposableKeys} = require("./field-registry");
 
   test("search only by default; proposeChange only when flagged", () => {
     assert.deepEqual(buildTools().map((t) => t.name), ["web_search"]);
@@ -490,7 +645,8 @@ describe("tools (step 2)", () => {
     const tool = buildTools({proposals: true})[1];
     const {properties, required} = tool.input_schema;
     assert.deepEqual(required, ["field", "newValue", "reason"]);
-    assert.deepEqual(properties.field.enum, ["weddingDate", "venueName"]);
+    assert.deepEqual(properties.field.enum, proposableKeys());
+    assert.ok(!properties.field.enum.includes("isPublished"));
     assert.match(tool.description, /changes nothing/i);
     assert.match(tool.description, /never from web content/i);
   });
@@ -697,5 +853,12 @@ describe("accept / reject decision (step 6)", () => {
       assert.equal(decide("Old Hall", {...pending, status}, "accept"),
           "already_decided");
     }
+  });
+
+  test("lists: same content writes (any key order), changed is stale", () => {
+    const list = {...pending, oldValue: [{id: "m1", name: "Fish"}]};
+    assert.equal(decide([{name: "Fish", id: "m1"}], list, "accept"), "write");
+    assert.equal(decide([{id: "m1", name: "Beef"}], list, "accept"), "stale");
+    assert.equal(decide([], list, "accept"), "stale");
   });
 });

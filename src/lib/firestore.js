@@ -498,6 +498,24 @@ export const subscribeToPendingProposals = (userId, onProposals, onError) => {
 };
 
 /**
+ * sameStoredValue
+ * Pure. Deep equality for stored values (strings, numbers, lists of plain
+ * maps), so list fields like mealOptions compare by content. Map keys are
+ * compared in sorted order, since Firestore doesn't keep the order they were
+ * written in. Same rule as sameStoredValue in functions/field-registry.js.
+ */
+export const sameStoredValue = (a, b) => {
+  const canon = (v) => {
+    if (Array.isArray(v)) return v.map(canon);
+    if (v && typeof v === "object") {
+      return Object.keys(v).sort().map(k => [k, canon(v[k])]);
+    }
+    return v ?? null;
+  };
+  return JSON.stringify(canon(a)) === JSON.stringify(canon(b));
+};
+
+/**
  * decideProposalAction
  * Pure. Same rule as decide() in functions/proposals.js (keep the two in step):
  *   "write"            accept, and the field is still what it was when proposed
@@ -509,7 +527,7 @@ export const decideProposalAction = (currentValue, proposal, decision) => {
   if (proposal.status !== "pending") return "already_decided";
   if (decision === "reject") return "reject";
   if (decision !== "accept") throw new Error(`Unknown decision: ${decision}`);
-  return (currentValue ?? null) === (proposal.oldValue ?? null) ? "write" : "stale";
+  return sameStoredValue(currentValue, proposal.oldValue) ? "write" : "stale";
 };
 
 /**

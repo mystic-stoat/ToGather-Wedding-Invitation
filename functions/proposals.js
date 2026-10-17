@@ -7,7 +7,11 @@
 // emulator's Firestore.
 
 const {FieldValue} = require("firebase-admin/firestore");
-const {validateProposal} = require("./field-registry");
+const {
+  proposableKeys,
+  validateProposal,
+  sameStoredValue,
+} = require("./field-registry");
 const {
   buildProposalsContext,
   PROPOSAL_DECIDED_DAYS,
@@ -53,16 +57,23 @@ const createProposeChangeHandler = ({
           "they want to change next.");
     }
 
-    const checked = validateProposal(field, newValue, {now: now()});
-    if (!checked.ok) throw new Error(checked.message);
+    // Unknown fields fail before the read (a bad name would make get() throw).
+    if (!proposableKeys().includes(field)) {
+      throw new Error(validateProposal(field, newValue).message);
+    }
 
-    // oldValue is read NOW so the card can show what is being replaced, and
-    // so accept can later tell if the couple edited the field by hand.
+    // oldValue is read NOW so the card can show what is being replaced, so
+    // accept can later tell if the couple edited the field by hand, and so a
+    // list proposal keeps the ids of items that already exist.
     const invitation = await db.collection("invitations").doc(weddingId).get();
     if (!invitation.exists) {
       throw new Error("There is no invitation to change yet.");
     }
     const oldValue = invitation.get(field) ?? null;
+
+    const checked = validateProposal(field, newValue,
+        {now: now(), current: oldValue});
+    if (!checked.ok) throw new Error(checked.message);
 
     const collection = proposalsRef(db, uid);
     const older = await collection
@@ -126,7 +137,8 @@ const decide = (currentValue, proposal, decision) => {
   if (proposal.status !== ProposalStatus.PENDING) return "already_decided";
   if (decision === "reject") return "reject";
   if (decision !== "accept") throw new Error(`Unknown decision: ${decision}`);
-  const same = (currentValue ?? null) === (proposal.oldValue ?? null);
+  // Lists are compared by content, not identity.
+  const same = sameStoredValue(currentValue, proposal.oldValue);
   return same ? "write" : "stale";
 };
 
