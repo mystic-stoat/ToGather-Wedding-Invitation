@@ -15,6 +15,7 @@ describe("chat helpers", () => {
     buildClaudeMessages,
     newestUserMessageId,
     extractReplyText,
+    extractTurnReply,
     slimTrace,
     buildWeddingContext,
   } = require("./chat-utils");
@@ -88,6 +89,36 @@ describe("chat helpers", () => {
       {type: "text", text: "open on Fridays.", citations: []},
     ]};
     assert.equal(extractReplyText(res), "The Barn is open on Fridays.");
+  });
+
+  // The model sometimes says its piece in the SAME response as the tool call
+  // and then ends the turn with an empty response (seen in real runs).
+  const sayThenCall = {content: [
+    {type: "thinking", thinking: ""},
+    {type: "text", text: "I've suggested June 12. Accept or reject below."},
+    {type: "tool_use", id: "t1", name: "proposeChange", input: {}},
+  ]};
+  const empty = {content: []};
+
+  test("extractTurnReply: normally the last response's text", () => {
+    const last = {content: [{type: "text", text: "Final."}]};
+    assert.equal(extractTurnReply([sayThenCall, last]), "Final.");
+  });
+  test("extractTurnReply: empty last response uses the earlier text", () => {
+    assert.equal(extractTurnReply([sayThenCall, empty]),
+        "I've suggested June 12. Accept or reject below.");
+  });
+  test("extractTurnReply: but not when a tool call failed", () => {
+    assert.equal(extractTurnReply([sayThenCall, empty], {toolErrors: 1}), "");
+  });
+  test("extractTurnReply: nothing anywhere stays empty", () => {
+    assert.equal(extractTurnReply([empty, empty]), "");
+    assert.equal(extractTurnReply([]), "");
+  });
+  test("extractTurnReply: takes the NEWEST earlier text", () => {
+    const first = {content: [{type: "text", text: "Older."}]};
+    assert.equal(extractTurnReply([first, sayThenCall, empty]),
+        "I've suggested June 12. Accept or reject below.");
   });
 
   test("slimTrace keeps stop reason, usage and block names only", () => {
@@ -364,6 +395,67 @@ describe("tool loop", () => {
     assert.equal(last.content[0].is_error, true);
     assert.equal(last.content[0].content, "boom");
     assert.equal(out.status, "done");
+    assert.equal(out.toolErrors, 1);
+  });
+
+  // Seen with the real model: tool_use blocks, but stop_reason "end_turn".
+  test("end_turn with a client tool_use still runs the tool", async () => {
+    const calls = [];
+    const sloppy = msg("end_turn", [
+      {type: "text", text: "I've suggested it."},
+      {type: "tool_use", id: "a1", name: "echo", input: {n: 1}},
+      {type: "tool_use", id: "a2", name: "echo", input: {n: 2}},
+    ]);
+    const claude = fakeClaude([sloppy, msg("end_turn")]);
+    const out = await runToolLoop({
+      callClaude: claude,
+      messages: start,
+      toolHandlers: {echo: async (input) => {
+        calls.push(input.n);
+        return "pong";
+      }},
+    });
+    assert.deepEqual(calls, [1, 2]);
+    assert.equal(claude.calls.length, 2);
+    const last = claude.calls[1][claude.calls[1].length - 1];
+    assert.deepEqual(last.content.map((b) => b.tool_use_id), ["a1", "a2"]);
+    assert.equal(out.status, "done");
+  });
+
+  test("end_turn with only server tool blocks is simply done", async () => {
+    const searched = msg("end_turn", [
+      {type: "server_tool_use", id: "s1", name: "web_search", input: {}},
+      {type: "web_search_tool_result", content: []},
+      {type: "text", text: "It is open Fridays."},
+    ]);
+    const claude = fakeClaude([searched]);
+    const out = await runToolLoop({callClaude: claude, messages: start});
+    assert.equal(claude.calls.length, 1);
+    assert.equal(out.status, "done");
+  });
+
+  test("max_tokens with a tool_use stays truncated (it may be cut off)", async () => {
+    const cut = msg("max_tokens", [
+      {type: "tool_use", id: "c1", name: "echo", input: {}},
+    ]);
+    const claude = fakeClaude([cut]);
+    const out = await runToolLoop({
+      callClaude: claude,
+      messages: start,
+      toolHandlers: {echo: async () => "pong"},
+    });
+    assert.equal(claude.calls.length, 1);
+    assert.equal(out.status, "truncated");
+  });
+
+  test("toolErrors counts only the calls that failed", async () => {
+    const claude = fakeClaude([toolUse("echo", "e1"), msg("end_turn")]);
+    const out = await runToolLoop({
+      callClaude: claude,
+      messages: start,
+      toolHandlers: {echo: async () => "pong"},
+    });
+    assert.equal(out.toolErrors, 0);
   });
 
   test("multiple tool_use blocks: all results in ONE user message", async () => {

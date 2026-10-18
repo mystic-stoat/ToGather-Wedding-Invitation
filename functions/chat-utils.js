@@ -65,6 +65,22 @@ const extractReplyText = (response) => {
       .trim();
 };
 
+// The reply to show for a whole turn. Normally the text of the last response.
+// But the model sometimes writes its message in the SAME response as the tool
+// call ("I've suggested it...") and then ends the turn with nothing more to
+// say, so the last response is empty. In that case use the newest text it
+// wrote earlier in the turn. Only when every tool call worked: text written
+// before a failed call may describe a change that never happened.
+const extractTurnReply = (trace, {toolErrors = 0} = {}) => {
+  const last = trace.length ? extractReplyText(trace[trace.length - 1]) : "";
+  if (last || toolErrors > 0) return last;
+  for (let i = trace.length - 2; i >= 0; i--) {
+    const earlier = extractReplyText(trace[i]);
+    if (earlier) return earlier;
+  }
+  return "";
+};
+
 // What we store on the reply doc: per response, the stop reason, usage, and
 // block types. Search results are large and would risk Firestore's 1 MiB
 // document limit, so their content is left out.
@@ -239,6 +255,7 @@ module.exports = {
   newestUserMessageId,
   buildClaudeMessages,
   extractReplyText,
+  extractTurnReply,
   slimTrace,
   buildWeddingContext,
 };

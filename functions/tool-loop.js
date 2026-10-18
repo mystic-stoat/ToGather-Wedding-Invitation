@@ -40,6 +40,18 @@ const sumUsage = (trace) =>
       {input_tokens: 0, output_tokens: 0},
   );
 
+// The API sometimes answers with client tool_use blocks but stop_reason
+// "end_turn" (seen with Haiku 5.5 when it makes several calls at once). Trust
+// the content: a call we never answer never runs, and the reply would promise
+// Accept/Reject buttons that don't exist. A "max_tokens" response is left
+// alone, since a cut-off tool call may be incomplete.
+const effectiveStopReason = (response) => {
+  const callsATool = (response.content || []).some((b) => b.type === "tool_use");
+  const endedNormally = response.stop_reason === "end_turn" ||
+    response.stop_reason === "stop_sequence";
+  return callsATool && endedNormally ? "tool_use" : response.stop_reason;
+};
+
 // status: "done" | "truncated" | "refused" | "cap_reached"
 // `response` is the last response received (what the reply doc displays).
 const runToolLoop = async ({
@@ -51,6 +63,7 @@ const runToolLoop = async ({
 }) => {
   const convo = [...messages];
   const trace = [];
+  let toolErrors = 0; // client tool calls that came back as errors
 
   const finish = (status, response) => ({
     status,
@@ -58,6 +71,7 @@ const runToolLoop = async ({
     trace,
     iterations: trace.length,
     usage: sumUsage(trace),
+    toolErrors,
   });
 
   for (let i = 0; i < maxCalls; i++) {
@@ -67,7 +81,7 @@ const runToolLoop = async ({
     const response = await callClaude({messages: [...convo], tools});
     trace.push(response);
 
-    switch (response.stop_reason) {
+    switch (effectiveStopReason(response)) {
       case "end_turn":
       case "stop_sequence":
         return finish("done", response);
@@ -97,6 +111,7 @@ const runToolLoop = async ({
         for (const block of toolBlocks) {
           results.push(await runOneTool(block, toolHandlers));
         }
+        toolErrors += results.filter((r) => r.is_error).length;
         // ALL results in ONE user message.
         convo.push({role: "user", content: results});
         break;

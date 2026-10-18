@@ -30,6 +30,9 @@ Colten Mikulastik:
 * initialized normalization of data and enforcement and validation of input data to tool from assistant 
 * connectd tool use into ui for approve reject from user
 * lots of tests created verifing connectivity along the way for development of the Assistant and tool use
+* Created evaluation environment for the Wedding Assistant,
+* created rule based evaluations for the wedding assistant, dialouge and tool use evaluations
+* created LLM based evaluations for hte wedding assistant, dialouge and tool use evaluations
 
 
 Keiran Indraanei:
