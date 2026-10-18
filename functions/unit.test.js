@@ -488,6 +488,46 @@ describe("field registry (step 1)", () => {
     assert.equal(validateProposal("venueName", "x".repeat(201)).ok, false);
   });
 
+  test("names: object or JSON string, stored with all three parts", () => {
+    const want = {ok: true, value: {first: "Sam", middle: "", last: "Lee"}};
+    assert.deepEqual(
+        validateProposal("groomName", {first: " Sam ", last: "Lee"}), want);
+    assert.deepEqual(
+        validateProposal("brideName", "{\"first\":\"Sam\",\"last\":\"Lee\"}"),
+        want);
+    assert.equal(FIELD_REGISTRY.groomName.format(want.value), "Sam Lee");
+  });
+
+  test("names: first is required, plain strings and long parts rejected", () => {
+    for (const bad of [{first: "", last: "Lee"}, "Sam Lee", "[]", null,
+      {first: "x".repeat(51)}]) {
+      assert.equal(validateProposal("groomName", bad).ok, false,
+          JSON.stringify(bad));
+    }
+  });
+
+  test("inviteDeadline: real date, on or before the wedding date", () => {
+    const invitation = {weddingDate: "2027-06-12"};
+    assert.deepEqual(
+        validateProposal("inviteDeadline", "2027-05-01", {invitation}),
+        {ok: true, value: "2027-05-01"});
+    assert.equal(
+        validateProposal("inviteDeadline", "2027-06-12", {invitation}).ok, true);
+    assert.match(
+        validateProposal("inviteDeadline", "2027-06-13", {invitation}).message,
+        /on or before the wedding date/);
+    assert.equal(validateProposal("inviteDeadline", "2027-02-30").ok, false);
+    // no wedding date yet: nothing to compare against
+    assert.equal(validateProposal("inviteDeadline", "2027-06-13").ok, true);
+  });
+
+  test("addresses are trimmed text, like the names of the places", () => {
+    assert.deepEqual(validateProposal("venueAddress", " 1 Farm Rd "),
+        {ok: true, value: "1 Farm Rd"});
+    assert.equal(validateProposal("receptionAddress", "").ok, false);
+    assert.equal(validateProposal("receptionAddress", "x".repeat(201)).ok, false);
+  });
+
   test("isPublished can never be proposed", () => {
     for (const v of ["true", "false", "True", "yes"]) {
       assert.equal(validateProposal("isPublished", v).ok, false, v);
@@ -498,7 +538,7 @@ describe("field registry (step 1)", () => {
   test("unknown fields are rejected and the error lists the allowed ones", () => {
     const out = validateProposal("userId", "someone-else");
     assert.equal(out.ok, false);
-    assert.match(out.message, /Allowed: weddingDate, ceremonyTime, venueName,/);
+    assert.ok(out.message.includes(`Allowed: ${proposableKeys().join(", ")}.`));
   });
 
   test("ceremonyTime is stored as HH:MM and formatted 12-hour", () => {

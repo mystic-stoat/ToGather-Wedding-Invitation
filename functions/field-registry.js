@@ -19,6 +19,7 @@ const {randomUUID} = require("node:crypto");
 const MAX_TEXT = 200;
 const MAX_TITLE = 100;
 const MAX_MESSAGE = 1000;
+const MAX_NAME_PART = 50;
 const DATE_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
 // One-digit hours are accepted and padded, since Claude may write "9:30".
 const TIME_RE = /^(\d{1,2}):(\d{2})(?::\d{2})?$/;
@@ -70,6 +71,8 @@ const isSafeHttpUrl = (value) => {
 };
 
 const fail = (message) => ({ok: false, message});
+
+const str = (v) => (typeof v === "string" ? v.trim() : "");
 
 // Required free text: trimmed, non-empty, at most `max` characters.
 const textField = (field, label, max) => ({
@@ -136,14 +139,49 @@ const fontField = (field, label) => ({
   format: (value) => String(value),
 });
 
+// A person's name, stored as {first, middle, last} like the Wedding Details
+// form. Sent as a JSON object; first is required (the form requires it too).
+// Always stored with all three keys, the shape the form writes.
+const nameField = (field, label) => ({
+  proposable: true,
+  label,
+  validate: (raw) => {
+    let parts = raw;
+    if (typeof raw === "string") {
+      try {
+        parts = JSON.parse(raw);
+      } catch (err) {
+        parts = null;
+      }
+    }
+    if (!parts || typeof parts !== "object" || Array.isArray(parts)) {
+      return fail(`${field} must be a JSON object like ` +
+        "{\"first\":\"Sam\",\"middle\":\"\",\"last\":\"Lee\"}.");
+    }
+    const value = {};
+    for (const key of ["first", "middle", "last"]) {
+      const part = str(parts[key]);
+      if (part.length > MAX_NAME_PART) {
+        return fail(`${field}.${key} must be ${MAX_NAME_PART} characters ` +
+          "or fewer.");
+      }
+      value[key] = part;
+    }
+    if (!value.first) return fail(`${field}.first is required.`);
+    return {ok: true, value};
+  },
+  format: (value) => (value && typeof value === "object" ?
+    ["first", "middle", "last"].map((k) => str(value[k])).filter(Boolean)
+        .join(" ") :
+    String(value)),
+});
+
 // --- List fields -----------------------------------------------------------
 // A list proposal replaces the WHOLE list, so it fits the one-field
 // old -> new model of proposals. newValue is the full list as a JSON array.
 // An item whose id matches an item in the current list keeps that id (guests'
 // RSVPs point at meal ids); any other item gets a new id from the server, so
 // Claude can't invent or reuse ids.
-
-const str = (v) => (typeof v === "string" ? v.trim() : "");
 
 const parseList = (raw) => {
   let list = raw;
@@ -259,10 +297,40 @@ const FIELD_REGISTRY = {
     format: formatTime,
   },
 
+  // Partner names, {first, middle, last} (Wedding Details form).
+  groomName: nameField("groomName", "Partner one"),
+  brideName: nameField("brideName", "Partner two"),
+
+  // Must be on or before the wedding date, like getInviteDeadlineError in
+  // src/lib/rsvpDeadline.js. `invitation` is the whole current document, so
+  // the wedding date it holds is the one checked against.
+  inviteDeadline: {
+    proposable: true,
+    label: "RSVP deadline",
+    validate: (raw, {invitation} = {}) => {
+      const value = String(raw).trim();
+      if (!isRealDate(value)) {
+        return fail("inviteDeadline must be a real date written YYYY-MM-DD.");
+      }
+      const weddingDate = invitation && invitation.weddingDate;
+      if (typeof weddingDate === "string" && value > weddingDate) {
+        return fail(`inviteDeadline must be on or before the wedding date ` +
+          `(${weddingDate}).`);
+      }
+      return {ok: true, value};
+    },
+    format: (value) => String(value),
+  },
+
   // Only the name: the address, URL and placeId come from the Google Places
   // picker, so a new name leaves the old map pin until the couple re-picks.
   venueName: textField("venueName", "Venue", MAX_TEXT),
   receptionName: textField("receptionName", "Reception", MAX_TEXT),
+  // Same for the address text: the map link, placeId and pin are left as they
+  // were until the couple re-picks the place.
+  venueAddress: textField("venueAddress", "Venue address", MAX_TEXT),
+  receptionAddress: textField("receptionAddress", "Reception address",
+      MAX_TEXT),
 
   greetingTitle: textField("greetingTitle", "Greeting title", MAX_TITLE),
   greetingMessage: textField("greetingMessage", "Greeting message",

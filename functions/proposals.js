@@ -72,7 +72,7 @@ const createProposeChangeHandler = ({
     const oldValue = invitation.get(field) ?? null;
 
     const checked = validateProposal(field, newValue,
-        {now: now(), current: oldValue});
+        {now: now(), current: oldValue, invitation: invitation.data()});
     if (!checked.ok) throw new Error(checked.message);
 
     const collection = proposalsRef(db, uid);

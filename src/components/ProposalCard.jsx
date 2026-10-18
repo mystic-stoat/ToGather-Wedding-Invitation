@@ -12,11 +12,21 @@ import { getTravelCategoryLabel } from "@/lib/travelStay";
 const PLACE_NOTE =
   "This changes the name only. After accepting, re-pick the place in Wedding Details so the address and map match.";
 
-// Only fields the assistant can propose (functions/field-registry.js).
+// Same idea for the address text: the map link and pin stay on the old place.
+const ADDRESS_NOTE =
+  "This changes the address text only. After accepting, re-pick the place in Wedding Details so the map link and pin match.";
+
+// Only fields the assistant can propose (functions/field-registry.js). A field
+// missing here gets no card at all, so keep this in step with the registry.
 // `kind` picks how the value is shown (plain text when missing); `note` is
 // shown under the change.
 const FIELDS = {
-  weddingDate:     { label: "Wedding date" },
+  groomName:        { label: "Partner one", kind: "name" },
+  brideName:        { label: "Partner two", kind: "name" },
+  weddingDate:      { label: "Wedding date" },
+  inviteDeadline:   { label: "RSVP deadline" },
+  venueAddress:     { label: "Venue address", note: ADDRESS_NOTE },
+  receptionAddress: { label: "Reception address", note: ADDRESS_NOTE },
   ceremonyTime:    { label: "Ceremony time", kind: "time" },
   venueName:       { label: "Venue", note: PLACE_NOTE },
   receptionName:   { label: "Reception", note: PLACE_NOTE },
@@ -67,6 +77,13 @@ const Value = ({ field, kind, value, struck }) => {
   if (kind === "list") return <ListValue field={field} value={value} struck={struck} />;
   const style = struck ? "line-through" : "";
   if (isUnset(value)) return <span className={style}>not set</span>;
+  if (kind === "name") {
+    // {first, middle, last} -> "First Middle Last"
+    const text = value && typeof value === "object"
+      ? ["first", "middle", "last"].map((k) => value[k]).filter(Boolean).join(" ")
+      : String(value);
+    return <span className={style}>{text || "not set"}</span>;
+  }
   if (kind === "time") return <span className={style}>{formatCeremonyTime(value)}</span>;
   if (kind === "children") {
     return <span className={style}>{CHILDREN_POLICY_LABELS[value] || String(value)}</span>;

@@ -64,6 +64,22 @@ test("valid proposal: pending doc, oldValue read, details untouched", {skip: SKI
   assert.deepEqual(await t.invitationDoc(), before);
 });
 
+test("inviteDeadline is checked against the stored wedding date", {skip: SKIP}, async () => {
+  const t = await setup({weddingDate: "2027-06-12"});
+  await assert.rejects(ask(t.handler, "inviteDeadline", "2027-07-01"),
+      /on or before the wedding date/);
+  await ask(t.handler, "inviteDeadline", "2027-05-01");
+  assert.equal((await t.proposals())[0].newValue, "2027-05-01");
+});
+
+test("a name proposal keeps the old name as oldValue", {skip: SKIP}, async () => {
+  const t = await setup({groomName: {first: "Sam", middle: "", last: "Lee"}});
+  await ask(t.handler, "groomName", {first: "Samuel", last: "Lee"});
+  const [p] = await t.proposals();
+  assert.deepEqual(p.oldValue, {first: "Sam", middle: "", last: "Lee"});
+  assert.deepEqual(p.newValue, {first: "Samuel", middle: "", last: "Lee"});
+});
+
 test("a field with no value yet gets oldValue null", {skip: SKIP}, async () => {
   const t = await setup();
   await ask(t.handler, "weddingDate", "2027-06-12");

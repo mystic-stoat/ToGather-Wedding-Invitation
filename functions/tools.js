@@ -24,17 +24,21 @@ const buildProposeChangeTool = () => ({
     "Design fields (colors, fonts, story title, greeting title and " +
     "message): when the couple asks you to choose or suggest, pick " +
     "concrete values yourself and propose them right away. They review " +
-    "the proposal before anything changes, so don't ask permission first.\n" +
-    "Facts (date, time, venue, reception, children policy) and lists " +
-    "(meals, travel, registries): use only values the couple stated or " +
-    "agreed to in this chat, never from web content alone. You may search " +
-    "to suggest options, but propose only once they pick one.\n" +
-    "venueName and receptionName change only the name, never the address, " +
-    "map link or map pin. After proposing one, tell the couple to re-pick " +
-    "the place in Wedding Details so those match.\n" +
+    "the proposal before anything changes, so don't ask permission first. " +
+    "If they shared how or where they met, or a favorite color or place, " +
+    "base the values on that and say so in `reason`.\n" +
+    "Facts (partner names, date, time, RSVP deadline, venue, reception, " +
+    "addresses, children policy) and lists (meals, travel, registries): " +
+    "use only values the couple stated or agreed to in this chat, never " +
+    "from web content alone. You may search to suggest options, but " +
+    "propose only once they pick one.\n" +
+    "venueName, receptionName, venueAddress and receptionAddress change " +
+    "only that text, never the map link or map pin. After proposing one, " +
+    "tell the couple to re-pick the place in Wedding Details so those " +
+    "match.\n" +
     "In `reason`, say what the couple actually asked for or said. Never " +
-    "claim they chose something they didn't. After proposing, tell them " +
-    "it is waiting for their approval.",
+    "claim they chose something they didn't. After proposing, say you've " +
+    "suggested it and they can accept or reject it below.",
   input_schema: {
     type: "object",
     properties: {
@@ -42,7 +46,12 @@ const buildProposeChangeTool = () => ({
       newValue: {
         type: "string",
         description:
-          "The new value. Dates as YYYY-MM-DD; times as 24-hour HH:MM; " +
+          "The new value. Dates (weddingDate, inviteDeadline) as " +
+          "YYYY-MM-DD, with inviteDeadline on or before the wedding date; " +
+          "groomName and brideName as a JSON object " +
+          "{\"first\":\"\",\"middle\":\"\",\"last\":\"\"} (first is " +
+          "required; send all parts you know, including the existing ones); " +
+          "times as 24-hour HH:MM; " +
           "childrenPolicy as allowed or adults_only; colors as hex " +
           `(#56642b); fonts one of: ${INVITATION_FONTS.join(", ")}. ` +
           "mealOptions, travelItems and registries replace the WHOLE " +
