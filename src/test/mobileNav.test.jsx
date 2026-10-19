@@ -20,7 +20,7 @@ const invitation = {
 
 const NAV_LABELS = [
   "Dashboard", "Wedding Details", "Guest List", "Wedding Assistant",
-  "Save the Date", "Paper Invitations", "Mobile Invitation",
+  "Save the Date", "Mobile Invitation",
 ];
 
 const Where = () => <p data-testid="location">{useLocation().pathname}</p>;
