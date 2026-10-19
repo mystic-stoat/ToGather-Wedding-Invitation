@@ -50,6 +50,7 @@ import { CANVAS } from "@/components/invitation/builderTheme";
 import { resolveInvitationTheme, buildGuestThemeStyle } from "@/lib/invitationTheme";
 import StorySection from "@/components/invitation/StorySection";
 import WeddingDaySection from "@/components/invitation/WeddingDaySection";
+import SaveTheDate from "@/components/SaveTheDate";
 import { parseWeddingDate } from "@/lib/weddingDate";
 import { photoSrc } from "@/lib/imageProcessing";
 import { photoImageStyle } from "@/lib/photoAdjust";
@@ -173,6 +174,14 @@ const InvitationContent = ({
                 </>
               )}
             </p>
+          )}
+          {/* Save the Date — page only, directly under the date line so guests
+              can always reach it: it does not depend on the Date tab's
+              Calendar View / Countdown switches, and it only appears with a
+              real wedding date. The builder preview keeps its static mock
+              button in the Wedding Day section instead. */}
+          {page && hasValidDate && (
+            <SaveTheDate invitation={invitation} variant="invitation" theme={theme} />
           )}
         </Inner>
       </div>
