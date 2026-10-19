@@ -27,6 +27,8 @@ addDoc,
 // add a document with auto-generated ID
 getDocs,
 // read all documents from a query
+getDocsFromServer,
+// read from the server only (fails offline instead of using cached data)
 updateDoc,
 // update specific fields in a document
 deleteDoc,
@@ -184,6 +186,29 @@ export const publishInvitation = async weddingId => {
   await updateDoc(ref, {
     isPublished: true
   });
+};
+
+/**
+ * countInviteEmailEligible
+ * How many guests the existing Cloud Function would try to email if the
+ * invitation were published now. Read-only — used for the count shown in the
+ * Guest List "Publish Invitation" dialog.
+ *
+ * Mirrors functions/index.js sendInvitesOnPublish (weddingId + emailStatus
+ * "pending") and functions/email-utils.js hasUsableEmail (email contains "@").
+ * Deliberately no orderBy("guestName"), so guests without a name still count.
+ * Reads from the server only: offline it throws instead of returning a
+ * partial cached result, and the dialog shows general wording instead.
+ */
+export const countInviteEmailEligible = async weddingId => {
+  const q = query(collection(db, "invitee"),
+    where("weddingId", "==", weddingId),
+    where("emailStatus", "==", "pending"));
+  const snap = await getDocsFromServer(q);
+  return snap.docs.filter(d => {
+    const email = d.data().email;
+    return typeof email === "string" && email.includes("@");
+  }).length;
 };
 
 // ══════════════════════════════════════════════════════════════════════════════
