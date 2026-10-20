@@ -137,6 +137,67 @@ describe("guest invitation — the complete saved invitation", () => {
   });
 });
 
+describe("published guest invitation — Add to Calendar switch", () => {
+  const header = () => section("header");
+  const weddingDay = () => section("date");
+
+  it("an older published invitation without the field shows the working Add to Calendar button", async () => {
+    expect(INVITATION).not.toHaveProperty("dateShowAddToCalendar");
+    renderGuestPage();
+    await screen.findByText("Sam & Alex");
+    expect(within(header()).queryByRole("button", { name: /add to calendar/i })).toBeNull();
+    fireEvent.click(within(weddingDay()).getByRole("button", { name: /add to calendar/i }));
+    const options = await screen.findByTestId("save-the-date-options");
+    expect(options.querySelector("a").href).toContain("calendar.google.com");
+    expect(options.querySelector("a").href).not.toContain(TOKEN);
+    expect(within(options).getByRole("button", { name: /download calendar event/i })).toBeTruthy();
+  });
+
+  it("shows the button when saved ON", async () => {
+    db.docs["invitations/w1"] = { ...INVITATION, dateShowAddToCalendar: true };
+    renderGuestPage();
+    await screen.findByText("Sam & Alex");
+    expect(within(weddingDay()).getByRole("button", { name: /add to calendar/i })).toBeTruthy();
+    expect(within(header()).queryByRole("button", { name: /add to calendar/i })).toBeNull();
+  });
+
+  it("Add to Calendar alone shows the Wedding Day section with the date and the working button", async () => {
+    db.docs["invitations/w1"] = {
+      ...INVITATION, dateShowCalendar: false, dateShowCountdown: false, dateShowAddToCalendar: true,
+    };
+    renderGuestPage();
+    await screen.findByText("Sam & Alex");
+    expect(weddingDay()).toHaveTextContent("May 22, 2027 · 4:30 PM");
+    expect(screen.queryByTestId("wedding-calendar")).toBeNull();
+    expect(screen.queryByTestId("wedding-countdown")).toBeNull();
+    fireEvent.click(within(weddingDay()).getByRole("button", { name: /add to calendar/i }));
+    expect(await screen.findByTestId("save-the-date-options")).toBeTruthy();
+  });
+
+  it("all three OFF hides the Wedding Day section; the rest of the invitation and RSVP stay", async () => {
+    db.docs["invitations/w1"] = {
+      ...INVITATION, dateShowCalendar: false, dateShowCountdown: false, dateShowAddToCalendar: false,
+    };
+    renderGuestPage();
+    await screen.findByText("Sam & Alex");
+    expect(weddingDay()).toBeNull();
+    expect(screen.queryByRole("button", { name: /add to calendar/i })).toBeNull();
+    expect(section("venue")).toBeTruthy();
+    expect(within(rsvp()).getByText("Will you be joining us?")).toBeTruthy();
+  });
+
+  it("hides the button when saved OFF, without affecting the Wedding Day section or the RSVP form", async () => {
+    db.docs["invitations/w1"] = { ...INVITATION, dateShowAddToCalendar: false };
+    renderGuestPage();
+    await screen.findByText("Sam & Alex");
+    expect(screen.queryByRole("button", { name: /add to calendar/i })).toBeNull();
+    expect(screen.queryByTestId("save-the-date-options")).toBeNull();
+    expect(screen.queryByTestId("preview-add-to-calendar")).toBeNull();
+    expect(section("date")).toBeTruthy();                       // Calendar View still on
+    expect(within(rsvp()).getByText("Will you be joining us?")).toBeTruthy();
+  });
+});
+
 describe("guest RSVP — existing form, fields and validation", () => {
   const goToInfoStep = async () => {
     await screen.findByText("Sam & Alex");
