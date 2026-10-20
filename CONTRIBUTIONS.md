@@ -80,6 +80,9 @@ Christopher Nguyen:
 * Added RSVP functionality that allows guests to submit their responses and revisit their invitation afterward.
 * Added unit tests for invitation rendering, guest RSVP functionality, and saved invitation handling.
 * Tested the invitation page and RSVP functionality using Firebase emulators and verified that all 678 automated tests passed.
+* Added the Add to Calendar toggle to the Invitation Builder's Date section.
+* Integrating Jesus's existing calendar feature into the Wedding Day section.
+* Added tests for toggle settings, invitation previews, and guest invitations.
 
 
 

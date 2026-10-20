@@ -7,7 +7,7 @@
 // Firestore / auth / maps are mocked — no emulator needed.
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import userEvent from "@testing-library/user-event";
-import { render, screen, fireEvent, waitFor, cleanup } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, cleanup, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
 const fs = vi.hoisted(() => ({
@@ -147,6 +147,12 @@ describe("event UID stability and uniqueness", () => {
     expect(guest.token).toBeUndefined();
     expect(guest.userId).toBeUndefined();
     expect(buildCalendarEvent(guest).uid).toBe("w1-save-the-date@togather");
+  });
+
+  it("the guest-safe projection carries the Add to Calendar switch (and omits it when never saved)", () => {
+    expect(toGuestInvitation({ ...INVITATION, dateShowAddToCalendar: false }).dateShowAddToCalendar).toBe(false);
+    expect(toGuestInvitation({ ...INVITATION, dateShowAddToCalendar: true }).dateShowAddToCalendar).toBe(true);
+    expect(toGuestInvitation({ ...INVITATION })).not.toHaveProperty("dateShowAddToCalendar");
   });
 });
 
@@ -324,9 +330,10 @@ describe("Guest invitation page", () => {
     render(<InvitationContent mode="page" invitation={invitation}
       settings={settings} storyBlocks={[]} partyMembers={[]} />);
 
-  it("shows Add to Calendar under the date line even when Date options are off", () => {
+  it("shows Add to Calendar in the Wedding Day section even when Calendar View / Countdown are off", () => {
     renderContent(INVITATION, { dateShowCalendar: false, dateShowCountdown: false });
-    expect(screen.getByRole("button", { name: /add to calendar/i })).toBeInTheDocument();
+    const section = document.querySelector('[data-section="date"]');
+    expect(within(section).getByRole("button", { name: /add to calendar/i })).toBeInTheDocument();
   });
 
   it("is absent when there is no valid wedding date", () => {
@@ -344,20 +351,94 @@ describe("Guest invitation page", () => {
 });
 
 describe("WeddingDaySection (page variant)", () => {
-  it("shows no duplicate action — the header owns the single live button", () => {
-    render(<WeddingDaySection invitation={INVITATION}
+  it("page: renders the single working SaveTheDate button at the bottom of the section", async () => {
+    const { container } = render(<WeddingDaySection invitation={INVITATION}
       settings={{ dateShowCalendar: true }} theme={THEME} variant="page" />);
-    expect(screen.queryByRole("button", { name: /add to calendar/i })).toBeNull();
-    expect(screen.queryByTestId("save-the-date-options")).toBeNull();
+    const btns = screen.getAllByRole("button", { name: /add to calendar/i });
+    expect(btns).toHaveLength(1);
+    expect(btns[0]).toHaveClass("tg-inv-button");
+    // After the date/time line
+    const dateLine = screen.getByText(/June 20, 2026/);
+    expect(dateLine.compareDocumentPosition(btns[0]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(container.querySelector('[data-testid="preview-add-to-calendar"]')).toBeNull();
+    fireEvent.click(btns[0]);
+    expect(await screen.findByTestId("save-the-date-options")).toBeInTheDocument();
   });
 
-  it("compact/preview variant keeps an inert visual button (no event actions)", () => {
+  it("page: OFF renders no button", () => {
+    render(<WeddingDaySection invitation={INVITATION}
+      settings={{ dateShowCalendar: true, dateShowAddToCalendar: false }} theme={THEME} variant="page" />);
+    expect(screen.queryByRole("button", { name: /add to calendar/i })).toBeNull();
+  });
+
+  it("compact/preview variant renders an inert placeholder (no event actions)", () => {
     render(<WeddingDaySection invitation={INVITATION}
       settings={{ dateShowCalendar: true }} theme={THEME} variant="compact" />);
-    const btn = screen.getByRole("button", { name: /add to calendar/i });
+    const btn = screen.getByTestId("preview-add-to-calendar");
     fireEvent.click(btn);
     expect(screen.queryByTestId("save-the-date-options")).toBeNull();
     expect(URL.createObjectURL).not.toHaveBeenCalled();
     expect(document.querySelector("a[href*='calendar.google.com']")).toBeNull();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+describe("Add to Calendar switch (dateShowAddToCalendar)", () => {
+  const renderContent = (mode, invitation, settings = {}) =>
+    render(<InvitationContent mode={mode} invitation={invitation}
+      settings={settings} storyBlocks={[]} partyMembers={[]} />);
+  const header = () => document.querySelector('[data-section="header"]');
+  const weddingDay = () => document.querySelector('[data-section="date"]');
+
+  it("page: ON (or missing on an older invitation) shows the working SaveTheDate in Wedding Day, not the header", async () => {
+    for (const settings of [{}, { dateShowAddToCalendar: true }]) {
+      cleanup();
+      renderContent("page", INVITATION, settings);
+      expect(within(header()).queryByRole("button", { name: /add to calendar/i })).toBeNull();
+      const btn = within(weddingDay()).getByRole("button", { name: /add to calendar/i });
+      fireEvent.click(btn);
+      const options = await screen.findByTestId("save-the-date-options");
+      expect(options.querySelector("a").href).toContain("calendar.google.com");
+    }
+  });
+
+  it("page: all three OFF hides the button and the Wedding Day section", () => {
+    renderContent("page", INVITATION, { dateShowAddToCalendar: false });
+    expect(screen.queryByRole("button", { name: /add to calendar/i })).toBeNull();
+    expect(screen.queryByTestId("save-the-date-options")).toBeNull();
+    expect(weddingDay()).toBeNull();
+  });
+
+  it("page: Add to Calendar alone shows the section with the date line and the button only", () => {
+    renderContent("page", INVITATION, {});
+    expect(weddingDay()).toHaveTextContent("June 20, 2026");
+    expect(screen.queryByTestId("wedding-calendar")).toBeNull();
+    expect(screen.queryByTestId("wedding-countdown")).toBeNull();
+    expect(within(weddingDay()).getByRole("button", { name: /add to calendar/i })).toBeInTheDocument();
+  });
+
+  it("page: OFF hides the button but leaves Calendar View / Countdown alone", () => {
+    renderContent("page", INVITATION,
+      { dateShowAddToCalendar: false, dateShowCalendar: true, dateShowCountdown: true });
+    expect(screen.queryByRole("button", { name: /add to calendar/i })).toBeNull();
+    expect(screen.getByTestId("wedding-calendar")).toBeInTheDocument();
+    expect(screen.getByTestId("wedding-countdown")).toBeInTheDocument();
+  });
+
+  it("preview: ON shows an inert placeholder in Wedding Day even with Calendar View / Countdown OFF", () => {
+    renderContent("preview", INVITATION, { dateShowCalendar: false, dateShowCountdown: false });
+    expect(within(header()).queryByTestId("preview-add-to-calendar")).toBeNull();
+    const btn = within(weddingDay()).getByTestId("preview-add-to-calendar");
+    expect(btn).toHaveTextContent("Add to calendar");
+    fireEvent.click(btn);
+    expect(screen.queryByTestId("save-the-date-options")).toBeNull();
+    expect(URL.createObjectURL).not.toHaveBeenCalled();
+    expect(document.querySelector("a[href*='calendar.google.com']")).toBeNull();
+  });
+
+  it("preview: OFF hides the placeholder", () => {
+    renderContent("preview", INVITATION, { dateShowAddToCalendar: false, dateShowCalendar: true });
+    expect(screen.queryByTestId("preview-add-to-calendar")).toBeNull();
+    expect(screen.queryByText("Add to calendar")).toBeNull();
   });
 });

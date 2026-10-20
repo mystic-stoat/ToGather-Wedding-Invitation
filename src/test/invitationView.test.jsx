@@ -28,14 +28,21 @@ describe("invitationToSettings — saved document → builder settings", () => {
       musicShowOnInvitation: true,          // shown by default
       travelShowOnInvitation: true, travelItems: [], travelMessage: "",
       storyTitle: "Our Story", storyShowOnInvitation: true,
-      dateShowCalendar: false, dateShowCountdown: false,
+      dateShowCalendar: false, dateShowCountdown: false, dateShowAddToCalendar: true,
       venueShowOnInvitation: true, venueShowMap: true, venueShowAddress: true, venueShowDirections: true,
       mealOptions: [],
     });
   });
 
   it("returns defaults for a missing document", () => {
-    expect(invitationToSettings(null)).toMatchObject({ musicShowOnInvitation: true, storyTitle: "Our Story" });
+    expect(invitationToSettings(null)).toMatchObject({
+      musicShowOnInvitation: true, storyTitle: "Our Story", dateShowAddToCalendar: true,
+    });
+  });
+
+  it("keeps a saved Add to Calendar choice (owner preview / published page)", () => {
+    expect(invitationToSettings({ dateShowAddToCalendar: false }).dateShowAddToCalendar).toBe(false);
+    expect(invitationToSettings({ dateShowAddToCalendar: true, isPublished: true }).dateShowAddToCalendar).toBe(true);
   });
 
   it("keeps the couple's saved choices, including switches that are off", () => {
