@@ -44,22 +44,33 @@
     --destructive:        356 44% 59%;    /* #C9666E                          */
     --destructive-foreground: 0 0% 100%;
 
-    /* ── Borders — #E7DED4 warm beige ──────────────────────────────────────── */
+    /* ── Borders — #F0EAE5 general borders; form fields use the slightly
+     * darker #E7DED4 (--input) so input outlines stay visible on white ───── */
     --border:             27 27% 92%; /* #F0EAE5 */
-    --input:              32 28.4% 86.9%;
+    --input:              32 28.4% 86.9%; /* #E7DED4 */
     --ring:               135 20.3% 31%;  /* matches primary — green focus rings, not blue */
 
     --radius: 0.75rem;
 
+    /* ── RSVP status — semantic, NOT part of the brand palette ──────────────
+     * Shared by Dashboard and Guest List badges, legend dots and the RSVP
+     * chart. Values are unchanged from the previous hard-coded hex colors. */
+    --status-accepted:             135 20% 31%;         /* #3F5F47 */
+    --status-accepted-bg:          140 23.1% 92.4%;     /* #E7F0EA */
+    --status-declined:             355.2 47.8% 59.4%;   /* #C9666E */
+    --status-declined-bg:          0 51.5% 93.5%;       /* #F7E6E6 */
+    --status-pending:              37.1 59.7% 54.3%;    /* #D09B45 */
+    --status-pending-bg:           38.6 87.5% 93.7%;    /* #FDF3E1 */
+
     /* ── Sidebar — its own surface, distinct from the page background ─────── */
-    --sidebar-background:          27 27% 92%;          /* #E7DED4 warm tan */
+    --sidebar-background:          27 27% 92%;          /* #F0EAE5 warm beige */
     --sidebar-foreground:          0 0% 17.3%;
     --sidebar-primary:             135 20.3% 31%;       /* #3F5F47 active nav pill */
     --sidebar-primary-foreground:  0 0% 100%;
     --sidebar-accent:              160 22% 92%;         /* #E6EFEC couple-info card */
     --sidebar-accent-foreground:   0 0% 17.3%;
     /* Secondary text on the tan sidebar — darker than --muted-foreground so nav
-     * labels keep ≥4.5:1 contrast on #E7DED4 (#5F574F ≈ 5.3:1)              */
+     * labels keep ≥4.5:1 contrast on the sidebar (#5F574F ≈ 5.9:1 on #F0EAE5) */
     --sidebar-muted-foreground:    30 9% 34%;
     --sidebar-border:              32 28.4% 86.9%;
     --sidebar-ring:                135 20.3% 31%;

@@ -20,13 +20,13 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts";
 import {
   LayoutDashboard, Users, Gift, MapPin,
   CalendarCheck, Mail, Smartphone, ChevronRight,
-  Share2, Pencil, Eye, Bell, Loader2,
-  Search, UserRound, LogOut, Heart,
+  Share2, Pencil, Eye, Loader2,
+  Search, UserRound,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,6 +39,7 @@ import { getMealLabel, getAttendanceStats } from "@/lib/rsvpOptions";
 import Logo from "@/assets/logo.svg";
 import Sidebar from "@/components/Sidebar"
 import MobileNav from "@/components/MobileNav";
+import SaveTheDate from "@/components/SaveTheDate";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -75,9 +76,9 @@ const timeAgo = (timestamp) => {
 // Kept in sync with the identical map in GuestList.jsx.
 const statusBadge = (status) => {
   const map = {
-    Accepted: "bg-[#E7F0EA] text-[#3F5F47]",
-    Declined: "bg-[#F7E6E6] text-[#C9666E]",
-    Pending:  "bg-[#FDF3E1] text-[#D09B45]",
+    Accepted: "bg-status-accepted-bg text-status-accepted",
+    Declined: "bg-status-declined-bg text-status-declined",
+    Pending:  "bg-status-pending-bg text-status-pending",
   };
   return map[status] || "bg-muted text-muted-foreground";
 };
@@ -109,13 +110,13 @@ const Dashboard = () => {
   const { user, userProfile, logout } = useAuth();
 
   const navigate         = useNavigate();
+  const location         = useLocation();
 
   // ── State ──────────────────────────────────────────────────────────────────
   const [invitation, setInvitation]       = useState(null);
   const [guests, setGuests]               = useState([]);
   const [loading, setLoading]             = useState(true);
   const [search, setSearch]               = useState("");
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   // ── Load invitation + guests on mount ──────────────────────────────────────
   useEffect(() => {
@@ -145,6 +146,13 @@ const Dashboard = () => {
     navigate("/login");
   };
 
+  // ── "Save the Date" sidebar link lands on #save-the-date — scroll the RSVP
+  //    Progress card (which holds the action) into view once it has rendered.
+  useEffect(() => {
+    if (loading || location.hash !== "#save-the-date") return;
+    document.getElementById("save-the-date")?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+  }, [location.hash, loading]);
+
   // ── Computed values ────────────────────────────────────────────────────────
 
   // RSVP counts from real data
@@ -159,9 +167,9 @@ const Dashboard = () => {
 
   // Donut chart data — matches the statusBadge colors above
   const rsvpChartData = [
-    { name: "Accepted", value: accepted || 0, color: "#3F5F47" },
-    { name: "Declined", value: declined || 0, color: "#C9666E" },
-    { name: "Pending",  value: pending  || 0, color: "#D09B45" },
+    { name: "Accepted", value: accepted || 0, color: "hsl(var(--status-accepted))" },
+    { name: "Declined", value: declined || 0, color: "hsl(var(--status-declined))" },
+    { name: "Pending",  value: pending  || 0, color: "hsl(var(--status-pending))" },
   ];
 
   // 3 most recent guests who have responded — sorted by respondedAt timestamp
@@ -206,38 +214,15 @@ const Dashboard = () => {
     <div className="min-h-screen bg-background flex">
 
       {/* Sidebar — visible on desktop only */}
-      <div className="hidden lg:flex">
-        <Sidebar invitation={invitation} onLogout={handleLogout} />
-      </div>
-
-      {/* Mobile nav drawer */}
-      <MobileNav
-        invitation={invitation}
-        onLogout={handleLogout}
-        open={mobileNavOpen}
-        onOpenChange={setMobileNavOpen}
-      />
+      <Sidebar invitation={invitation} onLogout={handleLogout} />
 
       {/* Main content area */}
       <main className="flex-1 min-h-screen overflow-y-auto">
 
-        {/* Mobile top bar — only shows when sidebar is hidden */}
-        <div className="lg:hidden bg-card border-b border-border/50 px-6 py-4 flex items-center justify-between">
-          <button
-            onClick={() => setMobileNavOpen(true)}
-            className="p-2 rounded-lg hover:bg-muted transition-colors"
-            aria-label="Open menu"
-          >
-            <Heart size={20} className="text-primary" />
-          </button>
-          <span className="font-heading text-lg font-semibold">ToGather</span>
-          <button onClick={handleLogout}
-            className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
-            <LogOut size={15} /> Log out
-          </button>
-        </div>
+        {/* Mobile / tablet top bar with the navigation drawer (below lg) */}
+        <MobileNav invitation={invitation} onLogout={handleLogout} />
 
-        <div className="px-6 lg:px-10 py-8 max-w-5xl mx-auto">
+        <div className="px-4 sm:px-6 lg:px-10 py-6 sm:py-8 max-w-7xl mx-auto">
 
           {/* Welcome heading */}
           <div className="mb-8">
@@ -260,7 +245,7 @@ const Dashboard = () => {
           </div>
 
           {/* ── Two column: Invitation preview + RSVP progress ── */}
-          <div className="grid lg:grid-cols-2 gap-6 mb-8">
+          <div className="grid md:grid-cols-2 gap-6 mb-8">
 
             {/* My Invitation */}
             <div className="bg-card rounded-2xl border border-border/50 shadow-sm p-5">
@@ -325,12 +310,12 @@ const Dashboard = () => {
               </div>
             </div>
 
-            {/* RSVP Progress */}
-            <div className="bg-card rounded-2xl border border-border/50 shadow-sm p-5">
+            {/* RSVP Progress — id is the "Save the Date" sidebar link target */}
+            <div id="save-the-date" className="bg-card rounded-2xl border border-border/50 shadow-sm p-5 scroll-mt-6">
               <h2 className="text-base font-semibold text-foreground mb-4">RSVP Progress</h2>
 
               {/* Donut chart */}
-              <div className="flex items-center gap-6 mb-5">
+              <div className="flex flex-wrap items-center gap-x-6 gap-y-4 mb-5">
                 <div className="relative w-32 h-32 flex-shrink-0">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
@@ -346,7 +331,7 @@ const Dashboard = () => {
                         strokeWidth={0}
                       >
                         {(total > 0 ? rsvpChartData : [{ color: "hsl(32, 20%, 88%)" }]).map((d, i) => (
-                          <Cell key={i} fill={d.color} />
+                          <Cell key={i} fill={d.color} style={{ fill: d.color }} />
                         ))}
                       </Pie>
                     </PieChart>
@@ -363,17 +348,17 @@ const Dashboard = () => {
                 {/* Legend */}
                 <div className="space-y-2 text-sm">
                   <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-[#3F5F47]" />
+                    <span className="w-2.5 h-2.5 rounded-full bg-status-accepted" />
                     <span className="font-medium text-foreground">{accepted}</span>
                     <span className="text-muted-foreground">Accepted</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-[#C9666E]" />
+                    <span className="w-2.5 h-2.5 rounded-full bg-status-declined" />
                     <span className="font-medium text-foreground">{declined}</span>
                     <span className="text-muted-foreground">Declined</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-[#D09B45]" />
+                    <span className="w-2.5 h-2.5 rounded-full bg-status-pending" />
                     <span className="font-medium text-foreground">{pending}</span>
                     <span className="text-muted-foreground">Pending</span>
                   </div>
@@ -390,9 +375,7 @@ const Dashboard = () => {
 
               {/* Quick links */}
               <div className="space-y-0.5 border-t border-border/40 pt-3">
-                <button className="w-full flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-muted/40 transition-colors text-sm text-foreground text-left">
-                  <Bell size={14} className="text-muted-foreground" /> Set Reminders
-                </button>
+                <SaveTheDate invitation={invitation} />
                 <Link to="/wedding-details"
                   className="flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-muted/40 transition-colors text-sm text-foreground">
                   <Pencil size={14} className="text-muted-foreground" /> Edit Wedding Details
@@ -416,11 +399,14 @@ const Dashboard = () => {
                     <div className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${avatarColor(g.guestName)}`}>
                       {getInitials(g.guestName)}
                     </div>
-                    <span className="text-sm font-medium text-foreground flex-1">{g.guestName}</span>
-                    <span className={`text-xs font-semibold px-2.5 py-1 rounded-lg ${statusBadge(g.rsvpStatus)}`}>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground truncate">{g.guestName}</p>
+                      <p className="sm:hidden text-xs text-muted-foreground">{timeAgo(g.respondedAt)}</p>
+                    </div>
+                    <span className={`flex-shrink-0 text-xs font-semibold px-2.5 py-1 rounded-lg ${statusBadge(g.rsvpStatus)}`}>
                       {g.rsvpStatus}
                     </span>
-                    <span className="text-xs text-muted-foreground w-20 text-right">
+                    <span className="hidden sm:block flex-shrink-0 text-xs text-muted-foreground w-20 text-right">
                       {timeAgo(g.respondedAt)}
                     </span>
                   </div>
@@ -466,7 +452,9 @@ const Dashboard = () => {
                 </p>
               </div>
             ) : (
-              <div className="overflow-x-auto rounded-2xl border border-border/50 bg-card shadow-sm">
+              <>
+              {/* Tablet & desktop: table */}
+              <div className="hidden md:block overflow-x-auto rounded-2xl border border-border/50 bg-card shadow-sm">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-border/60">
@@ -499,17 +487,7 @@ const Dashboard = () => {
                         </td>
                         {/* Meal + Dietary / Allergies — kept as separate lines */}
                         <td className="px-5 py-4 text-muted-foreground">
-                          {(() => {
-                            const meal = getMealLabel(g, invitation?.mealOptions);
-                            const dietary = (g.dietaryRestrictions || "").trim();
-                            if (!meal && !dietary) return "—";
-                            return (
-                              <div className="space-y-0.5 text-xs leading-snug">
-                                {meal && <p><span className="text-muted-foreground/70">Meal: </span><span className={`text-foreground ${g.mealId ? "" : "capitalize"}`}>{meal}</span></p>}
-                                {dietary && <p><span className="text-muted-foreground/70">Dietary / Allergies: </span><span className="text-foreground">{dietary}</span></p>}
-                              </div>
-                            );
-                          })()}
+                          <MealDietary guest={g} mealOptions={invitation?.mealOptions} />
                         </td>
                         {/* Plus one — show Yes/No like the Figma wireframe */}
                         <td className="px-5 py-4 text-muted-foreground">
@@ -520,12 +498,7 @@ const Dashboard = () => {
                         {/* Copy RSVP link — each guest has a unique token */}
                         <td className="px-5 py-4">
                           <button
-                            onClick={() => {
-                              // URL includes both inviteeId and token so RSVP page can do a direct doc lookup
-                            const link = `${window.location.origin}/rsvp/${g.inviteeId}/${g.token}`;
-                              navigator.clipboard.writeText(link);
-                              alert(`Copied!\n${link}`);
-                            }}
+                            onClick={() => copyRsvpLink(g)}
                             className="text-xs text-primary hover:underline">
                             Copy link
                           </button>
@@ -535,6 +508,39 @@ const Dashboard = () => {
                   </tbody>
                 </table>
               </div>
+
+              {/* Phones: one card per guest — same information as the table */}
+              <ul className="md:hidden space-y-3" aria-label="Guests">
+                {filtered.map(g => (
+                  <li key={g.inviteeId} className="bg-card rounded-2xl border border-border/50 shadow-sm p-4">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${avatarColor(g.guestName)}`}>
+                        {getInitials(g.guestName)}
+                      </div>
+                      <p className="flex-1 min-w-0 font-medium text-foreground truncate">{g.guestName}</p>
+                      <span className={`flex-shrink-0 inline-flex px-2.5 py-1 rounded-lg text-xs font-semibold ${statusBadge(g.rsvpStatus)}`}>
+                        {g.rsvpStatus}
+                      </span>
+                    </div>
+                    <dl className="mt-3 grid grid-cols-[auto,1fr] gap-x-3 gap-y-1.5 text-sm">
+                      <dt className="text-xs text-muted-foreground pt-0.5">Meal / Dietary</dt>
+                      <dd className="text-muted-foreground min-w-0 break-words">
+                        <MealDietary guest={g} mealOptions={invitation?.mealOptions} />
+                      </dd>
+                      <dt className="text-xs text-muted-foreground">Plus One</dt>
+                      <dd className="text-muted-foreground">
+                        {g.plusOneLimit > 0 ? <span className="text-primary font-medium">Yes</span> : "No"}
+                      </dd>
+                    </dl>
+                    <button
+                      onClick={() => copyRsvpLink(g)}
+                      className="mt-3 w-full h-11 rounded-xl border border-input text-sm font-medium text-primary hover:bg-muted transition-colors">
+                      Copy RSVP link
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              </>
             )}
           </div>
 

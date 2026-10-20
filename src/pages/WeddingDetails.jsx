@@ -258,6 +258,15 @@ const {
   const handleSave = async () => {
     if (!user) return;
 
+    // Prevent saving if existing wedding details failed to load.
+    // This avoids accidentally creating a duplicate invitation.
+    if (loadingData || loadError) {
+      setSaveError(
+        "Unable to verify your existing wedding details. Please refresh the page and try again."
+      );
+      return;
+    }
+
     setSaveError("");
     setSaved(false);
 

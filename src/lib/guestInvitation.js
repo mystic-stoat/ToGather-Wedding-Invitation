@@ -74,6 +74,11 @@ export const toGuestInvitation = (inv) => {
   out.groomName = firstNameOnly(inv.groomName);
   out.brideName = firstNameOnly(inv.brideName);
 
+  // Opaque document id — needed for a stable, unique Save the Date event UID.
+  // No added exposure: the invitee document the guest page already loads
+  // carries this same weddingId, and invitation docs are publicly readable.
+  if (typeof inv.weddingId === "string" && inv.weddingId) out.weddingId = inv.weddingId;
+
   // Sections switched off → their content isn't sent at all
   if (!(inv.musicShowOnInvitation ?? true)) out.musicTrackId = "";
   if (!getTravelShowOnInvitation(inv)) { out.travelItems = []; out.travelMessage = ""; }

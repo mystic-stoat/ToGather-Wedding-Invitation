@@ -28,6 +28,7 @@ import Logo from "@/assets/logo.svg";
 import FormError from "@/components/ui/form-error";
 import { useFormState } from "@/hooks/useFormState";
 import { validateEmail } from "@/utils/validation";
+import { requiresEmailVerification } from "@/lib/emailVerification";
 
 
 const Login = () => {
@@ -73,9 +74,11 @@ const Login = () => {
 
     try {
       // Call Firebase via AuthContext
-      await login(email, password);
-      // If we get here, login succeeded — go to dashboard
-      navigate("/dashboard");
+      const credential = await login(email, password);
+      // New accounts that haven't verified their email go to the
+      // verification screen instead of the app (verifying in another
+      // tab or on another device flips this to /dashboard on next login).
+      navigate(requiresEmailVerification(credential.user) ? "/verify-email" : "/dashboard");
     } catch (err) {
       // Firebase error codes → friendly messages
       const code = err.code;

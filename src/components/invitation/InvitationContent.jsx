@@ -174,6 +174,8 @@ const InvitationContent = ({
               )}
             </p>
           )}
+          {/* Save the Date / Add to Calendar lives at the bottom of the
+              Wedding Day section (WeddingDaySection), not here. */}
         </Inner>
       </div>
 
@@ -242,9 +244,10 @@ const InvitationContent = ({
           Party, Venue, Travel & Stay, RSVP, Registry — then the closing.
           Color Theme has no section of its own; it styles everything. ── */}
 
-      {/* Wedding Day (Date tab) — right after Greetings; only when Calendar View
-          and/or Countdown is on (page: and a valid date is set). The hero date
-          above is always shown regardless of these settings. */}
+      {/* Wedding Day (Date tab) — right after Greetings; shown when Calendar
+          View, Countdown and/or Add to Calendar is on (page: and a valid date
+          is set). The hero date above is always shown regardless of these
+          settings. */}
       {show.date && (
         <WeddingDaySection invitation={invitation} settings={settings}
           theme={theme} backgroundColor={sec.date} {...(page ? { variant: "page" } : {})} />

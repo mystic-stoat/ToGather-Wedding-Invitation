@@ -292,24 +292,26 @@ describe("page mode — RSVP area and Q&A links", () => {
 describe("WeddingDaySection variants", () => {
   const theme = resolveInvitationTheme(FULL_SETTINGS);
 
-  it("compact (builder) keeps its phone classes and the Add to calendar button", () => {
+  it("compact (builder) keeps its phone classes and the Add to calendar placeholder at the bottom", () => {
     const { container } = render(
       <WeddingDaySection invitation={INVITATION} settings={FULL_SETTINGS} theme={theme} backgroundColor="#fff" />,
     );
     const root = container.firstElementChild;
     expect(root).toHaveClass("p-6", "text-center");
     expect(root.querySelector(".tg-inv-inner")).toBeNull();
-    expect(screen.getByRole("button", { name: "Add to calendar" })).toBeTruthy();
+    expect(screen.getByTestId("preview-add-to-calendar")).toHaveTextContent("Add to calendar");
+    expect(root.lastElementChild).toBe(screen.getByTestId("preview-add-to-calendar"));
   });
 
-  it("page hides the unfinished Add to calendar button and uses page sizing", () => {
+  it("page uses the working Save the Date button (no placeholder) and page sizing", () => {
     const { container } = render(
       <WeddingDaySection invitation={INVITATION} settings={FULL_SETTINGS} theme={theme} backgroundColor="#fff" variant="page" />,
     );
     const root = container.firstElementChild;
     expect(root).toHaveClass("tg-inv-section");
     expect(root.querySelector(":scope > .tg-inv-inner")).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Add to calendar" })).toBeNull();
+    expect(screen.queryByTestId("preview-add-to-calendar")).toBeNull();
+    expect(screen.getByRole("button", { name: "Add to Calendar" })).toHaveClass("tg-inv-button");
     expect(screen.getByTestId("wedding-calendar")).toHaveClass("tg-inv-date__calendar");
     expect(screen.getByTestId("wedding-countdown")).toHaveClass("tg-inv-date__countdown");
   });

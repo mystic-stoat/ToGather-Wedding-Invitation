@@ -3,10 +3,12 @@
 // WHAT THIS COMPONENT DOES:
 //   The invitation's "Wedding Day" section: an optional month calendar with the
 //   wedding day highlighted, an optional live countdown, the date/time line and
-//   the existing "Add to calendar" button (not wired up yet; ICS comes later).
+//   an optional "Add to Calendar" button at the bottom (the working
+//   SaveTheDate component on the page; a non-functional placeholder in the
+//   builder preview).
 //
-//   The parent decides whether to render this at all (only when Calendar View
-//   and/or Countdown is on — see shouldShowWeddingDaySection). The wedding date
+//   The parent decides whether to render this at all (when any of Calendar
+//   View, Countdown or Add to Calendar is on — see shouldShowWeddingDaySection). The wedding date
 //   and ceremony time come from Wedding Details (`invitation`); colors and fonts
 //   come from the resolved Color Theme (`theme`).
 //
@@ -15,11 +17,12 @@
 //
 //   variant="compact" (default) — the builder's phone preview, unchanged.
 //   variant="page"              — the standalone invitation website: sizes come
-//     from invitationContent.css, and the unfinished "Add to calendar" button is
-//     not shown. (On the page the parent only renders this section when a valid
-//     date is set — see getSectionVisibility in src/lib/invitationView.js.)
+//     from invitationContent.css. (On the page the parent only renders this
+//     section when a valid date is set — see getSectionVisibility in
+//     src/lib/invitationView.js.)
 // ─────────────────────────────────────────────────────────────────────────────
 import { useEffect, useState } from "react";
+import SaveTheDate from "@/components/SaveTheDate";
 import {
   MONTH_NAMES,
   WEEKDAY_LABELS,
@@ -192,11 +195,10 @@ const Countdown = ({ target, theme, hasTime, sz }) => {
 const WeddingDaySection = ({ invitation, settings, theme, backgroundColor, variant = "compact" }) => {
   const page = variant === "page";
   const sz = page ? SIZES.page : SIZES.compact;
-  const { dateShowCalendar, dateShowCountdown } = normalizeDateSettings(settings);
+  const { dateShowCalendar, dateShowCountdown, dateShowAddToCalendar } = normalizeDateSettings(settings);
   const date   = parseWeddingDate(invitation?.weddingDate);
   const target = getWeddingStartTime(invitation);
   const time   = formatCeremonyTime(invitation?.ceremonyTime);
-  const btnStyle = { backgroundColor: theme.button, color: theme.buttonLabel };
 
   return (
     <div className={sz.section} data-section="date" style={{ backgroundColor }}>
@@ -224,14 +226,22 @@ const WeddingDaySection = ({ invitation, settings, theme, backgroundColor, varia
           </p>
         )}
 
-        {/* Existing button — calendar file (ICS) export is a separate task, so
-            the standalone page doesn't show it until it works. */}
-        {!page && (
-          <button type="button" className="w-full py-2 rounded-full text-white text-[9px] font-bold"
-            style={btnStyle}>
+        {/* Add to Calendar — last, after the date/time line, matching the
+            Date tab's order (Calendar View, Countdown, Add to Calendar).
+              Page:    the existing working SaveTheDate component (renders
+                       nothing without a valid date).
+              Preview: a non-functional placeholder, shown even before a
+                       date is set like the other preview placeholders. */}
+        {dateShowAddToCalendar && (page ? (
+          <SaveTheDate invitation={invitation} variant="invitation" theme={theme} />
+        ) : (
+          <button type="button" tabIndex={-1} aria-disabled="true"
+            data-testid="preview-add-to-calendar"
+            className="w-full py-2 rounded-full text-white text-[9px] font-bold cursor-default"
+            style={{ backgroundColor: theme.button, color: theme.buttonLabel }}>
             Add to calendar
           </button>
-        )}
+        ))}
       </InnerWrap>
     </div>
   );

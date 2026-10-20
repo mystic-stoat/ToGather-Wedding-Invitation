@@ -22,7 +22,17 @@ Colten Mikulastik:
 * AI API connection to chat feature
 * Cloud function development, for handling AI API calls and requests
 * Database adjustments to persistant chat storage
-
+* Current wedding details context added when messages sent to claude
+* tests functions created for the utilities, end to end tests with different users.
+* addition of anthropic web search tool and database represenatation
+* creation of custom tool for assistant to propose change to database
+* creation of proposed changes, requiring new database table
+* initialized normalization of data and enforcement and validation of input data to tool from assistant 
+* connectd tool use into ui for approve reject from user
+* lots of tests created verifing connectivity along the way for development of the Assistant and tool use
+* Created evaluation environment for the Wedding Assistant,
+* created rule based evaluations for the wedding assistant, dialouge and tool use evaluations
+* created LLM based evaluations for hte wedding assistant, dialouge and tool use evaluations
 
 
 Keiran Indraanei:
@@ -78,6 +88,15 @@ Christopher Nguyen:
 * Added RSVP functionality that allows guests to submit their responses and revisit their invitation afterward.
 * Added unit tests for invitation rendering, guest RSVP functionality, and saved invitation handling.
 * Tested the invitation page and RSVP functionality using Firebase emulators and verified that all 678 automated tests passed.
+* Added the Add to Calendar toggle to the Invitation Builder's Date section.
+* Integrating Jesus's existing calendar feature into the Wedding Day section.
+* Added tests for toggle settings, invitation previews, and guest invitations.
+- Added the Publish Invitation feature to the Guest List page.
+- Added a confirmation dialog with an Invitation Builder reminder and warnings before publishing.
+- Added an eligible guest email counter using Firebase Firestore.
+- Added a Published status indicator and error handling to prevent duplicate publishing.
+- Created 32 unit tests for the publishing feature.
+
 
 
 
