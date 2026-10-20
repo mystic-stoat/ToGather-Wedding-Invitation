@@ -88,6 +88,12 @@ Christopher Nguyen:
 * Added RSVP functionality that allows guests to submit their responses and revisit their invitation afterward.
 * Added unit tests for invitation rendering, guest RSVP functionality, and saved invitation handling.
 * Tested the invitation page and RSVP functionality using Firebase emulators and verified that all 678 automated tests passed.
+- Added the Publish Invitation feature to the Guest List page.
+- Added a confirmation dialog with an Invitation Builder reminder and warnings before publishing.
+- Added an eligible guest email counter using Firebase Firestore.
+- Added a Published status indicator and error handling to prevent duplicate publishing.
+- Created 32 unit tests for the publishing feature.
+
 
 
 
