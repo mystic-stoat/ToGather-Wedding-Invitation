@@ -8,7 +8,9 @@
     "start": "npm run shell",
     "deploy": "firebase deploy --only functions",
     "logs": "firebase functions:log",
-    "test": "node --test"
+    "test": "node --test",
+    "test:emu": "FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 GCLOUD_PROJECT=togather-64b0b node --test integration.test.js",
+    "eval": "node evals/run.js"
   },
   "engines": {
     "node": "22"
