@@ -96,7 +96,8 @@ Christopher Nguyen:
 - Added an eligible guest email counter using Firebase Firestore.
 - Added a Published status indicator and error handling to prevent duplicate publishing.
 - Created 32 unit tests for the publishing feature.
-
+* Removed unfinished Paper Invitations navigation and the nonfunctional Export CSV button from Guest List.
+* Updated navigation and Guest List tests to verify the cleanup while preserving existing functionality.
 
 
 

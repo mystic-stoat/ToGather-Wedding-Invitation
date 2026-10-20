@@ -20,8 +20,11 @@ const invitation = {
 
 const NAV_LABELS = [
   "Dashboard", "Wedding Details", "Guest List", "Wedding Assistant",
-  "Save the Date", "Paper Invitations", "Mobile Invitation",
+  "Save the Date", "Mobile Invitation",
 ];
+
+// Unfinished placeholder links that must not appear in either navigation.
+const REMOVED_LABELS = ["Paper Invitations"];
 
 const Where = () => <p data-testid="location">{useLocation().pathname}</p>;
 
@@ -57,6 +60,11 @@ describe("MobileNav — slide-out navigation drawer", () => {
     const nav = within(drawer).getByRole("navigation", { name: "Main navigation" });
     for (const label of NAV_LABELS) {
       expect(within(nav).getByRole("link", { name: label })).toBeInTheDocument();
+    }
+    expect(within(nav).getAllByRole("link")).toHaveLength(NAV_LABELS.length);
+    for (const label of REMOVED_LABELS) {
+      expect(within(drawer).queryByRole("link", { name: label })).not.toBeInTheDocument();
+      expect(within(drawer).queryByText(label)).not.toBeInTheDocument();
     }
     expect(within(drawer).getByText("Chris & Jean")).toBeInTheDocument();
     expect(within(drawer).getByText("June 17, 2027")).toBeInTheDocument();
@@ -118,5 +126,22 @@ describe("Sidebar — desktop variant is unchanged", () => {
     const aside = container.querySelector("aside");
     expect(aside).toHaveClass("hidden", "lg:flex", "w-52");
     expect(screen.getByRole("link", { name: "Dashboard" })).toHaveAttribute("aria-current", "page");
+  });
+
+  it("lists every working link and no unfinished placeholder links", () => {
+    render(
+      <MemoryRouter initialEntries={["/dashboard"]}>
+        <Sidebar invitation={invitation} onLogout={() => {}} />
+      </MemoryRouter>
+    );
+    const nav = screen.getByRole("navigation", { name: "Main navigation" });
+    for (const label of NAV_LABELS) {
+      expect(within(nav).getByRole("link", { name: label })).toBeInTheDocument();
+    }
+    expect(within(nav).getAllByRole("link")).toHaveLength(NAV_LABELS.length);
+    for (const label of REMOVED_LABELS) {
+      expect(screen.queryByRole("link", { name: label })).not.toBeInTheDocument();
+      expect(screen.queryByText(label)).not.toBeInTheDocument();
+    }
   });
 });

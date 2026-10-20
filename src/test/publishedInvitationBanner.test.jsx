@@ -14,6 +14,8 @@ const fs = vi.hoisted(() => ({
   addInvitee: vi.fn(async () => "g1"),
   deleteInvitee: vi.fn(async () => {}),
   subscribeToMessages: vi.fn((uid, onMessages) => { onMessages([]); return () => {}; }),
+  subscribeToPendingProposals: vi.fn((uid, onProposals) => { onProposals([]); return () => { }; }),
+  decideProposal: vi.fn(async () => { }),
   sendUserMessage: vi.fn(async () => "m1"),
   retryUserMessage: vi.fn(async () => {}),
   clearMessages: vi.fn(async () => {}),
