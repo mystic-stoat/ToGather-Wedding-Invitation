@@ -454,4 +454,19 @@ describe("Guest List — existing behavior is preserved", () => {
     fireEvent.click(screen.getByRole("button", { name: /add guest/i }));
     expect(screen.getByText("Add a Guest")).toBeInTheDocument();
   });
+
+  it("has no Export CSV placeholder, and Import CSV still opens its modal", async () => {
+    renderPage();
+    await waitForPage();
+
+    expect(screen.queryByRole("button", { name: /export csv/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/export csv/i)).not.toBeInTheDocument();
+
+    expect(screen.queryByRole("heading", { name: "Import Guest List" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /import csv/i }));
+    expect(screen.getByRole("heading", { name: "Import Guest List" })).toBeInTheDocument();
+    expect(screen.getByText(/upload a csv file to add multiple guests at once/i)).toBeInTheDocument();
+    expect(document.querySelector('input[type="file"][accept=".csv"]')).toBeTruthy();
+    expect(alertSpy).not.toHaveBeenCalled();
+  });
 });

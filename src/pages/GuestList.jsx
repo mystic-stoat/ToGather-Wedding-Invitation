@@ -28,7 +28,7 @@ import Papa from "papaparse";
 import {
   Users, UserPlus, Search, Trash2, Loader2,
   ChevronDown, ChevronUp,
-  Download, Filter, Upload, X, FileText, AlertCircle,
+  Filter, Upload, X, FileText, AlertCircle,
   Send, CheckCircle2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -1158,10 +1158,6 @@ const GuestList = () => {
 
             {/* Action buttons */}
             <div className="flex flex-wrap items-center gap-3">
-              {/* Export CSV — placeholder for future feature */}
-              <Button variant="outline" size="sm" className="rounded-xl gap-2 border-border/60">
-                <Download size={15} /> Export CSV
-              </Button>
               <Button variant="outline" size="sm" className="rounded-xl gap-2 border-border/60"
                 onClick={() => {
                   if (!invitation?.weddingId) {

@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import {
   LayoutDashboard, Heart, Users, MapPin,
-  CalendarCheck, Mail, Smartphone, ChevronRight,
+  CalendarCheck, Smartphone, ChevronRight,
   LogOut
 } from "lucide-react";
 import Logo from "@/assets/logo.svg";
@@ -78,7 +78,6 @@ const Sidebar = ({ invitation, onLogout, variant = "desktop", onNavigate }) => {
             {/* Save the Date lives inside the Dashboard's RSVP Progress card —
                 the hash scrolls it into view (see Dashboard's hash effect). */}
             <NavItem to="/dashboard#save-the-date" icon={CalendarCheck} label="Save the Date" active={location.pathname === "/dashboard" && location.hash === "#save-the-date"}/>
-            <NavItem to="/dashboard"         icon={Mail}          label="Paper Invitations" active={location.pathname === "/paper-invitation"}/>
             <NavItem to="/create-invitation" icon={Smartphone}    label="Mobile Invitation" active={location.pathname === "/create-invitation"}/>
           </div>
         </div>
