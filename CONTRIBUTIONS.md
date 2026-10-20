@@ -24,7 +24,15 @@ Colten Mikulastik:
 * Database adjustments to persistant chat storage
 * Current wedding details context added when messages sent to claude
 * tests functions created for the utilities, end to end tests with different users.
-
+* addition of anthropic web search tool and database represenatation
+* creation of custom tool for assistant to propose change to database
+* creation of proposed changes, requiring new database table
+* initialized normalization of data and enforcement and validation of input data to tool from assistant 
+* connectd tool use into ui for approve reject from user
+* lots of tests created verifing connectivity along the way for development of the Assistant and tool use
+* Created evaluation environment for the Wedding Assistant,
+* created rule based evaluations for the wedding assistant, dialouge and tool use evaluations
+* created LLM based evaluations for hte wedding assistant, dialouge and tool use evaluations
 
 
 Keiran Indraanei:

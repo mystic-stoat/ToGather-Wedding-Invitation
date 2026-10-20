@@ -491,6 +491,102 @@ export const deleteRegistry = async (weddingId, registryId) => {
 // ══════════════════════════════════════════════════════════════════════════════
 // WEDDING ASSISTANT — Chat Messages
 // ══════════════════════════════════════════════════════════════════════════════
+// WEDDING ASSISTANT — Proposals (Accept / Reject)
+// ══════════════════════════════════════════════════════════════════════════════
+// Claude never writes wedding details. The Cloud Function only creates
+// proposals at betrothed/{userId}/proposals/{proposalId}:
+//   field, oldValue, newValue, reason, weddingId,
+//   status: "pending" | "accepted" | "rejected" | "superseded" | "stale"
+//
+// Accept / Reject below is the ONLY code that applies a proposal. It is not a
+// chat message, so it never wakes the assistant: the assistant learns the
+// outcome from its next turn's context. firestore.rules lets the client change
+// only status + decidedAt on its own pending proposals.
+
+const proposalsCol = (userId) =>
+  collection(db, "betrothed", userId, "proposals");
+
+/**
+ * subscribeToPendingProposals
+ * Live listener on the proposals waiting for an answer, oldest first. No
+ * orderBy in the query (that would need a composite index), so it sorts here.
+ */
+export const subscribeToPendingProposals = (userId, onProposals, onError) => {
+  const q = query(proposalsCol(userId), where("status", "==", "pending"));
+  return onSnapshot(
+    q,
+    (snap) => {
+      const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      list.sort((a, b) => (a.createdAt?.toMillis?.() ?? 0) - (b.createdAt?.toMillis?.() ?? 0));
+      onProposals(list);
+    },
+    onError
+  );
+};
+
+/**
+ * sameStoredValue
+ * Pure. Deep equality for stored values (strings, numbers, lists of plain
+ * maps), so list fields like mealOptions compare by content. Map keys are
+ * compared in sorted order, since Firestore doesn't keep the order they were
+ * written in. Same rule as sameStoredValue in functions/field-registry.js.
+ */
+export const sameStoredValue = (a, b) => {
+  const canon = (v) => {
+    if (Array.isArray(v)) return v.map(canon);
+    if (v && typeof v === "object") {
+      return Object.keys(v).sort().map(k => [k, canon(v[k])]);
+    }
+    return v ?? null;
+  };
+  return JSON.stringify(canon(a)) === JSON.stringify(canon(b));
+};
+
+/**
+ * decideProposalAction
+ * Pure. Same rule as decide() in functions/proposals.js (keep the two in step):
+ *   "write"            accept, and the field is still what it was when proposed
+ *   "stale"            accept, but the field changed since (e.g. edited by hand)
+ *   "reject"           reject
+ *   "already_decided"  not pending any more
+ */
+export const decideProposalAction = (currentValue, proposal, decision) => {
+  if (proposal.status !== "pending") return "already_decided";
+  if (decision === "reject") return "reject";
+  if (decision !== "accept") throw new Error(`Unknown decision: ${decision}`);
+  return sameStoredValue(currentValue, proposal.oldValue) ? "write" : "stale";
+};
+
+/**
+ * decideProposal
+ * Accept or reject one proposal in a single transaction: read the proposal and
+ * the current field, decide, then write the field and/or the status.
+ * Returns the action taken (see decideProposalAction).
+ */
+export const decideProposal = (userId, proposalId, decision) =>
+  runTransaction(db, async (tx) => {
+    const proposalRef = doc(proposalsCol(userId), proposalId);
+    const proposalSnap = await tx.get(proposalRef);
+    if (!proposalSnap.exists()) throw new Error("Proposal not found.");
+    const proposal = proposalSnap.data();
+
+    const invitationRef = doc(db, "invitations", proposal.weddingId);
+    const invitationSnap = await tx.get(invitationRef);
+    const action = invitationSnap.exists()
+      ? decideProposalAction(invitationSnap.data()[proposal.field], proposal, decision)
+      : proposal.status === "pending" ? "stale" : "already_decided";
+
+    const status = { write: "accepted", reject: "rejected", stale: "stale" }[action];
+    if (!status) return action; // already decided: change nothing
+
+    if (action === "write") {
+      tx.update(invitationRef, { [proposal.field]: proposal.newValue });
+    }
+    tx.update(proposalRef, { status, decidedAt: serverTimestamp() });
+    return action;
+  });
+
+// ══════════════════════════════════════════════════════════════════════════════
 // One continuous chat per couple, one document per message, stored at:
 //
 //   betrothed/{userId}/messages/{messageId}
