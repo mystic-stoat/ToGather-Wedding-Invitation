@@ -33,6 +33,17 @@ import ProposalCard from "@/components/ProposalCard";
 // that text as a normal message, exactly as if the user had typed it.
 const STARTER_PROMPTS = [];
 
+// Formats names stored as either strings or structured name objects.
+const formatName = (name) => {
+  if (!name) return "";
+  if (typeof name === "string") return name.trim();
+
+  return [name.first, name.middle, name.last]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+};
+
 const WeddingAssistant = () => {
   const { user, logout } = useAuth();
 
@@ -358,10 +369,76 @@ const WeddingAssistant = () => {
           <div className="w-full lg:w-96 shrink-0 lg:self-start lg:max-h-full lg:overflow-y-auto bg-card rounded-2xl shadow-xl shadow-foreground/5 border border-border/40 p-5 sm:p-10 space-y-6">
             <h2 className="text-xl font-semibold text-foreground">Wedding Details</h2>
 
-            {/* Status cards go here */}
-            <StatusCard label="Date" />
-            <StatusCard label="Location" />
-            <StatusCard label="Time" />
+            {/* Display saved wedding details that the AI can update */}
+            {loading ? (
+              <p className="text-sm text-muted-foreground">
+                Loading wedding details...
+              </p>
+            ) : !invitation ? (
+              <p className="text-sm text-muted-foreground">
+                No wedding details found. Add your wedding details to get started.
+              </p>
+            ) : (
+              (() => {
+                const details = [
+                  {
+                    label: "Groom",
+                    value: formatName(invitation.groomName),
+                  },
+                  {
+                    label: "Bride",
+                    value: formatName(invitation.brideName),
+                  },
+                  {
+                    label: "Wedding Date",
+                    value: invitation.weddingDate,
+                  },
+                  {
+                    label: "Ceremony Time",
+                    value: invitation.ceremonyTime,
+                  },
+                  {
+                    label: "Ceremony Venue",
+                    value: invitation.venueName,
+                  },
+                  {
+                    label: "Reception Venue",
+                    value: invitation.receptionName,
+                  },
+                  {
+                    label: "RSVP Deadline",
+                    value: invitation.inviteDeadline,
+                  },
+                  {
+                    label: "Ceremony Address",
+                    value: invitation.venueAddress,
+                  },
+                  {
+                    label: "Reception Address",
+                    value: invitation.receptionAddress,
+                  },
+                ].filter(
+                  (detail) =>
+                    typeof detail.value === "string" &&
+                    detail.value.trim() !== ""
+                );
+
+                return details.length > 0 ? (
+                  details.map((detail) => (
+                    <StatusCard
+                      key={detail.label}
+                      label={detail.label}
+                      value={detail.value}
+                      isComplete={true}
+                    />
+                  ))
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    No wedding details added yet. Ask the assistant to help you get started!
+                  </p>
+                );
+              })()
+            )}
           </div>
         </div>
         </div>
