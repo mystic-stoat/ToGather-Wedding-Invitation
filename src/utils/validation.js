@@ -34,3 +34,51 @@ export const validateName = (name) => {
   if (!name.trim()) return "Full name is required";
   return null;
 };
+
+// Validate a required text field
+export const validateRequiredField = (value, fieldName) => {
+  if (!value || !value.trim()) {
+    return `${fieldName} is required.`;
+  }
+
+  return null;
+};
+
+// Validate the wedding date
+export const validateWeddingDate = (date) => {
+  if (!date) {
+    return "Wedding date is required.";
+  }
+
+  const parsedDate = new Date(`${date}T00:00:00`);
+
+  if (Number.isNaN(parsedDate.getTime())) {
+    return "Please enter a valid wedding date.";
+  }
+
+  return null;
+};
+
+// Validate the ceremony time
+export const validateCeremonyTime = (time) => {
+  if (!time) {
+    return "Ceremony time is required.";
+  }
+
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) {
+    return "Please enter a valid ceremony time.";
+  }
+
+  return null;
+};
+
+export const isLegacyWedding = (weddingDate) => {
+  if (!weddingDate) return false;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const date = new Date(`${weddingDate}T00:00:00`);
+
+  return !Number.isNaN(date.getTime()) && date < today;
+};
