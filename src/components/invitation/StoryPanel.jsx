@@ -21,6 +21,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { Plus, BookHeart, Loader2, AlertCircle } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import AiFieldHint from "@/components/AiFieldHint";
 import {
   AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
   AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction,
@@ -179,7 +180,7 @@ const StoryPanel = ({
           <div>
             <label htmlFor="story-section-title" className="text-xs font-bold tracking-widest uppercase mb-2 block"
               style={{ color: BUILDER_UI.onSurfaceVar }}>
-              Section Title
+              Section Title <AiFieldHint />
             </label>
             <Input
               id="story-section-title"

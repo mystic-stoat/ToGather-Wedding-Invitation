@@ -27,6 +27,7 @@ import PublishedInvitationBanner from "@/components/PublishedInvitationBanner";
 import { useNavigate } from "react-router-dom";
 import ChatBubble from "@/components/ChatBubble";
 import ProposalCard from "@/components/ProposalCard";
+import { CHILDREN_POLICY_LABELS } from "@/lib/rsvpOptions";
 
 // Optional starter prompts. Leave empty for now: nothing renders when empty.
 // If you add strings here later, each one shows up as a button that sends
@@ -43,6 +44,11 @@ const formatName = (name) => {
     .join(" ")
     .trim();
 };
+
+// Short text for a list field (meals, travel, registries); "" when empty so
+// the detail is hidden like any other blank one.
+const formatList = (items, formatItem) =>
+  Array.isArray(items) ? items.map(formatItem).join("; ") : "";
 
 const WeddingAssistant = () => {
   const { user, logout } = useAuth();
@@ -417,26 +423,73 @@ const WeddingAssistant = () => {
                     label: "Reception Address",
                     value: invitation.receptionAddress,
                   },
-                ].filter(
-                  (detail) =>
+                  {
+                    label: "Children Policy",
+                    value: CHILDREN_POLICY_LABELS[invitation.childrenPolicy],
+                  },
+                  {
+                    label: "Greeting Title",
+                    value: invitation.greetingTitle,
+                  },
+                  {
+                    label: "Greeting Message",
+                    value: invitation.greetingMessage,
+                  },
+                  {
+                    label: "Primary Color",
+                    value: invitation.colorPalette1,
+                  },
+                  {
+                    label: "Secondary Color",
+                    value: invitation.colorPalette2,
+                  },
+                  {
+                    label: "Heading Font",
+                    value: invitation.font1,
+                  },
+                  {
+                    label: "Body Font",
+                    value: invitation.font2,
+                  },
+                  {
+                    label: "Story Title",
+                    value: invitation.storyTitle,
+                  },
+                  {
+                    label: "Meal Options",
+                    value: formatList(invitation.mealOptions, (m) =>
+                      m.description ? `${m.name} (${m.description})` : m.name
+                    ),
+                  },
+                  {
+                    label: "Travel & Stay",
+                    value: formatList(
+                      invitation.travelItems,
+                      (t) => `${t.name} (${t.category})`
+                    ),
+                  },
+                  {
+                    label: "Gift Registries",
+                    value: formatList(
+                      invitation.registries,
+                      (r) => `${r.name}${r.isVisible === false ? " (hidden)" : ""}`
+                    ),
+                  },
+                ].map((detail) => {
+                  const isSet =
                     typeof detail.value === "string" &&
-                    detail.value.trim() !== ""
-                );
+                    detail.value.trim() !== "";
+                  return { ...detail, value: isSet ? detail.value : "Not set", isSet };
+                });
 
-                return details.length > 0 ? (
-                  details.map((detail) => (
-                    <StatusCard
-                      key={detail.label}
-                      label={detail.label}
-                      value={detail.value}
-                      isComplete={true}
-                    />
-                  ))
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    No wedding details added yet. Ask the assistant to help you get started!
-                  </p>
-                );
+                return details.map((detail) => (
+                  <StatusCard
+                    key={detail.label}
+                    label={detail.label}
+                    value={detail.value}
+                    isComplete={detail.isSet}
+                  />
+                ));
               })()
             )}
           </div>

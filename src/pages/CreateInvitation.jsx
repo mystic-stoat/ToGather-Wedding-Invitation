@@ -71,6 +71,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthContext";
 import { getInvitationByUser, saveInvitation } from "@/lib/firestore";
 import PublishedInvitationBanner from "@/components/PublishedInvitationBanner";
+import AiFieldHint from "@/components/AiFieldHint";
 import {
   normalizeMealOptions,
   cleanMealOptionsForSave,
@@ -174,7 +175,7 @@ const GreetingsPanel = ({ settings, onChange, hero, onHeroChange, heroProgress, 
     <div>
       <h3 className="text-xs font-bold tracking-widest uppercase mb-4"
         style={{ color: BUILDER_UI.onSurfaceVar }}>
-        Invitation Title
+        Invitation Title <AiFieldHint />
       </h3>
       <Input
         value={settings.greetingTitle || ""}
@@ -192,7 +193,7 @@ const GreetingsPanel = ({ settings, onChange, hero, onHeroChange, heroProgress, 
     <div>
       <h3 className="text-xs font-bold tracking-widest uppercase mb-4"
         style={{ color: BUILDER_UI.onSurfaceVar }}>
-        Welcome Message
+        Welcome Message <AiFieldHint />
       </h3>
       <Textarea
         value={settings.greetingMessage || ""}
@@ -241,7 +242,7 @@ const RsvpPanel = ({ invitation, settings, onChange, deadlineError, onDeadlineEr
       <div>
         <h3 className="text-xs font-bold tracking-widest uppercase mb-4"
           style={{ color: BUILDER_UI.onSurfaceVar }}>
-          RSVP Deadline
+          RSVP Deadline <AiFieldHint />
         </h3>
         <Input
           type="date"
@@ -273,7 +274,7 @@ const RsvpPanel = ({ invitation, settings, onChange, deadlineError, onDeadlineEr
       <div>
         <h3 className="text-xs font-bold tracking-widest uppercase mb-1"
           style={{ color: BUILDER_UI.onSurfaceVar }}>
-          Meal Options
+          Meal Options <AiFieldHint />
         </h3>
         <p className="text-sm" style={{ color: BUILDER_UI.onSurfaceVar }}>
           Guests who accept will choose one of these meals for themselves and each
@@ -651,7 +652,7 @@ const TravelPanel = ({ settings, onChange, errors, setErrors }) => {
       <div>
         <h3 className="text-xs font-bold tracking-widest uppercase mb-4"
           style={{ color: BUILDER_UI.onSurfaceVar }}>
-          Places
+          Places <AiFieldHint />
         </h3>
 
         {items.length === 0 ? (
