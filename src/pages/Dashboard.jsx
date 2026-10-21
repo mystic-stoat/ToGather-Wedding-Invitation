@@ -20,12 +20,12 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts";
 import {
   LayoutDashboard, Users, Gift, MapPin,
   CalendarCheck, Mail, Smartphone, ChevronRight,
-  Share2, Pencil, Eye, Bell, Loader2,
+  Share2, Pencil, Eye, Loader2,
   Search, UserRound,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -39,6 +39,7 @@ import { getMealLabel, getAttendanceStats } from "@/lib/rsvpOptions";
 import Logo from "@/assets/logo.svg";
 import Sidebar from "@/components/Sidebar"
 import MobileNav from "@/components/MobileNav";
+import SaveTheDate from "@/components/SaveTheDate";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -109,6 +110,7 @@ const Dashboard = () => {
   const { user, userProfile, logout } = useAuth();
 
   const navigate         = useNavigate();
+  const location         = useLocation();
 
   // ── State ──────────────────────────────────────────────────────────────────
   const [invitation, setInvitation]       = useState(null);
@@ -143,6 +145,13 @@ const Dashboard = () => {
     await logout();
     navigate("/login");
   };
+
+  // ── #save-the-date deep links scroll the RSVP Progress card (which holds
+  //    the Save the Date action) into view once it has rendered.
+  useEffect(() => {
+    if (loading || location.hash !== "#save-the-date") return;
+    document.getElementById("save-the-date")?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+  }, [location.hash, loading]);
 
   // ── Computed values ────────────────────────────────────────────────────────
 
@@ -301,8 +310,8 @@ const Dashboard = () => {
               </div>
             </div>
 
-            {/* RSVP Progress */}
-            <div className="bg-card rounded-2xl border border-border/50 shadow-sm p-5">
+            {/* RSVP Progress — anchors the Save the Date action for #save-the-date links */}
+            <div id="save-the-date" className="bg-card rounded-2xl border border-border/50 shadow-sm p-5 scroll-mt-6">
               <h2 className="text-base font-semibold text-foreground mb-4">RSVP Progress</h2>
 
               {/* Donut chart */}
@@ -366,9 +375,7 @@ const Dashboard = () => {
 
               {/* Quick links */}
               <div className="space-y-0.5 border-t border-border/40 pt-3">
-                <button className="w-full flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-muted/40 transition-colors text-sm text-foreground text-left">
-                  <Bell size={14} className="text-muted-foreground" /> Set Reminders
-                </button>
+                <SaveTheDate invitation={invitation} />
                 <Link to="/wedding-details"
                   className="flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-muted/40 transition-colors text-sm text-foreground">
                   <Pencil size={14} className="text-muted-foreground" /> Edit Wedding Details

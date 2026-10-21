@@ -5,6 +5,13 @@
 //   Shows all guests with their RSVP status, email, group, plus one,
 //   and meal/dietary info. Supports search, filter by status, add, and delete.
 //
+// PUBLISH INVITATION (moved here from the Invitation Builder):
+//   "Publish Invitation" opens a confirmation modal showing how many guests
+//   are eligible for an invitation email. Confirming calls the existing
+//   publishInvitation(), which flips isPublished false -> true; that is what
+//   makes the existing Cloud Function (functions/index.js ->
+//   sendInvitesOnPublish) send the emails. Nothing here sends email directly.
+//
 // DATA FLOW:
 //   1. Load invitation from `invitations` to get weddingId
 //   2. Load all guests from `invitee` collection using weddingId
@@ -21,7 +28,8 @@ import Papa from "papaparse";
 import {
   Users, UserPlus, Search, Trash2, Loader2,
   ChevronDown, ChevronUp,
-  Download, Filter, Upload, X, FileText, AlertCircle,
+  Filter, Upload, X, FileText, AlertCircle,
+  Send, CheckCircle2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,9 +39,12 @@ import {
   getInvitees,
   addInvitee,
   deleteInvitee,
+  publishInvitation,
+  countInviteEmailEligible,
 } from "@/lib/firestore";
 import Sidebar from "@/components/Sidebar"
 import MobileNav from "@/components/MobileNav";
+import PublishedInvitationBanner from "@/components/PublishedInvitationBanner";
 import {
   CHILDREN_OVERRIDE,
   CHILDREN_POLICY_LABELS,
@@ -520,6 +531,84 @@ const ImportCsvModal = ({ onImport, onClose, importing }) => {
   );
 };
 
+// ── Publish Invitation Modal ─────────────────────────────────────────────────
+// Confirms publishing. Same look as AddGuestModal / ImportCsvModal above.
+//   eligibleCount — guests the Cloud Function would email; null = couldn't
+//                   be checked (general wording, never a guessed number)
+//   statusError   — the invitation's current status couldn't be confirmed;
+//                   publishing is blocked until the modal is reopened
+const PublishInvitationModal = ({ eligibleCount, checking, publishing, error, statusError, onConfirm, onClose }) => (
+  <div className="fixed inset-0 bg-foreground/20 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div role="dialog" aria-modal="true" aria-labelledby="publish-invitation-title"
+      className="bg-card rounded-2xl border border-border/50 shadow-xl p-6 w-full max-w-md space-y-4 max-h-[90vh] overflow-y-auto">
+      <h3 id="publish-invitation-title" className="font-heading text-lg font-semibold text-foreground italic">
+        Publish your invitation?
+      </h3>
+      <p className="text-sm text-foreground">
+        Publishing starts sending invitation emails to your guests right away. This can't be undone.
+      </p>
+
+      {/* Informational reminder only — nothing is checked or required */}
+      <p className="text-sm text-muted-foreground">
+        Before you publish, make sure your invitation is complete in the Invitation Builder.
+        Review your wedding details, invitation design, and guest list information.
+      </p>
+
+      {/* Eligible-guest count */}
+      <div data-testid="publish-eligible"
+        className="bg-muted/40 rounded-xl px-4 py-3 border border-border/40 text-sm text-foreground">
+        {checking ? (
+          <span className="flex items-center gap-2 text-muted-foreground">
+            <Loader2 size={14} className="animate-spin" /> Checking your guest list...
+          </span>
+        ) : eligibleCount === null ? (
+          <p>
+            We couldn't check how many guests are eligible right now. Guests on your list who
+            have an email address and haven't been sent an invitation yet will be emailed.
+          </p>
+        ) : (
+          <>
+            <p className="font-semibold">
+              {eligibleCount} {eligibleCount === 1 ? "guest is" : "guests are"} eligible for an invitation email.
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Eligible means the guest has an email address and hasn't been sent an invitation yet.
+              This doesn't guarantee every email will be delivered.
+            </p>
+            {eligibleCount === 0 && (
+              <p className="mt-2 font-semibold text-status-pending">
+                No invitation emails will be sent. You can still publish.
+              </p>
+            )}
+          </>
+        )}
+      </div>
+
+      <p className="text-sm text-muted-foreground">
+        Guests you add after publishing will not automatically receive an invitation email.
+      </p>
+
+      {(statusError || error) && (
+        <div role="alert" className="flex items-start gap-2 bg-destructive/8 border border-destructive/20 rounded-xl px-4 py-3">
+          <AlertCircle size={16} className="text-destructive flex-shrink-0 mt-0.5" />
+          <p className="text-sm text-destructive">{statusError || error}</p>
+        </div>
+      )}
+
+      <div className="flex gap-3">
+        <Button variant="outline" className="flex-1 rounded-xl" onClick={onClose} disabled={publishing}>
+          Cancel
+        </Button>
+        <Button variant="default" className="flex-1 rounded-xl" onClick={onConfirm} disabled={checking || publishing || !!statusError}>
+          {publishing
+            ? <span className="flex items-center gap-2"><Loader2 size={14} className="animate-spin" />Publishing...</span>
+            : "Publish Now"}
+        </Button>
+      </div>
+    </div>
+  </div>
+);
+
 // ── Guest Row ─────────────────────────────────────────────────────────────────
 // Each guest row — click to expand and see plus one details
 // Meal + Dietary/Allergies shown as two labelled lines (keeps the table narrow).
@@ -817,6 +906,13 @@ const GuestList = () => {
   const [deletingId, setDeletingId]       = useState(null);
   const [showImportModal, setShowImportModal] = useState(false);
   const [importingCsv, setImportingCsv]       = useState(false);
+  const [showPublishModal, setShowPublishModal] = useState(false);
+  const [eligibleCount, setEligibleCount]       = useState(null); // null = unknown
+  const [checkingCount, setCheckingCount]       = useState(false);
+  const [publishing, setPublishing]             = useState(false);
+  const [publishError, setPublishError]         = useState("");
+  const [statusError, setStatusError]           = useState(""); // blocks publishing
+  const publishingRef = useRef(false); // blocks a second publish before re-render
 
   // ── Load invitation + guests on mount ──────────────────────────────────────
   useEffect(() => {
@@ -908,6 +1004,64 @@ const GuestList = () => {
     alert(`RSVP link copied!\n${link}`);
   };
 
+  // ── Publish invitation ─────────────────────────────────────────────────────
+  // Opening the modal refreshes the invitation and the eligible-guest count.
+  //   - Invitation status can't be confirmed → error, publishing blocked.
+  //   - Already published (e.g. in another tab) → show Published, no write.
+  //   - Only the count failed → publishing allowed, general email wording.
+  const handleOpenPublish = async () => {
+    if (!invitation?.weddingId) {
+      alert("Please fill in your wedding details first.");
+      return;
+    }
+    setPublishError("");
+    setStatusError("");
+    setEligibleCount(null);
+    setCheckingCount(true);
+    setShowPublishModal(true);
+    const [latest, count] = await Promise.allSettled([
+      getInvitationByUser(user.uid),
+      countInviteEmailEligible(invitation.weddingId),
+    ]);
+    setCheckingCount(false);
+    if (count.status === "fulfilled") setEligibleCount(count.value);
+    else console.error("Eligible guest count error:", count.reason);
+    if (latest.status === "rejected") {
+      console.error("Invitation status check error:", latest.reason);
+      setStatusError("We couldn't check your invitation's current status, so it hasn't been published. Please close this and try again.");
+      return;
+    }
+    if (!latest.value?.weddingId || latest.value.weddingId !== invitation.weddingId) {
+      setStatusError("We couldn't find your invitation, so it hasn't been published. Please refresh the page and try again.");
+      return;
+    }
+    if (latest.value.isPublished === true) {
+      setInvitation(latest.value);
+      setShowPublishModal(false);
+      alert("Your invitation has already been published.");
+      return;
+    }
+  };
+
+  const handleConfirmPublish = async () => {
+    if (publishingRef.current || statusError) return;
+    publishingRef.current = true;
+    setPublishing(true);
+    setPublishError("");
+    try {
+      await publishInvitation(invitation.weddingId);
+      // Shows the Published status and the existing PublishedInvitationBanner
+      setInvitation(prev => ({ ...prev, isPublished: true }));
+      setShowPublishModal(false);
+    } catch (err) {
+      console.error("Publish invitation error:", err);
+      setPublishError("Couldn't publish your invitation. " + (err?.message || "Please try again."));
+    } finally {
+      publishingRef.current = false;
+      setPublishing(false);
+    }
+  };
+
   // ── Logout ─────────────────────────────────────────────────────────────────
   const handleLogout = async () => {
     await logout();
@@ -971,6 +1125,19 @@ const GuestList = () => {
         />
       )}
 
+      {/* Publish Invitation Modal */}
+      {showPublishModal && (
+        <PublishInvitationModal
+          eligibleCount={eligibleCount}
+          checking={checkingCount}
+          publishing={publishing}
+          error={publishError}
+          statusError={statusError}
+          onConfirm={handleConfirmPublish}
+          onClose={() => setShowPublishModal(false)}
+        />
+      )}
+
       {/* Main content */}
       <main className="flex-1 min-h-screen overflow-y-auto">
 
@@ -991,10 +1158,6 @@ const GuestList = () => {
 
             {/* Action buttons */}
             <div className="flex flex-wrap items-center gap-3">
-              {/* Export CSV — placeholder for future feature */}
-              <Button variant="outline" size="sm" className="rounded-xl gap-2 border-border/60">
-                <Download size={15} /> Export CSV
-              </Button>
               <Button variant="outline" size="sm" className="rounded-xl gap-2 border-border/60"
                 onClick={() => {
                   if (!invitation?.weddingId) {
@@ -1015,8 +1178,32 @@ const GuestList = () => {
                 }}>
                 <UserPlus size={15} /> Add Guest
               </Button>
+              {invitation?.isPublished === true ? (
+                <span className="inline-flex items-center gap-1.5 h-9 px-3 rounded-xl text-sm font-semibold bg-status-accepted-bg text-status-accepted border border-status-accepted/15">
+                  <CheckCircle2 size={15} /> Published
+                </span>
+              ) : (
+                <Button variant="default" size="sm" className="rounded-xl gap-2" onClick={handleOpenPublish}>
+                  <Send size={15} /> Publish Invitation
+                </Button>
+              )}
             </div>
           </div>
+
+          {/* Published warning — invitation emails went out when the host
+              published; guests added after that moment are never queued for
+              an automatic email, and edits here don't update sent mail. */}
+          <PublishedInvitationBanner
+            isPublished={invitation?.isPublished}
+            message={
+              "Your wedding invitation has already been published, and guests may have " +
+              "received an email with the original details. Guests added now won't " +
+              "automatically receive an invitation email, and changes here will not " +
+              "update emails that have already been delivered. Please make sure your " +
+              "guests are informed of important changes."
+            }
+            className="mb-6"
+          />
 
           {/* Stats bar — quick summary above the table */}
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">

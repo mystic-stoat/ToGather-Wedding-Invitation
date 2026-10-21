@@ -70,6 +70,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthContext";
 import { getInvitationByUser, saveInvitation } from "@/lib/firestore";
+import PublishedInvitationBanner from "@/components/PublishedInvitationBanner";
 import {
   normalizeMealOptions,
   cleanMealOptionsForSave,
@@ -784,9 +785,13 @@ const TravelPanel = ({ settings, onChange, errors, setErrors }) => {
 // The date and ceremony time come from Wedding Details (no duplicate inputs).
 // Calendar View and Countdown are independent switches, both OFF by default,
 // saved as dateShowCalendar / dateShowCountdown on the invitation doc.
+// Add to Calendar (dateShowAddToCalendar, ON by default) shows or hides the
+// Save the Date button at the bottom of the Wedding Day section. Any one of
+// the three switches is enough to show that section.
 const DATE_OPTIONS = [
-  { field: "dateShowCalendar",  label: "Calendar View", desc: "Show a mini calendar with the date highlighted" },
-  { field: "dateShowCountdown", label: "Countdown",     desc: "Show a live countdown to the wedding" },
+  { field: "dateShowCalendar",      label: "Calendar View",   desc: "Show a mini calendar with the date highlighted" },
+  { field: "dateShowCountdown",     label: "Countdown",       desc: "Show a live countdown to the wedding" },
+  { field: "dateShowAddToCalendar", label: "Add to Calendar", desc: "Allow guests to save the wedding date to Google Calendar or download an .ics file." },
 ];
 
 const DatePanel = ({ invitation, settings, onChange }) => {
@@ -825,7 +830,7 @@ const DatePanel = ({ invitation, settings, onChange }) => {
         Display Options
       </h3>
       <p className="text-sm mb-4" style={{ color: BUILDER_UI.onSurfaceVar }}>
-        Turn on either option, or both, to add a Wedding Day section to your invitation.
+        Turn on any of these options to add a Wedding Day section to your invitation.
       </p>
       {DATE_OPTIONS.map(opt => {
         const on = dateSettings[opt.field];
@@ -1765,6 +1770,11 @@ const CreateInvitation = () => {
                 </button>
               </div>
             )}
+
+            {/* Published warning — lives inside the edit pane so it never
+                overlaps the phone preview; hidden when Preview is toggled on
+                smaller screens, same as the rest of the settings UI. */}
+            <PublishedInvitationBanner isPublished={invitation?.isPublished} className="mb-6" />
 
             {/* Section header */}
             <div className="flex justify-between items-end gap-3 mb-6 sm:mb-10">

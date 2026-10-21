@@ -32,11 +32,17 @@ import { useAuth } from "@/contexts/AuthContext";
 import { getInvitationByUser, saveInvitation } from "@/lib/firestore";
 import Sidebar from "@/components/Sidebar";
 import MobileNav from "@/components/MobileNav";
+import PublishedInvitationBanner from "@/components/PublishedInvitationBanner";
 import GoogleMapEmbed, { buildMapQuery } from "@/components/GoogleMapEmbed";
 import PlaceAutocompleteInput from "@/components/PlaceAutocompleteInput";
 import { CHILDREN_POLICY, getWeddingChildrenPolicy } from "@/lib/rsvpOptions";
 import { getInviteDeadlineError } from "@/lib/rsvpDeadline";
-
+import {
+  validateWeddingDate,
+  validateCeremonyTime,
+  validateRequiredField,
+  isLegacyWedding } from "@/utils/validation"; //has a non used legacy wedding function that may be used in the future
+  import { useFormState } from "@/hooks/useFormState";
 // Wedding-level children policy choices. Individual guests can override this
 // in Guest List → Add Guest.
 const CHILDREN_POLICY_CHOICES = [
@@ -97,11 +103,19 @@ const WeddingDetails = () => {
   // UI state for loading, saving, save confirmation, and load failures
   const [loadingData, setLoadingData] = useState(true);
   const [loadError, setLoadError] = useState("");
-  const [saving, setSaving] = useState(false);
+  //const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState("");
-  const [fieldErrors, setFieldErrors] = useState({});
+  //const [fieldErrors, setFieldErrors] = useState({});
 
+  // Reusable form error and saving state
+const {
+  errors: fieldErrors,
+  setErrors: setFieldErrors,
+  loading: saving,
+  setLoading: setSaving,
+  clearError,
+} = useFormState();
   // ── Load existing invitation when the page mounts ──────────────────────────
   useEffect(() => {
     if (!user) return; // shouldn't happen (protected route), but safety check
@@ -171,22 +185,75 @@ const WeddingDetails = () => {
 
   // ── Validation handler ─────────────────────────────────────────────────────
   const validateForm = () => {
-    const errors = {};
+  const errors = {};
 
-    if (!form.groomName.first.trim()) errors["groomName.first"] = "First name is required.";
-    if (!form.brideName.first.trim()) errors["brideName.first"] = "First name is required.";
-    if (!form.weddingDate) errors.weddingDate = "Wedding date is required.";
-    if (!form.ceremonyTime) errors.ceremonyTime = "Ceremony time is required.";
-    // Shared with the Invitation Builder's RSVP tab (same field, same rule)
-    const deadlineError = getInviteDeadlineError(form.inviteDeadline, form.weddingDate);
-    if (deadlineError) errors.inviteDeadline = deadlineError;
+  // Partner names
+  const groomFirstError = validateRequiredField(
+    form.groomName.first,
+    "First name"
+  );
 
-    if (!form.venueName.trim()) errors.venueName = "Wedding venue name is required.";
-    if (!form.receptionName.trim()) errors.receptionName = "Reception venue name is required.";
+  if (groomFirstError) {
+    errors["groomName.first"] = groomFirstError;
+  }
 
-    setFieldErrors(errors);
-    return Object.keys(errors).length === 0;
-  };
+  const brideFirstError = validateRequiredField(
+    form.brideName.first,
+    "First name"
+  );
+
+  if (brideFirstError) {
+    errors["brideName.first"] = brideFirstError;
+  }
+
+  // Wedding date and ceremony time
+  const weddingDateError = validateWeddingDate(form.weddingDate);
+
+  if (weddingDateError) {
+    errors.weddingDate = weddingDateError;
+  }
+
+  const ceremonyTimeError = validateCeremonyTime(form.ceremonyTime);
+
+  if (ceremonyTimeError) {
+    errors.ceremonyTime = ceremonyTimeError;
+  }
+
+  // RSVP deadline
+  const deadlineError = getInviteDeadlineError(
+    form.inviteDeadline,
+    form.weddingDate
+  );
+
+  if (deadlineError) {
+    errors.inviteDeadline = deadlineError;
+  }
+
+  // Venue names
+  const venueError = validateRequiredField(
+    form.venueName,
+    "Wedding venue name"
+  );
+
+  if (venueError) {
+    errors.venueName = venueError;
+  }
+
+  const receptionError = validateRequiredField(
+    form.receptionName,
+    "Reception venue name"
+  );
+
+  if (receptionError) {
+    errors.receptionName = receptionError;
+  }
+
+  //const isLegacy = isLegacyWedding(weddingDate);
+
+  setFieldErrors(errors);
+
+  return Object.keys(errors).length === 0;
+};
 
   // ── Save handler ────────────────────────────────────────────────────────────
   const handleSave = async () => {
@@ -300,6 +367,8 @@ const WeddingDetails = () => {
             </div>
           )}
 
+          <PublishedInvitationBanner isPublished={invitationData?.isPublished} />
+
           <div className="bg-card rounded-2xl shadow-xl shadow-foreground/5 border border-border/40 p-8 sm:p-10 space-y-8">
             {/* Desktop title + save row */}
             <div className="hidden lg:flex items-center justify-between">
@@ -327,7 +396,10 @@ const WeddingDetails = () => {
                   <Input
                     placeholder="First"
                     value={form.groomName.first}
-                    onChange={e => setName("groomName", "first", e.target.value)}
+                    onChange={e => {
+                      setName("groomName", "first", e.target.value)
+                      clearError("groomName.first")
+                    }}
                     className={inputCls}
                   />
                   <Input
@@ -350,7 +422,10 @@ const WeddingDetails = () => {
                   <Input
                     placeholder="First"
                     value={form.brideName.first}
-                    onChange={e => setName("brideName", "first", e.target.value)}
+                    onChange={e => {
+                      setName("brideName", "first", e.target.value)
+                      clearError("brideName.first")
+                    }}
                     className={inputCls}
                   />
                   <Input
@@ -378,7 +453,11 @@ const WeddingDetails = () => {
                   <Input
                     type="date"
                     value={form.weddingDate}
-                    onChange={e => set("weddingDate", e.target.value)}
+                    onChange={e => {
+                      set("weddingDate", e.target.value)
+                      clearError("weddingDate")
+                      clearError("inviteDeadline")
+                    }}
                     className={inputCls}
                   />
                 </FormField>
@@ -386,7 +465,10 @@ const WeddingDetails = () => {
                   <Input
                     type="time"
                     value={form.ceremonyTime}
-                    onChange={e => set("ceremonyTime", e.target.value)}
+                    onChange={e => {
+                      set("ceremonyTime", e.target.value)
+                      clearError("ceremonyTime")
+                    }}
                     className={inputCls}
                   />
                 </FormField>
@@ -400,7 +482,10 @@ const WeddingDetails = () => {
                 <Input
                   type="date"
                   value={form.inviteDeadline}
-                  onChange={e => set("inviteDeadline", e.target.value)}
+                  onChange={e => {
+                    set("inviteDeadline", e.target.value)
+                    clearError("inviteDeadline")
+                  }}
                   className={inputCls}
                 />
               </FormField>
@@ -414,7 +499,10 @@ const WeddingDetails = () => {
                 <Input
                   placeholder="The Grand Pavilion"
                   value={form.venueName}
-                  onChange={e => set("venueName", e.target.value)}
+                  onChange={e => {
+                    set("venueName", e.target.value)
+                    clearError("venueName")
+                  }}
                   className={inputCls}
                 />
               </FormField>
@@ -424,7 +512,10 @@ const WeddingDetails = () => {
                   placeholder="Start typing a venue or address…"
                   aria-label="Wedding venue location"
                   value={form.venueAddress}
-                  onChange={v => set("venueAddress", v)}
+                  onChange={v => {
+                    set("venueAddress", v)
+                    clearError("venueAddress")
+                  }}
                   onPlaceSelect={handlePlaceSelect("venue")}
                   className={inputCls}
                 />
@@ -440,7 +531,10 @@ const WeddingDetails = () => {
                 <Input
                   placeholder="The Grand Pavilion"
                   value={form.receptionName}
-                  onChange={e => set("receptionName", e.target.value)}
+                  onChange={e => {
+                    set("receptionName", e.target.value)
+                    clearError("receptionName")
+                  }}
                   className={inputCls}
                 />
               </FormField>
@@ -450,7 +544,10 @@ const WeddingDetails = () => {
                   placeholder="Start typing a venue or address…"
                   aria-label="Reception location"
                   value={form.receptionAddress}
-                  onChange={v => set("receptionAddress", v)}
+                  onChange={v => {
+                    set("receptionAddress", v)
+                    clearError("receptionAddress")
+                  }}
                   onPlaceSelect={handlePlaceSelect("reception")}
                   className={inputCls}
                 />

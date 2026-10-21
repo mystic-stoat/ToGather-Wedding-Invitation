@@ -17,31 +17,52 @@ import {
 } from "@/lib/weddingDate";
 
 describe("Date tab settings", () => {
-  it("defaults both options to OFF", () => {
-    expect(DEFAULT_DATE_SETTINGS).toEqual({ dateShowCalendar: false, dateShowCountdown: false });
+  it("defaults Calendar View and Countdown to OFF and Add to Calendar to ON", () => {
+    expect(DEFAULT_DATE_SETTINGS).toEqual({
+      dateShowCalendar: false, dateShowCountdown: false, dateShowAddToCalendar: true,
+    });
     expect(normalizeDateSettings()).toEqual(DEFAULT_DATE_SETTINGS);
     expect(normalizeDateSettings(null)).toEqual(DEFAULT_DATE_SETTINGS);
   });
 
-  it("treats older invitations without date settings as OFF and ignores unrelated fields", () => {
+  it("treats older invitations without date settings as the defaults and ignores unrelated fields", () => {
     expect(normalizeDateSettings({ greetingTitle: "Hi", musicShowOnInvitation: true }))
       .toEqual(DEFAULT_DATE_SETTINGS);
   });
 
-  it("only accepts a real boolean true", () => {
+  it("Calendar View / Countdown only accept a real boolean true", () => {
     expect(normalizeDateSettings({ dateShowCalendar: "true", dateShowCountdown: 1 }))
       .toEqual(DEFAULT_DATE_SETTINGS);
     expect(normalizeDateSettings({ dateShowCalendar: true, dateShowCountdown: false }))
-      .toEqual({ dateShowCalendar: true, dateShowCountdown: false });
+      .toEqual({ dateShowCalendar: true, dateShowCountdown: false, dateShowAddToCalendar: true });
+  });
+
+  it("Add to Calendar is only turned off by a real boolean false", () => {
+    expect(normalizeDateSettings({ dateShowAddToCalendar: false }).dateShowAddToCalendar).toBe(false);
+    expect(normalizeDateSettings({ dateShowAddToCalendar: true }).dateShowAddToCalendar).toBe(true);
+    for (const v of ["false", 0, null, undefined]) {
+      expect(normalizeDateSettings({ dateShowAddToCalendar: v }).dateShowAddToCalendar).toBe(true);
+    }
+  });
+
+  it("defaults (Add to Calendar ON) show the Wedding Day section", () => {
+    expect(shouldShowWeddingDaySection(DEFAULT_DATE_SETTINGS)).toBe(true);
+    expect(shouldShowWeddingDaySection({})).toBe(true);
   });
 
   it.each([
-    [false, false, false],
-    [true,  false, true],
-    [false, true,  true],
-    [true,  true,  true],
-  ])("calendar=%s countdown=%s → section shown: %s", (cal, cd, shown) => {
-    expect(shouldShowWeddingDaySection({ dateShowCalendar: cal, dateShowCountdown: cd })).toBe(shown);
+    [false, false, false, false],
+    [true,  false, false, true],
+    [false, true,  false, true],
+    [false, false, true,  true],
+    [true,  true,  false, true],
+    [true,  false, true,  true],
+    [false, true,  true,  true],
+    [true,  true,  true,  true],
+  ])("calendar=%s countdown=%s addToCalendar=%s → section shown: %s", (cal, cd, atc, shown) => {
+    expect(shouldShowWeddingDaySection({
+      dateShowCalendar: cal, dateShowCountdown: cd, dateShowAddToCalendar: atc,
+    })).toBe(shown);
   });
 });
 
