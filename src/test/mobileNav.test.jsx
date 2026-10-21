@@ -20,11 +20,11 @@ const invitation = {
 
 const NAV_LABELS = [
   "Dashboard", "Wedding Details", "Guest List", "Wedding Assistant",
-  "Save the Date", "Mobile Invitation",
+  "Mobile Invitation",
 ];
 
-// Unfinished placeholder links that must not appear in either navigation.
-const REMOVED_LABELS = ["Paper Invitations"];
+// Links removed from the sidebar that must not appear in either navigation.
+const REMOVED_LABELS = ["Paper Invitations", "Save the Date"];
 
 const Where = () => <p data-testid="location">{useLocation().pathname}</p>;
 
