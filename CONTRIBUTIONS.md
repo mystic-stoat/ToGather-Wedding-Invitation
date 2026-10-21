@@ -37,13 +37,33 @@ Colten Mikulastik:
 
 Keiran Indraanei:
 
-- Created the Forgot Password page and password reset
-  interface
-- Integrated the existing Firebase password reset functionality into the Forgot Password workflow
-- Created the initial AI Wedding Assistant chat interface
-- Added the Wedding Assistant as a protected application route
-- Implemented section selection and a guided Wedding Details conversation flow
-- Added message input, conversation history, and completion response functionality
+* Developed the Forgot Password page and password reset interface.
+* Integrated Firebase Authentication password reset functionality into the Forgot Password workflow.
+* Added error handling and user feedback for invalid email addresses, excessive reset requests, and unsuccessful password reset attempts.
+* Created the initial AI Wedding Assistant chat interface.
+* Added the Wedding Assistant as a protected application route.
+* Implemented section selection and a guided Wedding Details conversation flow.
+* Added message input, conversation history, and completion response functionality to the initial Wedding Assistant interface.
+* Contributed to the Software Requirements Specification (SRS), including Section 4 functional requirements and the addition of AI Wedding Assistant requirements.
+* Updated SRS section organization and numbering to accommodate the new AI Assistant feature.
+* Developed Section 12, Quality Management Plan, and contributed to Section 13, Appendix, of the Project Plan.
+* Participated in sponsor feedback discussions and requirements planning for the Wedding Assistant and Wedding Details integration.
+* Updated the Wedding Details form and page to better reflect the approved application design.
+* Improved Wedding Details form validation, including required fields and RSVP deadline validation.
+* Added inline validation messages and error handling for Wedding Details.
+* Improved Wedding Details saving behavior and user feedback (PR #61).
+* Contributed to acceptance testing documentation, including assigned ATP sections and test case development.
+* Conducted and documented user acceptance testing for the RoleRadar and ChorePal projects.
+* Contributed to the Maintenance Plan and Manual, including troubleshooting and support documentation.
+* Contributed to the project's abstract, describing its core functionality, intended users, and AI-assisted wedding planning features.
+* Integrated saved invitation data into the AI Wedding Assistant sidebar.
+* Replaced placeholder Wedding Details status cards with dynamically populated wedding information.
+* Added display support for couple names, wedding date, ceremony time, ceremony and reception venues, addresses, and RSVP deadline.
+* Added loading and empty-state handling for the Wedding Assistant's Wedding Details panel.
+* Connected the Wedding Assistant sidebar's data-refresh behavior to the existing AI proposal approval workflow.
+* Verified the Wedding Assistant integration through a successful production build and manual browser testing.
+* Executed the application's automated test suite using Vitest and Firebase emulators, recording 930 passing tests and 13 remaining failures for further investigation.
+* Committed and pushed the Wedding Assistant integration changes to the `feature/wedding-details-integration` branch for review.
 
 
 
