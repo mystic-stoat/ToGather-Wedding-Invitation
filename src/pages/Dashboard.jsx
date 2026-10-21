@@ -146,8 +146,8 @@ const Dashboard = () => {
     navigate("/login");
   };
 
-  // ── "Save the Date" sidebar link lands on #save-the-date — scroll the RSVP
-  //    Progress card (which holds the action) into view once it has rendered.
+  // ── #save-the-date deep links scroll the RSVP Progress card (which holds
+  //    the Save the Date action) into view once it has rendered.
   useEffect(() => {
     if (loading || location.hash !== "#save-the-date") return;
     document.getElementById("save-the-date")?.scrollIntoView?.({ behavior: "smooth", block: "start" });
@@ -310,7 +310,7 @@ const Dashboard = () => {
               </div>
             </div>
 
-            {/* RSVP Progress — id is the "Save the Date" sidebar link target */}
+            {/* RSVP Progress — anchors the Save the Date action for #save-the-date links */}
             <div id="save-the-date" className="bg-card rounded-2xl border border-border/50 shadow-sm p-5 scroll-mt-6">
               <h2 className="text-base font-semibold text-foreground mb-4">RSVP Progress</h2>
 

@@ -317,10 +317,9 @@ describe("Dashboard integration", () => {
 });
 
 describe("Sidebar integration", () => {
-  it("Save the Date nav item links to the dashboard action anchor", () => {
+  it("has no Save the Date nav item — the action lives only in the RSVP Progress card", () => {
     inRouter(<Sidebar invitation={INVITATION} />, "/wedding-details");
-    const link = screen.getByRole("link", { name: /save the date/i });
-    expect(link.getAttribute("href")).toBe("/dashboard#save-the-date");
+    expect(screen.queryByRole("link", { name: /save the date/i })).toBeNull();
   });
 });
 
