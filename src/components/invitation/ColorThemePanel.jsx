@@ -13,6 +13,7 @@
 import { useEffect, useId, useState } from "react";
 import { AlertTriangle, CheckCircle2, RotateCcw } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import AiFieldHint from "@/components/AiFieldHint";
 import { BUILDER_UI, ERROR_COLOR } from "@/components/invitation/builderTheme";
 import {
   COLOR_THEMES, FONT_PAIRS, INVITATION_FONTS, THEME_SECTIONS, MAIN_BACKGROUND,
@@ -236,7 +237,7 @@ const ColorThemePanel = ({ settings, onChange, onApply }) => {
 
       {/* ── Invitation colors ─────────────────────────────────────────────── */}
       <section>
-        <SectionHeading>Invitation Colors</SectionHeading>
+        <SectionHeading>Invitation Colors <AiFieldHint /></SectionHeading>
         <div className="grid grid-cols-2 gap-x-4 gap-y-6">
           <ColorField label="Primary" value={theme.colorPalette1} testId="color-primary"
             onChange={v => onChange("colorPalette1", v)}
@@ -308,7 +309,7 @@ const ColorThemePanel = ({ settings, onChange, onApply }) => {
       </section>
 
       <section>
-        <SectionHeading>Typography</SectionHeading>
+        <SectionHeading>Typography <AiFieldHint /></SectionHeading>
         <div className="grid grid-cols-2 gap-x-4 gap-y-6">
           {[
             { field: "font1", label: "Heading Font", testId: "font-heading" },

@@ -33,11 +33,12 @@ import { getInvitationByUser, saveInvitation } from "@/lib/firestore";
 import Sidebar from "@/components/Sidebar";
 import MobileNav from "@/components/MobileNav";
 import PublishedInvitationBanner from "@/components/PublishedInvitationBanner";
+import AiFieldHint from "@/components/AiFieldHint";
 import GoogleMapEmbed, { buildMapQuery } from "@/components/GoogleMapEmbed";
 import PlaceAutocompleteInput from "@/components/PlaceAutocompleteInput";
 import { CHILDREN_POLICY, getWeddingChildrenPolicy } from "@/lib/rsvpOptions";
 import { getInviteDeadlineError } from "@/lib/rsvpDeadline";
-import { 
+import {
   validateWeddingDate,
   validateCeremonyTime,
   validateRequiredField,
@@ -51,9 +52,11 @@ const CHILDREN_POLICY_CHOICES = [
 ];
 
 // ── Reusable labeled form field wrapper ───────────────────────────────────────
-const FormField = ({ label, children, error, helper }) => (
+const FormField = ({ label, children, error, helper, ai }) => (
   <div className="space-y-1.5">
-    <Label className="text-sm font-medium text-muted-foreground">{label}</Label>
+    <Label className="text-sm font-medium text-muted-foreground">
+      {label}{ai && <> <AiFieldHint /></>}
+    </Label>
     {children}
     {helper && !error && <p className="text-xs text-muted-foreground">{helper}</p>}
     {error && <p className="text-xs text-destructive">{error}</p>}
@@ -391,7 +394,7 @@ const {
             <section className="space-y-6">
               <h2 className="font-heading text-xl font-semibold text-foreground">Partner Names</h2>
 
-              <FormField label="Partner One's name" error={fieldErrors["groomName.first"]}>
+              <FormField label="Partner One's name" ai error={fieldErrors["groomName.first"]}>
                 <div className="grid grid-cols-3 gap-3">
                   <Input
                     placeholder="First"
@@ -417,7 +420,7 @@ const {
                 </div>
               </FormField>
 
-              <FormField label="Partner Two's name" error={fieldErrors["brideName.first"]}>
+              <FormField label="Partner Two's name" ai error={fieldErrors["brideName.first"]}>
                 <div className="grid grid-cols-3 gap-3">
                   <Input
                     placeholder="First"
@@ -449,7 +452,7 @@ const {
               <h2 className="font-heading text-xl font-semibold text-foreground">Date & Time</h2>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <FormField label="Wedding Date" error={fieldErrors.weddingDate}>
+                <FormField label="Wedding Date" ai error={fieldErrors.weddingDate}>
                   <Input
                     type="date"
                     value={form.weddingDate}
@@ -461,7 +464,7 @@ const {
                     className={inputCls}
                   />
                 </FormField>
-                <FormField label="Ceremony Time" error={fieldErrors.ceremonyTime}>
+                <FormField label="Ceremony Time" ai error={fieldErrors.ceremonyTime}>
                   <Input
                     type="time"
                     value={form.ceremonyTime}
@@ -476,6 +479,7 @@ const {
 
               <FormField
                 label="RSVP Deadline"
+                ai
                 error={fieldErrors.inviteDeadline}
                 helper="Guests won't be able to RSVP after this date."
               >
@@ -495,7 +499,7 @@ const {
             <section className="space-y-6">
               <h2 className="font-heading text-xl font-semibold text-foreground">Venue & Location</h2>
 
-              <FormField label="Wedding Venue Name" error={fieldErrors.venueName}>
+              <FormField label="Wedding Venue Name" ai error={fieldErrors.venueName}>
                 <Input
                   placeholder="The Grand Pavilion"
                   value={form.venueName}
@@ -507,7 +511,7 @@ const {
                 />
               </FormField>
 
-              <FormField label="Wedding Venue Location" error={fieldErrors.venueAddress}>
+              <FormField label="Wedding Venue Location" ai error={fieldErrors.venueAddress}>
                 <PlaceAutocompleteInput
                   placeholder="Start typing a venue or address…"
                   aria-label="Wedding venue location"
@@ -527,7 +531,7 @@ const {
                 showLink
               />
 
-              <FormField label="Reception Venue Name" error={fieldErrors.receptionName}>
+              <FormField label="Reception Venue Name" ai error={fieldErrors.receptionName}>
                 <Input
                   placeholder="The Grand Pavilion"
                   value={form.receptionName}
@@ -539,7 +543,7 @@ const {
                 />
               </FormField>
 
-              <FormField label="Reception Location" error={fieldErrors.receptionAddress}>
+              <FormField label="Reception Location" ai error={fieldErrors.receptionAddress}>
                 <PlaceAutocompleteInput
                   placeholder="Start typing a venue or address…"
                   aria-label="Reception location"
@@ -564,7 +568,7 @@ const {
             {/* ── Children ── */}
             <section className="space-y-4">
               <div>
-                <h2 className="font-heading text-xl font-semibold text-foreground">Children</h2>
+                <h2 className="font-heading text-xl font-semibold text-foreground">Children <AiFieldHint /></h2>
                 <p className="text-sm text-muted-foreground mt-1">Are children invited to the wedding?</p>
               </div>
 

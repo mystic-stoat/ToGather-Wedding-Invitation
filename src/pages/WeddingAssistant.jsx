@@ -27,11 +27,28 @@ import PublishedInvitationBanner from "@/components/PublishedInvitationBanner";
 import { useNavigate } from "react-router-dom";
 import ChatBubble from "@/components/ChatBubble";
 import ProposalCard from "@/components/ProposalCard";
+import { CHILDREN_POLICY_LABELS } from "@/lib/rsvpOptions";
 
 // Optional starter prompts. Leave empty for now: nothing renders when empty.
 // If you add strings here later, each one shows up as a button that sends
 // that text as a normal message, exactly as if the user had typed it.
 const STARTER_PROMPTS = [];
+
+// Formats names stored as either strings or structured name objects.
+const formatName = (name) => {
+  if (!name) return "";
+  if (typeof name === "string") return name.trim();
+
+  return [name.first, name.middle, name.last]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+};
+
+// Short text for a list field (meals, travel, registries); "" when empty so
+// the detail is hidden like any other blank one.
+const formatList = (items, formatItem) =>
+  Array.isArray(items) ? items.map(formatItem).join("; ") : "";
 
 const WeddingAssistant = () => {
   const { user, logout } = useAuth();
@@ -358,10 +375,123 @@ const WeddingAssistant = () => {
           <div className="w-full lg:w-96 shrink-0 lg:self-start lg:max-h-full lg:overflow-y-auto bg-card rounded-2xl shadow-xl shadow-foreground/5 border border-border/40 p-5 sm:p-10 space-y-6">
             <h2 className="text-xl font-semibold text-foreground">Wedding Details</h2>
 
-            {/* Status cards go here */}
-            <StatusCard label="Date" />
-            <StatusCard label="Location" />
-            <StatusCard label="Time" />
+            {/* Display saved wedding details that the AI can update */}
+            {loading ? (
+              <p className="text-sm text-muted-foreground">
+                Loading wedding details...
+              </p>
+            ) : !invitation ? (
+              <p className="text-sm text-muted-foreground">
+                No wedding details found. Add your wedding details to get started.
+              </p>
+            ) : (
+              (() => {
+                const details = [
+                  {
+                    label: "Groom",
+                    value: formatName(invitation.groomName),
+                  },
+                  {
+                    label: "Bride",
+                    value: formatName(invitation.brideName),
+                  },
+                  {
+                    label: "Wedding Date",
+                    value: invitation.weddingDate,
+                  },
+                  {
+                    label: "Ceremony Time",
+                    value: invitation.ceremonyTime,
+                  },
+                  {
+                    label: "Ceremony Venue",
+                    value: invitation.venueName,
+                  },
+                  {
+                    label: "Reception Venue",
+                    value: invitation.receptionName,
+                  },
+                  {
+                    label: "RSVP Deadline",
+                    value: invitation.inviteDeadline,
+                  },
+                  {
+                    label: "Ceremony Address",
+                    value: invitation.venueAddress,
+                  },
+                  {
+                    label: "Reception Address",
+                    value: invitation.receptionAddress,
+                  },
+                  {
+                    label: "Children Policy",
+                    value: CHILDREN_POLICY_LABELS[invitation.childrenPolicy],
+                  },
+                  {
+                    label: "Greeting Title",
+                    value: invitation.greetingTitle,
+                  },
+                  {
+                    label: "Greeting Message",
+                    value: invitation.greetingMessage,
+                  },
+                  {
+                    label: "Primary Color",
+                    value: invitation.colorPalette1,
+                  },
+                  {
+                    label: "Secondary Color",
+                    value: invitation.colorPalette2,
+                  },
+                  {
+                    label: "Heading Font",
+                    value: invitation.font1,
+                  },
+                  {
+                    label: "Body Font",
+                    value: invitation.font2,
+                  },
+                  {
+                    label: "Story Title",
+                    value: invitation.storyTitle,
+                  },
+                  {
+                    label: "Meal Options",
+                    value: formatList(invitation.mealOptions, (m) =>
+                      m.description ? `${m.name} (${m.description})` : m.name
+                    ),
+                  },
+                  {
+                    label: "Travel & Stay",
+                    value: formatList(
+                      invitation.travelItems,
+                      (t) => `${t.name} (${t.category})`
+                    ),
+                  },
+                  {
+                    label: "Gift Registries",
+                    value: formatList(
+                      invitation.registries,
+                      (r) => `${r.name}${r.isVisible === false ? " (hidden)" : ""}`
+                    ),
+                  },
+                ].map((detail) => {
+                  const isSet =
+                    typeof detail.value === "string" &&
+                    detail.value.trim() !== "";
+                  return { ...detail, value: isSet ? detail.value : "Not set", isSet };
+                });
+
+                return details.map((detail) => (
+                  <StatusCard
+                    key={detail.label}
+                    label={detail.label}
+                    value={detail.value}
+                    isComplete={detail.isSet}
+                  />
+                ));
+              })()
+            )}
           </div>
         </div>
         </div>
