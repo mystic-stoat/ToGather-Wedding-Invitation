@@ -74,6 +74,9 @@ import { db } from "@/lib/firebase";
 export const createUserProfile = async (uid, name, email) => {
   // doc(db, "collection", "documentId") — creates a reference to a specific doc
   const ref = doc(db, "betrothed", uid);
+  // Invitation first: if anything fails the profile is still missing, so
+  // recoverUserProfile runs on the next sign-in and repairs both.
+  await ensureInvitation(uid);
   await setDoc(ref, {
     userId: uid,
     email,
@@ -84,15 +87,59 @@ export const createUserProfile = async (uid, name, email) => {
 };
 
 /**
+ * ensureInvitation
+ * Creates an empty invitation for the user unless they already have one, so the
+ * wedding assistant works right after signup. saveInvitation adds userId,
+ * isPublished: false and createdAt. Not atomic (queries can't run in a
+ * transaction), but it only runs at signup and recovery.
+ */
+const ensureInvitation = async uid => {
+  if (await getInvitationByUser(uid)) return;
+  await saveInvitation(uid, EMPTY_INVITATION);
+};
+
+// Wedding Details fields, all empty (same shape as EMPTY in WeddingDetails.jsx).
+const EMPTY_INVITATION = {
+  groomName: { first: "", middle: "", last: "" },
+  brideName: { first: "", middle: "", last: "" },
+  weddingDate: "",
+  ceremonyTime: "",
+  inviteDeadline: "",
+  venueName: "",
+  venueAddress: "",
+  venueURL: "",
+  venuePlaceId: "",
+  venueLat: null,
+  venueLng: null,
+  receptionName: "",
+  receptionAddress: "",
+  receptionURL: "",
+  receptionPlaceId: "",
+  receptionLat: null,
+  receptionLng: null,
+  childrenPolicy: "allowed",
+  greetingTitle: "",
+  greetingMessage: "",
+  storyTitle: "",
+  mealOptions: [],
+  travelItems: [],
+  registries: [],
+  qaItems: [],
+};
+
+/**
  * recoverUserProfile
  * Repairs a missing betrothed/{uid} profile after a partial signup failure.
  * Runs in a transaction so it is idempotent: if the document already exists
  * (created since the read that noticed it missing, or by another tab) the
  * existing data is returned untouched — a valid profile is never overwritten.
+ * The invitation is ensured first (like createUserProfile), so a failure there
+ * leaves the profile missing and this runs again.
  * Returns { created: boolean, profile }.
  */
 export const recoverUserProfile = async (uid, name, email) => {
   const ref = doc(db, "betrothed", uid);
+  await ensureInvitation(uid);
   return runTransaction(db, async (transaction) => {
     const snap = await transaction.get(ref);
     if (snap.exists()) {
