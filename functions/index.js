@@ -14,8 +14,17 @@ const {hasUsableEmail, buildEmail} = require("./email-utils");
 const {
   newestUserMessageId,
   buildClaudeMessages,
-  extractReplyText,
+  extractTurnReply,
+  slimTrace,
+  buildWeddingContext,
 } = require("./chat-utils");
+const {runToolLoop, MAX_CALLS} = require("./tool-loop");
+const {makeCallClaude, buildSystemPrompt} = require("./assistant-config");
+const {buildTools} = require("./tools");
+const {
+  createProposeChangeHandler,
+  loadProposalsContext,
+} = require("./proposals");
 
 // Initialise the Admin SDK before anything that might use it.
 initializeApp();
@@ -57,24 +66,60 @@ const EmailStatus = Object.freeze({
 // In the emulator it's read from functions/.secret.local instead.
 const ANTHROPIC_API_KEY = defineSecret("ANTHROPIC_API_KEY");
 
-const CLAUDE_MODEL = "claude-haiku-5-5";
-const CLAUDE_MAX_TOKENS = 512; // explicit so a reply can never run away
 const CLAUDE_MAX_HISTORY = 20; // last N messages sent each turn
-
-const ASSISTANT_SYSTEM_PROMPT =
-  "You are a warm, concise wedding planning assistant helping a host " +
-  "enter details for their wedding invitation website.\n" +
-  "Ask one friendly question at a time to collect what is needed " +
-  "(for example the wedding date, the location, and what time guests " +
-  "should arrive).\n" +
-  "Keep replies to 1-3 sentences.";
 
 // Shown in the chat UI on failure; the real error only goes to the logs.
 const CHAT_USER_ERROR = "The assistant couldn't reply. Please try again.";
 
+
 // ---------------------------------------------------------------------------
 // Helper functions
 // ---------------------------------------------------------------------------
+
+
+/**
+ * Looks up the host's invitation. Returns the <wedding_details> block for the
+ * system prompt, and the invitation's id (the weddingId proposals point at;
+ * null if there is no invitation). On a failed lookup, text is "" and
+ * weddingId null: the chat should still work without the details, and "No
+ * wedding details entered yet" would be a false statement when the real
+ * problem is a failed read.
+ */
+async function getWeddingContext(uid) {
+  try {
+    const snap = await db.collection("invitations")
+        .where("userId", "==", uid)
+        .limit(1)
+        .get();
+    const doc = snap.empty ? null : snap.docs[0];
+    return {
+      text: buildWeddingContext(doc ? doc.data() : null),
+      weddingId: doc ? doc.id : null,
+    };
+  } catch (err) {
+    logger.warn("Could not load wedding details for chat", {
+      uid,
+      error: err.message,
+    });
+    return {text: "", weddingId: null};
+  }
+}
+
+/**
+ * The <proposals> block for the system prompt. "" on failure: Claude just
+ * loses the memory of recent decisions, and the chat still works.
+ */
+async function getProposalsContext(uid) {
+  try {
+    return await loadProposalsContext(db, uid);
+  } catch (err) {
+    logger.warn("Could not load proposals for chat", {
+      uid,
+      error: err.message,
+    });
+    return "";
+  }
+}
 
 /**
  * "Worker claims emailStatus to sending using Transaction".
@@ -264,6 +309,99 @@ exports.sendInviteEmail = onTaskDispatched(
     },
 );
 
+/**
+ * One assistant turn: guards, history, Claude (via the tool loop), reply.
+ * Throws on any failure; the trigger turns that into status "error".
+ */
+async function runTurn(uid, msgId) {
+  const messagesRef = db.collection("betrothed").doc(uid)
+      .collection("messages");
+  const userRef = messagesRef.doc(msgId);
+  // Deterministic ID: a duplicate trigger overwrites, never double-replies.
+  const replyRef = messagesRef.doc(`reply-${msgId}`);
+
+  // Events are delivered at least once. If this message already has a
+  // reply, skip so a repeat delivery doesn't pay for a second API call.
+  if ((await replyRef.get()).exists) return;
+
+  // Last N messages, newest first (flipped to chronological in helper).
+  const recent = await messagesRef
+      .orderBy("createdAt", "desc")
+      .limit(CLAUDE_MAX_HISTORY)
+      .get();
+  const docs = recent.docs.map((d) => ({id: d.id, ...d.data()}));
+
+  // Message was deleted before we got to it (chat cleared): do nothing.
+  if (!docs.some((d) => d.id === msgId)) return;
+
+  // DOUBLE-SUBMIT GUARD: if a newer user message exists, that message's
+  // own run answers with the full context. Replying here would double up.
+  if (newestUserMessageId(docs) !== msgId) {
+    await userRef.update({status: "superseded"});
+    return;
+  }
+
+  const messages = buildClaudeMessages(docs);
+  if (messages.length === 0) {
+    throw new Error("No sendable messages in history.");
+  }
+
+  const [{text: weddingContext, weddingId}, proposalsContext] =
+    await Promise.all([getWeddingContext(uid), getProposalsContext(uid)]);
+  const system = buildSystemPrompt({weddingContext, proposalsContext});
+
+  // proposeChange is only offered when there is an invitation to change.
+  // Claude can only PROPOSE: the handler writes proposals, never details.
+  const tools = buildTools({proposals: Boolean(weddingId)});
+  const toolHandlers = weddingId ?
+    {proposeChange: createProposeChangeHandler({
+      db, uid, weddingId, messageId: msgId,
+    })} :
+    {};
+
+  // Created per call: the secret's value only exists at runtime.
+  const client = new Anthropic({apiKey: ANTHROPIC_API_KEY.value()});
+  const result = await runToolLoop({
+    callClaude: makeCallClaude(client, system),
+    messages,
+    tools, // built once above, sent unchanged on every call
+    toolHandlers,
+  });
+
+  if (result.status === "cap_reached") {
+    throw new Error(`Still asking for tools after ${MAX_CALLS} calls.`);
+  }
+
+  const text = extractTurnReply(result.trace, {toolErrors: result.toolErrors});
+  if (!text) {
+    throw new Error(
+        `Empty reply (status: ${result.status}, ` +
+        `stop: ${result.response.stop_reason}).`,
+    );
+  }
+
+  // Reply + status flip in ONE batch: both happen or neither. If the
+  // chat was cleared mid-call, the update fails and no orphan is saved.
+  const batch = db.batch();
+  batch.set(replyRef, {
+    role: "assistant",
+    content: [{type: "text", text}],
+    createdAt: FieldValue.serverTimestamp(),
+    status: "complete",
+    // truncated: result.status === "truncated", // good info for development
+    iterations: result.iterations,
+    usage: result.usage,
+    // Debug trace: emulator only, so it never fills the production database.
+    // JSON round-trip: Firestore rejects class instances, and the SDK's
+    // response objects may carry prototypes it can't serialise.
+    ...(process.env.FUNCTIONS_EMULATOR === "true" && {
+      trace: JSON.parse(JSON.stringify(slimTrace(result.trace))),
+    }),
+  });
+  batch.update(userRef, {status: "replied"});
+  await batch.commit();
+}
+
 // ---------------------------------------------------------------------------
 // Trigger: wedding assistant chat
 // ---------------------------------------------------------------------------
@@ -284,70 +422,14 @@ exports.replyToUserMessage = onDocumentCreated(
       if (!snap) return;
 
       const {uid, msgId} = event.params;
-      const message = snap.data();
 
       // LOOP GUARD: the reply we write is also a new message document, which
       // fires this trigger again. Anything that isn't a user message exits
       // immediately, so the function can never answer its own replies.
-      if (message.role !== "user") return;
-
-      const messagesRef = db.collection("betrothed").doc(uid)
-          .collection("messages");
-      // Deterministic ID: a duplicate trigger overwrites, never double-replies.
-      const replyRef = messagesRef.doc(`reply-${msgId}`);
+      if (snap.data().role !== "user") return;
 
       try {
-        // Events are delivered at least once. If this message already has a
-        // reply, skip so a repeat delivery doesn't pay for a second API call.
-        if ((await replyRef.get()).exists) return;
-
-        // Last N messages, newest first (flipped to chronological in helper).
-        const recent = await messagesRef
-            .orderBy("createdAt", "desc")
-            .limit(CLAUDE_MAX_HISTORY)
-            .get();
-        const docs = recent.docs.map((d) => ({id: d.id, ...d.data()}));
-
-        // Message was deleted before we got to it (chat cleared): do nothing.
-        if (!docs.some((d) => d.id === msgId)) return;
-
-        // DOUBLE-SUBMIT GUARD: if a newer user message exists, that message's
-        // own run answers with the full context. Replying here would double up.
-        if (newestUserMessageId(docs) !== msgId) {
-          await snap.ref.update({status: "superseded"});
-          return;
-        }
-
-        const messages = buildClaudeMessages(docs);
-        if (messages.length === 0) {
-          throw new Error("No sendable messages in history.");
-        }
-
-        // Created per call: the secret's value only exists at runtime.
-        const client = new Anthropic({apiKey: ANTHROPIC_API_KEY.value()});
-        const response = await client.messages.create({
-          model: CLAUDE_MODEL,
-          max_tokens: CLAUDE_MAX_TOKENS,
-          system: ASSISTANT_SYSTEM_PROMPT,
-          messages,
-        });
-
-        const text = extractReplyText(response);
-        if (!text) {
-          throw new Error(`Empty reply (stop: ${response.stop_reason}).`);
-        }
-
-        // Reply + status flip in ONE batch: both happen or neither. If the
-        // chat was cleared mid-call, the update fails and no orphan is saved.
-        const batch = db.batch();
-        batch.set(replyRef, {
-          role: "assistant",
-          content: [{type: "text", text}],
-          createdAt: FieldValue.serverTimestamp(),
-          status: "complete",
-        });
-        batch.update(snap.ref, {status: "replied"});
-        await batch.commit();
+        await runTurn(uid, msgId);
       } catch (err) {
         logger.error("replyToUserMessage failed", {
           uid,

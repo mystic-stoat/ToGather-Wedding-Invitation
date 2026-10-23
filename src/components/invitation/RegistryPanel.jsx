@@ -13,6 +13,7 @@
 
 import { Plus, Gift, Info, AlertCircle, Loader2, EyeOff } from "lucide-react";
 import RegistryMessageCard from "@/components/registry/RegistryMessageCard";
+import AiFieldHint from "@/components/AiFieldHint";
 import RegistryRow from "@/components/registry/RegistryRow";
 import RegistryFormModal from "@/components/registry/RegistryFormModal";
 import DeleteRegistryModal from "@/components/registry/DeleteRegistryModal";
@@ -136,7 +137,7 @@ const RegistryPanel = ({ registry }) => {
       <div>
         <div className="flex items-center justify-between gap-4 mb-4">
           <div>
-            <h3 className={sectionHeading} style={{ color: BUILDER_UI.onSurfaceVar }}>Registry Links</h3>
+            <h3 className={sectionHeading} style={{ color: BUILDER_UI.onSurfaceVar }}>Registry Links <AiFieldHint /></h3>
             <p className="text-xs mt-1" style={{ color: BUILDER_UI.onSurfaceVar }}>
               Guests only see links that are switched on. Hidden links stay here so you can edit them.
             </p>

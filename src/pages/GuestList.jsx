@@ -5,6 +5,13 @@
 //   Shows all guests with their RSVP status, email, group, plus one,
 //   and meal/dietary info. Supports search, filter by status, add, and delete.
 //
+// PUBLISH INVITATION (moved here from the Invitation Builder):
+//   "Publish Invitation" opens a confirmation modal showing how many guests
+//   are eligible for an invitation email. Confirming calls the existing
+//   publishInvitation(), which flips isPublished false -> true; that is what
+//   makes the existing Cloud Function (functions/index.js ->
+//   sendInvitesOnPublish) send the emails. Nothing here sends email directly.
+//
 // DATA FLOW:
 //   1. Load invitation from `invitations` to get weddingId
 //   2. Load all guests from `invitee` collection using weddingId
@@ -20,8 +27,9 @@ import { useNavigate } from "react-router-dom";
 import Papa from "papaparse";
 import {
   Users, UserPlus, Search, Trash2, Loader2,
-  ChevronDown, ChevronUp, Heart, LogOut,
-  Download, Filter, Upload, X, FileText, AlertCircle,
+  ChevronDown, ChevronUp,
+  Filter, Upload, X, FileText, AlertCircle,
+  Send, CheckCircle2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,8 +39,12 @@ import {
   getInvitees,
   addInvitee,
   deleteInvitee,
+  publishInvitation,
+  countInviteEmailEligible,
 } from "@/lib/firestore";
 import Sidebar from "@/components/Sidebar"
+import MobileNav from "@/components/MobileNav";
+import PublishedInvitationBanner from "@/components/PublishedInvitationBanner";
 import {
   CHILDREN_OVERRIDE,
   CHILDREN_POLICY_LABELS,
@@ -70,9 +82,9 @@ const avatarColor = (name = "") => {
 // Kept in sync with the identical map in Dashboard.jsx.
 const statusBadge = (status) => {
   const map = {
-    Accepted: "bg-[#E7F0EA] text-[#3F5F47] border border-[#3F5F47]/15",
-    Declined: "bg-[#F7E6E6] text-[#C9666E] border border-[#C9666E]/20",
-    Pending:  "bg-[#FDF3E1] text-[#D09B45] border border-[#D09B45]/25",
+    Accepted: "bg-status-accepted-bg text-status-accepted border border-status-accepted/15",
+    Declined: "bg-status-declined-bg text-status-declined border border-status-declined/20",
+    Pending:  "bg-status-pending-bg text-status-pending border border-status-pending/25",
   };
   return map[status] || "bg-muted text-muted-foreground border border-border";
 };
@@ -519,6 +531,84 @@ const ImportCsvModal = ({ onImport, onClose, importing }) => {
   );
 };
 
+// ── Publish Invitation Modal ─────────────────────────────────────────────────
+// Confirms publishing. Same look as AddGuestModal / ImportCsvModal above.
+//   eligibleCount — guests the Cloud Function would email; null = couldn't
+//                   be checked (general wording, never a guessed number)
+//   statusError   — the invitation's current status couldn't be confirmed;
+//                   publishing is blocked until the modal is reopened
+const PublishInvitationModal = ({ eligibleCount, checking, publishing, error, statusError, onConfirm, onClose }) => (
+  <div className="fixed inset-0 bg-foreground/20 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div role="dialog" aria-modal="true" aria-labelledby="publish-invitation-title"
+      className="bg-card rounded-2xl border border-border/50 shadow-xl p-6 w-full max-w-md space-y-4 max-h-[90vh] overflow-y-auto">
+      <h3 id="publish-invitation-title" className="font-heading text-lg font-semibold text-foreground italic">
+        Publish your invitation?
+      </h3>
+      <p className="text-sm text-foreground">
+        Publishing starts sending invitation emails to your guests right away. This can't be undone.
+      </p>
+
+      {/* Informational reminder only — nothing is checked or required */}
+      <p className="text-sm text-muted-foreground">
+        Before you publish, make sure your invitation is complete in the Invitation Builder.
+        Review your wedding details, invitation design, and guest list information.
+      </p>
+
+      {/* Eligible-guest count */}
+      <div data-testid="publish-eligible"
+        className="bg-muted/40 rounded-xl px-4 py-3 border border-border/40 text-sm text-foreground">
+        {checking ? (
+          <span className="flex items-center gap-2 text-muted-foreground">
+            <Loader2 size={14} className="animate-spin" /> Checking your guest list...
+          </span>
+        ) : eligibleCount === null ? (
+          <p>
+            We couldn't check how many guests are eligible right now. Guests on your list who
+            have an email address and haven't been sent an invitation yet will be emailed.
+          </p>
+        ) : (
+          <>
+            <p className="font-semibold">
+              {eligibleCount} {eligibleCount === 1 ? "guest is" : "guests are"} eligible for an invitation email.
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Eligible means the guest has an email address and hasn't been sent an invitation yet.
+              This doesn't guarantee every email will be delivered.
+            </p>
+            {eligibleCount === 0 && (
+              <p className="mt-2 font-semibold text-status-pending">
+                No invitation emails will be sent. You can still publish.
+              </p>
+            )}
+          </>
+        )}
+      </div>
+
+      <p className="text-sm text-muted-foreground">
+        Guests you add after publishing will not automatically receive an invitation email.
+      </p>
+
+      {(statusError || error) && (
+        <div role="alert" className="flex items-start gap-2 bg-destructive/8 border border-destructive/20 rounded-xl px-4 py-3">
+          <AlertCircle size={16} className="text-destructive flex-shrink-0 mt-0.5" />
+          <p className="text-sm text-destructive">{statusError || error}</p>
+        </div>
+      )}
+
+      <div className="flex gap-3">
+        <Button variant="outline" className="flex-1 rounded-xl" onClick={onClose} disabled={publishing}>
+          Cancel
+        </Button>
+        <Button variant="default" className="flex-1 rounded-xl" onClick={onConfirm} disabled={checking || publishing || !!statusError}>
+          {publishing
+            ? <span className="flex items-center gap-2"><Loader2 size={14} className="animate-spin" />Publishing...</span>
+            : "Publish Now"}
+        </Button>
+      </div>
+    </div>
+  </div>
+);
+
 // ── Guest Row ─────────────────────────────────────────────────────────────────
 // Each guest row — click to expand and see plus one details
 // Meal + Dietary/Allergies shown as two labelled lines (keeps the table narrow).
@@ -542,21 +632,45 @@ const MealDietaryLines = ({ entity, mealOptions }) => {
   );
 };
 
+// Derived display data shared by the desktop GuestRow and the mobile GuestCard
+const getGuestDetails = (guest, invitation) => {
+  // Plus ones — older records may only have { name, meal }; normalize fills
+  // in mealId / dietaryRestrictions so every entry has the same shape
+  const plusOnes = normalizePlusOnes(guest.plusOnes);
+  return {
+    plusOnes,
+    hasPlusOnes: plusOnes.length > 0,
+    mealOptions: invitation?.mealOptions,
+    // Effective children policy + whether it comes from a guest override
+    childrenPolicy: getEffectiveChildrenPolicy(invitation, guest),
+    hasChildrenOverride: getGuestChildrenOverride(guest) !== CHILDREN_OVERRIDE.INHERIT,
+  };
+};
+
+// Plus-one cards (expanded under a table row, or inside a mobile guest card)
+const PlusOnesList = ({ plusOnes, mealOptions }) => (
+  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+    {plusOnes.map((po, i) => (
+      <div key={i}
+        className="flex items-start gap-3 bg-card rounded-xl px-3 py-2 border border-border/40">
+        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5 ${avatarColor(po.name || "Guest")}`}>
+          {getInitials(po.name || "G")}
+        </div>
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-foreground">{po.name || "Guest"}</p>
+          <MealDietaryLines entity={po} mealOptions={mealOptions} />
+        </div>
+      </div>
+    ))}
+  </div>
+);
+
 const GuestRow = ({ guest, onDelete, deleting, onCopyLink, invitation }) => {
   // expanded shows the plus one details below the row
   const [expanded, setExpanded] = useState(false);
 
-  // Plus ones — older records may only have { name, meal }; normalize fills
-  // in mealId / dietaryRestrictions so every entry has the same shape
-  const plusOnes = normalizePlusOnes(guest.plusOnes);
-
-  const hasPlusOnes = plusOnes.length > 0;
-
-  const mealOptions = invitation?.mealOptions;
-
-  // Effective children policy + whether it comes from a guest override
-  const childrenPolicy = getEffectiveChildrenPolicy(invitation, guest);
-  const hasChildrenOverride = getGuestChildrenOverride(guest) !== CHILDREN_OVERRIDE.INHERIT;
+  const { plusOnes, hasPlusOnes, mealOptions, childrenPolicy, hasChildrenOverride } =
+    getGuestDetails(guest, invitation);
 
   return (
     <>
@@ -663,25 +777,115 @@ const GuestRow = ({ guest, onDelete, deleting, onCopyLink, invitation }) => {
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
                 Plus Ones
               </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                {plusOnes.map((po, i) => (
-                  <div key={i}
-                    className="flex items-start gap-3 bg-card rounded-xl px-3 py-2 border border-border/40">
-                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5 ${avatarColor(po.name || "Guest")}`}>
-                      {getInitials(po.name || "G")}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-foreground">{po.name || "Guest"}</p>
-                      <MealDietaryLines entity={po} mealOptions={mealOptions} />
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <PlusOnesList plusOnes={plusOnes} mealOptions={mealOptions} />
             </div>
           </td>
         </tr>
       )}
     </>
+  );
+};
+
+// ── GuestCard ─────────────────────────────────────────────────────────────────
+// Phone layout for one guest (below md). Shows everything GuestRow shows —
+// children policy, email, group, plus-one allowance, RSVP status, meal /
+// dietary, submitted plus ones — with the same Copy link and Remove actions.
+const GuestCard = ({ guest, onDelete, deleting, onCopyLink, invitation }) => {
+  const [expanded, setExpanded] = useState(false);
+  const { plusOnes, hasPlusOnes, mealOptions, childrenPolicy, hasChildrenOverride } =
+    getGuestDetails(guest, invitation);
+  const plusOnesId = `plus-ones-${guest.inviteeId}`;
+
+  return (
+    <li className="bg-card rounded-2xl border border-border/50 shadow-sm p-4">
+      <div className="flex items-start gap-3">
+        <div className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${avatarColor(guest.guestName)}`}>
+          {getInitials(guest.guestName)}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-medium text-foreground text-sm break-words">{guest.guestName}</p>
+          <p
+            className="text-[11px] text-muted-foreground mt-0.5"
+            title={hasChildrenOverride ? "Set for this guest" : "Uses the wedding setting"}
+          >
+            {CHILDREN_POLICY_LABELS[childrenPolicy]}
+            {hasChildrenOverride && <span className="text-primary font-medium"> · guest exception</span>}
+          </p>
+        </div>
+        <span className={`flex-shrink-0 inline-flex px-2.5 py-1 rounded-lg text-xs font-semibold ${statusBadge(guest.rsvpStatus)}`}>
+          {guest.rsvpStatus}
+        </span>
+      </div>
+
+      <dl className="mt-3 grid grid-cols-[auto,1fr] gap-x-3 gap-y-1.5 text-sm">
+        <dt className="text-xs text-muted-foreground pt-0.5">Email</dt>
+        <dd className="text-muted-foreground min-w-0 break-all">
+          {guest.email || <span className="text-muted-foreground/40">—</span>}
+        </dd>
+        <dt className="text-xs text-muted-foreground pt-0.5">Group</dt>
+        <dd>
+          {guest.group ? (
+            <span className="text-xs bg-muted px-2 py-1 rounded-lg text-muted-foreground font-medium">
+              {guest.group}
+            </span>
+          ) : (
+            <span className="text-muted-foreground">—</span>
+          )}
+        </dd>
+        <dt className="text-xs text-muted-foreground pt-0.5">Plus One</dt>
+        <dd className="text-muted-foreground">
+          {guest.plusOneLimit > 0 ? `+${guest.plusOneLimit} allowed` : "None"}
+        </dd>
+        <dt className="text-xs text-muted-foreground pt-0.5">Meal / Dietary</dt>
+        <dd className="text-muted-foreground min-w-0 break-words">
+          <MealDietaryLines entity={guest} mealOptions={mealOptions} />
+        </dd>
+      </dl>
+
+      {/* Submitted plus ones — same details as the table's expandable row */}
+      {hasPlusOnes && (
+        <div className="mt-3">
+          <button
+            type="button"
+            onClick={() => setExpanded(!expanded)}
+            aria-expanded={expanded}
+            aria-controls={plusOnesId}
+            className="w-full h-11 flex items-center justify-between px-3 rounded-xl bg-muted/40 text-sm font-medium text-primary hover:bg-muted transition-colors">
+            {expanded ? "Hide" : "Show"} plus ones ({plusOnes.length})
+            {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+          </button>
+          {expanded && (
+            <div id={plusOnesId} className="mt-2">
+              <PlusOnesList plusOnes={plusOnes} mealOptions={mealOptions} />
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Actions */}
+      <div className="mt-3 flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => onCopyLink(guest)}
+          className="flex-1 h-11 rounded-xl border border-input text-sm font-medium text-primary hover:bg-muted transition-colors">
+          Copy RSVP link
+        </button>
+        {deleting ? (
+          <span className="h-11 w-11 flex items-center justify-center" role="status" aria-label="Removing guest">
+            <Loader2 size={16} className="animate-spin text-muted-foreground" />
+          </span>
+        ) : (
+          <button
+            type="button"
+            onClick={() => onDelete(guest.inviteeId)}
+            aria-label={`Remove ${guest.guestName}`}
+            title="Remove guest"
+            className="h-11 w-11 flex items-center justify-center rounded-xl border border-input text-muted-foreground hover:text-destructive hover:border-destructive/40 transition-colors">
+            <Trash2 size={16} />
+          </button>
+        )}
+      </div>
+    </li>
   );
 };
 
@@ -702,6 +906,13 @@ const GuestList = () => {
   const [deletingId, setDeletingId]       = useState(null);
   const [showImportModal, setShowImportModal] = useState(false);
   const [importingCsv, setImportingCsv]       = useState(false);
+  const [showPublishModal, setShowPublishModal] = useState(false);
+  const [eligibleCount, setEligibleCount]       = useState(null); // null = unknown
+  const [checkingCount, setCheckingCount]       = useState(false);
+  const [publishing, setPublishing]             = useState(false);
+  const [publishError, setPublishError]         = useState("");
+  const [statusError, setStatusError]           = useState(""); // blocks publishing
+  const publishingRef = useRef(false); // blocks a second publish before re-render
 
   // ── Load invitation + guests on mount ──────────────────────────────────────
   useEffect(() => {
@@ -793,6 +1004,64 @@ const GuestList = () => {
     alert(`RSVP link copied!\n${link}`);
   };
 
+  // ── Publish invitation ─────────────────────────────────────────────────────
+  // Opening the modal refreshes the invitation and the eligible-guest count.
+  //   - Invitation status can't be confirmed → error, publishing blocked.
+  //   - Already published (e.g. in another tab) → show Published, no write.
+  //   - Only the count failed → publishing allowed, general email wording.
+  const handleOpenPublish = async () => {
+    if (!invitation?.weddingId) {
+      alert("Please fill in your wedding details first.");
+      return;
+    }
+    setPublishError("");
+    setStatusError("");
+    setEligibleCount(null);
+    setCheckingCount(true);
+    setShowPublishModal(true);
+    const [latest, count] = await Promise.allSettled([
+      getInvitationByUser(user.uid),
+      countInviteEmailEligible(invitation.weddingId),
+    ]);
+    setCheckingCount(false);
+    if (count.status === "fulfilled") setEligibleCount(count.value);
+    else console.error("Eligible guest count error:", count.reason);
+    if (latest.status === "rejected") {
+      console.error("Invitation status check error:", latest.reason);
+      setStatusError("We couldn't check your invitation's current status, so it hasn't been published. Please close this and try again.");
+      return;
+    }
+    if (!latest.value?.weddingId || latest.value.weddingId !== invitation.weddingId) {
+      setStatusError("We couldn't find your invitation, so it hasn't been published. Please refresh the page and try again.");
+      return;
+    }
+    if (latest.value.isPublished === true) {
+      setInvitation(latest.value);
+      setShowPublishModal(false);
+      alert("Your invitation has already been published.");
+      return;
+    }
+  };
+
+  const handleConfirmPublish = async () => {
+    if (publishingRef.current || statusError) return;
+    publishingRef.current = true;
+    setPublishing(true);
+    setPublishError("");
+    try {
+      await publishInvitation(invitation.weddingId);
+      // Shows the Published status and the existing PublishedInvitationBanner
+      setInvitation(prev => ({ ...prev, isPublished: true }));
+      setShowPublishModal(false);
+    } catch (err) {
+      console.error("Publish invitation error:", err);
+      setPublishError("Couldn't publish your invitation. " + (err?.message || "Please try again."));
+    } finally {
+      publishingRef.current = false;
+      setPublishing(false);
+    }
+  };
+
   // ── Logout ─────────────────────────────────────────────────────────────────
   const handleLogout = async () => {
     await logout();
@@ -856,22 +1125,26 @@ const GuestList = () => {
         />
       )}
 
+      {/* Publish Invitation Modal */}
+      {showPublishModal && (
+        <PublishInvitationModal
+          eligibleCount={eligibleCount}
+          checking={checkingCount}
+          publishing={publishing}
+          error={publishError}
+          statusError={statusError}
+          onConfirm={handleConfirmPublish}
+          onClose={() => setShowPublishModal(false)}
+        />
+      )}
+
       {/* Main content */}
       <main className="flex-1 min-h-screen overflow-y-auto">
 
-        {/* Mobile top bar */}
-        <div className="lg:hidden bg-card border-b border-border/50 px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Heart size={16} className="text-primary" />
-            <span className="font-heading text-lg font-semibold">ToGather</span>
-          </div>
-          <button onClick={handleLogout}
-            className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
-            <LogOut size={15} /> Log out
-          </button>
-        </div>
+        {/* Mobile / tablet top bar with the navigation drawer (below lg) */}
+        <MobileNav invitation={invitation} onLogout={handleLogout} />
 
-        <div className="px-6 lg:px-10 py-8 max-w-6xl mx-auto">
+        <div className="px-4 sm:px-6 lg:px-10 py-6 sm:py-8 max-w-6xl mx-auto">
 
           {/* Page header */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
@@ -884,11 +1157,7 @@ const GuestList = () => {
             </div>
 
             {/* Action buttons */}
-            <div className="flex items-center gap-3">
-              {/* Export CSV — placeholder for future feature */}
-              <Button variant="outline" size="sm" className="rounded-xl gap-2 border-border/60">
-                <Download size={15} /> Export CSV
-              </Button>
+            <div className="flex flex-wrap items-center gap-3">
               <Button variant="outline" size="sm" className="rounded-xl gap-2 border-border/60"
                 onClick={() => {
                   if (!invitation?.weddingId) {
@@ -909,15 +1178,39 @@ const GuestList = () => {
                 }}>
                 <UserPlus size={15} /> Add Guest
               </Button>
+              {invitation?.isPublished === true ? (
+                <span className="inline-flex items-center gap-1.5 h-9 px-3 rounded-xl text-sm font-semibold bg-status-accepted-bg text-status-accepted border border-status-accepted/15">
+                  <CheckCircle2 size={15} /> Published
+                </span>
+              ) : (
+                <Button variant="default" size="sm" className="rounded-xl gap-2" onClick={handleOpenPublish}>
+                  <Send size={15} /> Publish Invitation
+                </Button>
+              )}
             </div>
           </div>
+
+          {/* Published warning — invitation emails went out when the host
+              published; guests added after that moment are never queued for
+              an automatic email, and edits here don't update sent mail. */}
+          <PublishedInvitationBanner
+            isPublished={invitation?.isPublished}
+            message={
+              "Your wedding invitation has already been published, and guests may have " +
+              "received an email with the original details. Guests added now won't " +
+              "automatically receive an invitation email, and changes here will not " +
+              "update emails that have already been delivered. Please make sure your " +
+              "guests are informed of important changes."
+            }
+            className="mb-6"
+          />
 
           {/* Stats bar — quick summary above the table */}
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">
             {[
               { label: "Invitations", value: total,    color: "text-foreground",   bg: "bg-card" },
-              { label: "Accepted",    value: accepted, color: "text-primary",      bg: "bg-primary/8" },
-              { label: "Declined",    value: declined, color: "text-destructive",  bg: "bg-destructive/8" },
+              { label: "Accepted",    value: accepted, color: "text-primary",      bg: "bg-primary/10" },
+              { label: "Declined",    value: declined, color: "text-destructive",  bg: "bg-destructive/10" },
               { label: "Pending",     value: pending,  color: "text-amber-600",    bg: "bg-amber-50" },
               // Real headcount: accepted guests + plus-ones they submitted
               { label: "Attending",   value: attending, color: "text-foreground",  bg: "bg-card",
@@ -947,11 +1240,12 @@ const GuestList = () => {
             </div>
 
             {/* Status filter buttons */}
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Filter size={14} className="text-muted-foreground flex-shrink-0" />
               {["All", "Accepted", "Declined", "Pending"].map(s => (
                 <button key={s} onClick={() => setStatusFilter(s)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border ${
+                  aria-pressed={statusFilter === s}
+                  className={`px-3 py-2.5 sm:py-1.5 rounded-lg text-xs font-semibold transition-all border ${
                     statusFilter === s
                       ? "bg-primary text-primary-foreground border-primary"
                       : "bg-card text-muted-foreground border-border/60 hover:border-primary/40"
@@ -976,7 +1270,9 @@ const GuestList = () => {
               </p>
             </div>
           ) : (
-            <div className="overflow-x-auto rounded-2xl border border-border/50 bg-card shadow-sm">
+            <>
+            {/* Tablet & desktop: table */}
+            <div className="hidden md:block overflow-x-auto rounded-2xl border border-border/50 bg-card shadow-sm">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border/60 bg-muted/30">
@@ -1010,6 +1306,27 @@ const GuestList = () => {
                 </p>
               </div>
             </div>
+
+            {/* Phones: one card per guest */}
+            <div className="md:hidden">
+              <ul className="space-y-3" aria-label="Guests">
+                {filtered.map(g => (
+                  <GuestCard
+                    key={g.inviteeId}
+                    guest={g}
+                    onDelete={handleDeleteGuest}
+                    invitation={invitation}
+                    deleting={deletingId === g.inviteeId}
+                    onCopyLink={handleCopyLink}
+                  />
+                ))}
+              </ul>
+              <p className="text-xs text-muted-foreground mt-3 px-1">
+                Showing {filtered.length} of {total} invitations
+                {statusFilter !== "All" && ` · Filtered by: ${statusFilter}`}
+              </p>
+            </div>
+            </>
           )}
         </div>
       </main>

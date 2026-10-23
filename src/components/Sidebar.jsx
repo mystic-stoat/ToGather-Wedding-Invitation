@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import {
   LayoutDashboard, Heart, Users, MapPin,
-  CalendarCheck, Mail, Smartphone, ChevronRight,
+  Smartphone, ChevronRight,
   LogOut
 } from "lucide-react";
 import Logo from "@/assets/logo.svg";
@@ -75,8 +75,6 @@ const Sidebar = ({ invitation, onLogout, variant = "desktop", onNavigate }) => {
         <div>
           <p className="text-[10px] font-medium text-sidebar-muted-foreground uppercase tracking-wider px-2.5 mb-1.5">Invitations</p>
           <div className="space-y-0.5">
-            <NavItem to="/dashboard"         icon={CalendarCheck} label="Save the Date"     active={location.pathname === "/save-the-date"}/>
-            <NavItem to="/dashboard"         icon={Mail}          label="Paper Invitations" active={location.pathname === "/paper-invitation"}/>
             <NavItem to="/create-invitation" icon={Smartphone}    label="Mobile Invitation" active={location.pathname === "/create-invitation"}/>
           </div>
         </div>

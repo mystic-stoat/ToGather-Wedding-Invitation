@@ -17,16 +17,38 @@ import {
   sendUserMessage,
   retryUserMessage,
   clearMessages,
+  subscribeToPendingProposals,
+  decideProposal,
   messageText,
 } from "@/lib/firestore";
 import Sidebar from "@/components/Sidebar";
+import MobileNav from "@/components/MobileNav";
+import PublishedInvitationBanner from "@/components/PublishedInvitationBanner";
 import { useNavigate } from "react-router-dom";
 import ChatBubble from "@/components/ChatBubble";
+import ProposalCard from "@/components/ProposalCard";
+import { CHILDREN_POLICY_LABELS } from "@/lib/rsvpOptions";
 
 // Optional starter prompts. Leave empty for now: nothing renders when empty.
 // If you add strings here later, each one shows up as a button that sends
 // that text as a normal message, exactly as if the user had typed it.
 const STARTER_PROMPTS = [];
+
+// Formats names stored as either strings or structured name objects.
+const formatName = (name) => {
+  if (!name) return "";
+  if (typeof name === "string") return name.trim();
+
+  return [name.first, name.middle, name.last]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+};
+
+// Short text for a list field (meals, travel, registries); "" when empty so
+// the detail is hidden like any other blank one.
+const formatList = (items, formatItem) =>
+  Array.isArray(items) ? items.map(formatItem).join("; ") : "";
 
 const WeddingAssistant = () => {
   const { user, logout } = useAuth();
@@ -38,7 +60,12 @@ const WeddingAssistant = () => {
   const [chatLoaded, setChatLoaded] = useState(false);
   const [error, setError] = useState(null);
   const [message, setMessage] = useState("");
+  // changes the assistant proposed that the couple hasn't answered yet
+  const [proposals, setProposals] = useState([]);
+  const [deciding, setDeciding] = useState(false);
   const bottomRef = useRef(null);
+  // the scrollable chat history box (scrolled directly, see effect below)
+  const chatScrollRef = useRef(null);
 
   // page state
   const [loading, setLoading] = useState(true);
@@ -70,13 +97,26 @@ const WeddingAssistant = () => {
       }
     );
 
+    // proposals waiting for Accept / Reject
+    const unsubscribeProposals = subscribeToPendingProposals(
+      user.uid,
+      setProposals,
+      (err) => console.error("proposals listener error", err)
+    );
+
     // stop listening when the page unmounts or the user changes
-    return unsubscribe;
+    return () => {
+      unsubscribe();
+      unsubscribeProposals();
+    };
   }, [user]);
 
   // keep the newest message in view
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    // Scroll only the chat box. scrollIntoView() would also scroll the whole
+    // page on phones/tablets, where the layout stacks and the page scrolls.
+    const box = chatScrollRef.current;
+    if (box) box.scrollTo?.({ top: box.scrollHeight, behavior: "smooth" });
   }, [messages, replyPending]);
 
   const loadData = async () => {
@@ -129,6 +169,26 @@ const WeddingAssistant = () => {
     }
   };
 
+  // Accept / Reject. Not a chat message: the assistant hears about it on its
+  // next turn. The card disappears on its own when the listener sees the change.
+  const handleDecide = async (proposalId, decision) => {
+    setError(null);
+    setDeciding(true);
+    try {
+      const action = await decideProposal(user.uid, proposalId, decision);
+      if (action === "stale") {
+        setError("That detail was changed after the suggestion, so nothing was applied.");
+      } else if (decision === "accept") {
+        loadData(); // refresh the invitation behind the page
+      }
+    } catch (err) {
+      console.error("decide proposal error", err);
+      setError("Couldn't save your answer. Please try again.");
+    } finally {
+      setDeciding(false);
+    }
+  };
+
   // wipes every saved message; the listener then empties the screen on its own
   const handleClearChat = async () => {
     try {
@@ -163,15 +223,23 @@ const WeddingAssistant = () => {
   );
 
   return (
-    <div className="h-screen bg-background flex overflow-hidden">
+    // Desktop (lg+): fixed-height app shell; chat scrolls inside its card.
+    // Tablet/phone: the page scrolls and the review panel stacks under the chat.
+    <div className="min-h-screen lg:h-screen bg-background flex lg:overflow-hidden">
       {/* sidebar to integrate with the rest of the web app */}
       <Sidebar invitation={invitation} onLogout={handleLogout} />
 
       {/* Main chat bot and review columns */}
-      <main className="flex-1 min-w-0 min-h-0 px-6 lg:px-10 py-8">
-        <div className="max-w-6xl mx-auto h-full flex gap-6">
-          {/* Conversation section */}
-          <div className="flex-1 min-w-0 min-h-0 bg-card rounded-2xl shadow-xl shadow-foreground/5 border border-border/40 p-8 sm:p-10 flex flex-col">
+      <main className="flex-1 min-w-0 lg:min-h-0 flex flex-col">
+        {/* Mobile / tablet top bar with the navigation drawer (below lg) */}
+        <MobileNav invitation={invitation} onLogout={handleLogout} />
+
+        <div className="flex-1 lg:min-h-0 px-4 sm:px-6 lg:px-10 py-6 sm:py-8">
+        <div className="max-w-6xl mx-auto h-full flex flex-col lg:flex-row gap-6">
+          {/* Conversation section: a fixed 75vh card on phones/tablets (flex-none,
+              so flex-1 can't stretch it to the whole history) so the chat
+              scrolls inside it and the composer stays on screen */}
+          <div className="h-[75vh] flex-none lg:flex-1 lg:h-auto min-w-0 min-h-0 bg-card rounded-2xl shadow-xl shadow-foreground/5 border border-border/40 p-5 sm:p-10 flex flex-col">
             {/* Section header */}
             <div className="flex mb-6">
               <h1 className="font-heading-3 text-2xl font-semibold text-foreground">
@@ -187,8 +255,13 @@ const WeddingAssistant = () => {
               </button>
             </div>
 
+            {/* Published warning — sits between the header and the scrollable
+                history so it stays on screen without covering messages or
+                the composer; the chat box below simply gets a little shorter. */}
+            <PublishedInvitationBanner isPublished={invitation?.isPublished} className="flex-shrink-0 mb-4" />
+
             {/* chat section */}
-            <div className="flex-1 overflow-y-auto min-h-0 mb-6 pr-4 space-y-5">
+            <div ref={chatScrollRef} className="flex-1 overflow-y-auto min-h-0 mb-6 pr-4 space-y-5">
 
               {/* Greeting (UI only, not saved to the conversation) */}
               <ChatBubble
@@ -218,6 +291,16 @@ const WeddingAssistant = () => {
                   key={msg.id}
                   message={messageText(msg)}
                   isUser={msg.role === "user"}
+                />
+              ))}
+
+              {/* Changes the assistant proposed: nothing applies until Accept */}
+              {proposals.map((proposal) => (
+                <ProposalCard
+                  key={proposal.id}
+                  proposal={proposal}
+                  busy={deciding}
+                  onDecide={handleDecide}
                 />
               ))}
 
@@ -262,7 +345,7 @@ const WeddingAssistant = () => {
                 }}
                 disabled={replyPending || !chatLoaded}
                 placeholder="Message your wedding assistant..."
-                className="flex-1 bg-transparent outline-none py-2"
+                className="flex-1 min-w-0 bg-transparent outline-none py-2"
               />
 
               {/* Voice button - UI only for now */}
@@ -289,14 +372,128 @@ const WeddingAssistant = () => {
           </div>
 
           {/*Review Changes Column*/}
-          <div className="w-96 shrink-0 self-start max-h-full overflow-y-auto bg-card rounded-2xl shadow-xl shadow-foreground/5 border border-border/40 p-8 sm:p-10 space-y-6">
+          <div className="w-full lg:w-96 shrink-0 lg:self-start lg:max-h-full lg:overflow-y-auto bg-card rounded-2xl shadow-xl shadow-foreground/5 border border-border/40 p-5 sm:p-10 space-y-6">
             <h2 className="text-xl font-semibold text-foreground">Wedding Details</h2>
 
-            {/* Status cards go here */}
-            <StatusCard label="Date" />
-            <StatusCard label="Location" />
-            <StatusCard label="Time" />
+            {/* Display saved wedding details that the AI can update */}
+            {loading ? (
+              <p className="text-sm text-muted-foreground">
+                Loading wedding details...
+              </p>
+            ) : !invitation ? (
+              <p className="text-sm text-muted-foreground">
+                No wedding details found. Add your wedding details to get started.
+              </p>
+            ) : (
+              (() => {
+                const details = [
+                  {
+                    label: "Groom",
+                    value: formatName(invitation.groomName),
+                  },
+                  {
+                    label: "Bride",
+                    value: formatName(invitation.brideName),
+                  },
+                  {
+                    label: "Wedding Date",
+                    value: invitation.weddingDate,
+                  },
+                  {
+                    label: "Ceremony Time",
+                    value: invitation.ceremonyTime,
+                  },
+                  {
+                    label: "Ceremony Venue",
+                    value: invitation.venueName,
+                  },
+                  {
+                    label: "Reception Venue",
+                    value: invitation.receptionName,
+                  },
+                  {
+                    label: "RSVP Deadline",
+                    value: invitation.inviteDeadline,
+                  },
+                  {
+                    label: "Ceremony Address",
+                    value: invitation.venueAddress,
+                  },
+                  {
+                    label: "Reception Address",
+                    value: invitation.receptionAddress,
+                  },
+                  {
+                    label: "Children Policy",
+                    value: CHILDREN_POLICY_LABELS[invitation.childrenPolicy],
+                  },
+                  {
+                    label: "Greeting Title",
+                    value: invitation.greetingTitle,
+                  },
+                  {
+                    label: "Greeting Message",
+                    value: invitation.greetingMessage,
+                  },
+                  {
+                    label: "Primary Color",
+                    value: invitation.colorPalette1,
+                  },
+                  {
+                    label: "Secondary Color",
+                    value: invitation.colorPalette2,
+                  },
+                  {
+                    label: "Heading Font",
+                    value: invitation.font1,
+                  },
+                  {
+                    label: "Body Font",
+                    value: invitation.font2,
+                  },
+                  {
+                    label: "Story Title",
+                    value: invitation.storyTitle,
+                  },
+                  {
+                    label: "Meal Options",
+                    value: formatList(invitation.mealOptions, (m) =>
+                      m.description ? `${m.name} (${m.description})` : m.name
+                    ),
+                  },
+                  {
+                    label: "Travel & Stay",
+                    value: formatList(
+                      invitation.travelItems,
+                      (t) => `${t.name} (${t.category})`
+                    ),
+                  },
+                  {
+                    label: "Gift Registries",
+                    value: formatList(
+                      invitation.registries,
+                      (r) => `${r.name}${r.isVisible === false ? " (hidden)" : ""}`
+                    ),
+                  },
+                ].map((detail) => {
+                  const isSet =
+                    typeof detail.value === "string" &&
+                    detail.value.trim() !== "";
+                  return { ...detail, value: isSet ? detail.value : "Not set", isSet };
+                });
+
+                return details.map((detail) => (
+                  <StatusCard
+                    key={detail.label}
+                    label={detail.label}
+                    value={detail.value}
+                    isComplete={detail.isSet}
+                  />
+                ));
+              })()
+            )}
           </div>
+        </div>
         </div>
       </main>
     </div>

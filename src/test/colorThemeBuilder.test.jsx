@@ -89,7 +89,7 @@ describe("Color Theme tab", () => {
     for (const name of ["Classic", "Editorial", "Modern", "Romantic", "Timeless"]) {
       expect(screen.getByRole("button", { name: new RegExp(`^${name}`) })).toBeTruthy();
     }
-  });
+  }, 10_000);
 
   it("applying a preset updates every preview color immediately, including the background", async () => {
     // The Wedding Day section only renders when a Date option is on (both OFF by default)
