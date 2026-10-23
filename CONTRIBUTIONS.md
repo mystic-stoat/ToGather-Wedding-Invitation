@@ -33,18 +33,17 @@ Colten Mikulastik:
 * Created evaluation environment for the Wedding Assistant,
 * created rule based evaluations for the wedding assistant, dialouge and tool use evaluations
 * created LLM based evaluations for hte wedding assistant, dialouge and tool use evaluations
+* fixed bug relating to issues with invitation documents being lazily created.
 
 
 Keiran Indraanei:
 
-- Created the Forgot Password page and password reset
-  interface
-- Integrated the existing Firebase password reset functionality into the Forgot Password workflow
-- Created the initial AI Wedding Assistant chat interface
-- Added the Wedding Assistant as a protected application route
-- Implemented section selection and a guided Wedding Details conversation flow
-- Added message input, conversation history, and completion response functionality
-
+- Developed the Forgot Password page and integrated Firebase Authentication password reset functionality.
+- Created the initial AI Wedding Assistant chat interface, including the protected route and guided Wedding Details conversation flow.
+- Updated the Wedding Details form to improve validation, saving behavior, and error handling (PR #61).
+- Integrated saved Wedding Details data from Firestore into the AI Wedding Assistant sidebar.
+- Replaced placeholder information with dynamically displayed wedding details, including couple names, wedding date, ceremony time, venue information, and RSVP deadline.
+- Added loading and empty-state handling for the Wedding Assistant's Wedding Details display.
 
 
 Christopher Nguyen:
