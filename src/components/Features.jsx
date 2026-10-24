@@ -1,25 +1,35 @@
 import { Smartphone, Users, Send, CalendarHeart, Sparkles } from "lucide-react";
 import ScrollReveal from "./ScrollReveal";
+import mobileFirstImage from "../assets/mobile-first-wedding-invitation.png";
+import smartGuestListImage from "../assets/smart-guest-list.png";
+import rsvpImage from "../assets/frictionless-rsvp-wedding-invitation.png";
+import singleSourceImage from "../assets/single-source-of-truth-workspace.png";
+import personalizationImage from "../assets/personalized-wedding-planning.png";
 const features = [{
   icon: Smartphone,
   title: "Mobile First",
-  desc: "Design a personalized invitation, create an all-in-one registry, and experience wedding planning the way it should be."
+  desc: "Design a personalized invitation, create an all-in-one registry, and experience wedding planning the way it should be.",
+  image: mobileFirstImage
 }, {
   icon: Users,
   title: "Smart Guest List",
-  desc: "Design a personalized invitation, create an all-in-one registry, and experience wedding planning the way it should be."
+  desc: "Design a personalized invitation, create an all-in-one registry, and experience wedding planning the way it should be.",
+  image: smartGuestListImage
 }, {
   icon: Send,
   title: "Frictionless RSVP",
-  desc: "Design a personalized invitation, create an all-in-one registry, and experience wedding planning the way it should be."
+  desc: "Design a personalized invitation, create an all-in-one registry, and experience wedding planning the way it should be.",
+  image: rsvpImage
 }, {
   icon: CalendarHeart,
   title: "Single Source of Truth",
-  desc: "Calendar integration — all event info to your default app."
+  desc: "Calendar integration — all event info to your default app.",
+  image: singleSourceImage
 }, {
   icon: Sparkles,
   title: "Personalization",
-  desc: "Design a personalized invitation, create an all-in-one registry, and experience wedding planning the way it should be."
+  desc: "Design a personalized invitation, create an all-in-one registry, and experience wedding planning the way it should be.",
+  image: personalizationImage
 }];
 const Features = () => <section id="features" className="py-24 md:py-32">
     <div className="container mx-auto px-6">
@@ -42,7 +52,16 @@ const Features = () => <section id="features" className="py-24 md:py-32">
                 <h3 className="font-heading text-2xl md:text-3xl font-semibold text-foreground">{f.title}</h3>
                 <p className="text-muted-foreground max-w-md text-pretty">{f.desc}</p>
               </div>
-              <div className="flex-1 w-full aspect-[4/3] rounded-2xl bg-card shadow-lg border border-border/50" />
+              <div className="flex-1 w-full aspect-[4/3] rounded-2xl bg-card shadow-lg border border-border/50 overflow-hidden">
+                {f.image && (
+                  <img
+                    src={f.image}
+                    alt={`${f.title} feature`}
+                    className="w-full h-full object-cover"
+                    loading="lazy"
+                  />
+                )}
+              </div>
             </div>
           </ScrollReveal>)}
       </div>
