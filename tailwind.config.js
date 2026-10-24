@@ -82,6 +82,15 @@ export default {
           DEFAULT:    "hsl(var(--card))",           // warm cream card background
           foreground: "hsl(var(--card-foreground))",
         },
+        // RSVP status colors (semantic): bg-status-accepted-bg text-status-accepted …
+        status: {
+          accepted:      "hsl(var(--status-accepted))",
+          "accepted-bg": "hsl(var(--status-accepted-bg))",
+          declined:      "hsl(var(--status-declined))",
+          "declined-bg": "hsl(var(--status-declined-bg))",
+          pending:       "hsl(var(--status-pending))",
+          "pending-bg":  "hsl(var(--status-pending-bg))",
+        },
         sidebar: {
           DEFAULT:              "hsl(var(--sidebar-background))",
           foreground:           "hsl(var(--sidebar-foreground))",

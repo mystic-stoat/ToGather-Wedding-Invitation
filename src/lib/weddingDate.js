@@ -28,20 +28,28 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ── Date tab settings (stored as flat booleans on the invitation doc) ────────
-export const DATE_SETTING_FIELDS = ["dateShowCalendar", "dateShowCountdown"];
+export const DATE_SETTING_FIELDS = ["dateShowCalendar", "dateShowCountdown", "dateShowAddToCalendar"];
 
-/** Both options are OFF unless explicitly saved as `true` (older docs have neither). */
+/**
+ * Calendar View and Countdown are OFF unless explicitly saved as `true`.
+ * Add to Calendar is ON unless explicitly saved as `false`, so existing
+ * invitations (which have no such field) keep showing the Save the Date button.
+ */
 export const normalizeDateSettings = (source = {}) => ({
-  dateShowCalendar:  source?.dateShowCalendar === true,
-  dateShowCountdown: source?.dateShowCountdown === true,
+  dateShowCalendar:      source?.dateShowCalendar === true,
+  dateShowCountdown:     source?.dateShowCountdown === true,
+  dateShowAddToCalendar: source?.dateShowAddToCalendar !== false,
 });
 
 export const DEFAULT_DATE_SETTINGS = normalizeDateSettings({});
 
-/** The Wedding Day section appears only when at least one option is on. */
+/**
+ * The Wedding Day section appears when ANY of the three options is on
+ * (Calendar View, Countdown, Add to Calendar), and is hidden when all are off.
+ */
 export const shouldShowWeddingDaySection = (settings = {}) => {
   const s = normalizeDateSettings(settings);
-  return s.dateShowCalendar || s.dateShowCountdown;
+  return s.dateShowCalendar || s.dateShowCountdown || s.dateShowAddToCalendar;
 };
 
 // ── Calendar math ─────────────────────────────────────────────────────────────

@@ -55,6 +55,10 @@ const calendar = () => within(preview()).queryByTestId("wedding-calendar");
 const countdown = () => within(preview()).queryByTestId("wedding-countdown");
 const calendarSwitch = () => screen.getByRole("switch", { name: "Show Calendar View" });
 const countdownSwitch = () => screen.getByRole("switch", { name: "Show Countdown" });
+const addToCalendarSwitch = () => screen.getByRole("switch", { name: "Show Add to Calendar" });
+const previewHeader = () => preview().querySelector('[data-section="header"]');
+// The non-functional "Add to calendar" placeholder under the preview's date line
+const previewAddToCalendar = () => within(preview()).queryByTestId("preview-add-to-calendar");
 const openDateTab = () => screen.findByRole("switch", { name: "Show Calendar View" });
 const clickSave = () => fireEvent.click(screen.getAllByText(/^Save$/)[0]);
 const lastSaved = () => fs.saveInvitation.mock.calls.at(-1)[1];
@@ -77,17 +81,25 @@ describe("Date tab — Calendar View and Countdown", () => {
     vi.useRealTimers();
   });
 
-  it("offers only Calendar View and Countdown, both OFF by default, with no Wedding Day section", async () => {
+  it("offers Calendar View, Countdown and Add to Calendar (in that order); only Add to Calendar is ON by default", async () => {
     fs.getInvitationByUser.mockResolvedValue({ ...BASE });
     renderBuilder();
     await openDateTab();
 
     expect(screen.queryByText("Text View")).toBeNull();
     expect(screen.getAllByRole("switch").map(s => s.getAttribute("aria-label")))
-      .toEqual(["Show Calendar View", "Show Countdown"]);
+      .toEqual(["Show Calendar View", "Show Countdown", "Show Add to Calendar"]);
     expect(calendarSwitch()).toHaveAttribute("aria-checked", "false");
     expect(countdownSwitch()).toHaveAttribute("aria-checked", "false");
-    expect(weddingDay()).toBeNull();
+    expect(addToCalendarSwitch()).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByText(
+      "Allow guests to save the wedding date to Google Calendar or download an .ics file.")).toBeTruthy();
+    // Add to Calendar alone: a Wedding Day section with the date and the button only
+    expect(weddingDay()).toBeTruthy();
+    expect(calendar()).toBeNull();
+    expect(countdown()).toBeNull();
+    expect(within(weddingDay()).getByText("June 20, 2026 · 2:30 PM")).toBeTruthy();
+    expect(weddingDay().contains(previewAddToCalendar())).toBe(true);
 
     // The hero date under the couple's names is always shown
     const hero = preview().querySelector('[data-section="header"]');
@@ -103,18 +115,21 @@ describe("Date tab — Calendar View and Countdown", () => {
     expect(screen.getByRole("link", { name: "Wedding Details" })).toHaveAttribute("href", "/wedding-details");
   });
 
-  it("an older invitation without date settings loads OFF and saves false without touching other settings", async () => {
+  it("an older invitation without date settings loads Calendar/Countdown OFF, Add to Calendar ON, and saves them without touching other settings", async () => {
     fs.getInvitationByUser.mockResolvedValue({
       ...BASE, greetingTitle: "Hello there", musicShowOnInvitation: false,
       travelShowOnInvitation: false, storyTitle: "How we met", colorPalette1: "#1e3a5f",
     });
     renderBuilder();
     await openDateTab();
-    expect(weddingDay()).toBeNull();
+    expect(weddingDay()).toBeTruthy();         // Add to Calendar defaults ON
+    expect(calendar()).toBeNull();
+    expect(countdown()).toBeNull();
 
     const saved = await saveAndGet();
     expect(saved.dateShowCalendar).toBe(false);
     expect(saved.dateShowCountdown).toBe(false);
+    expect(saved.dateShowAddToCalendar).toBe(true);
     expect(saved.greetingTitle).toBe("Hello there");
     expect(saved.musicShowOnInvitation).toBe(false);
     expect(saved.travelShowOnInvitation).toBe(false);
@@ -147,8 +162,9 @@ describe("Date tab — Calendar View and Countdown", () => {
     expect(firstRow[1].textContent).toBe("1");
     expect(within(calendar()).queryByText("31")).toBeNull();
 
-    // Existing Add to calendar button stays in the section
+    // The Add to calendar placeholder is in this section (not the header)
     expect(within(weddingDay()).getByText("Add to calendar")).toBeTruthy();
+    expect(within(previewHeader()).queryByText("Add to calendar")).toBeNull();
     expect(within(weddingDay()).getByText("June 20, 2026 · 2:30 PM")).toBeTruthy();
 
     const saved = await saveAndGet();
@@ -184,7 +200,7 @@ describe("Date tab — Calendar View and Countdown", () => {
     expect(saved).toMatchObject({ dateShowCalendar: false, dateShowCountdown: true });
   });
 
-  it("both options together show calendar and countdown; turning both off removes the section live", async () => {
+  it("both options together show calendar and countdown; turning all three off removes the section live", async () => {
     fs.getInvitationByUser.mockResolvedValue({ ...BASE });
     renderBuilder();
     await openDateTab();
@@ -203,10 +219,16 @@ describe("Date tab — Calendar View and Countdown", () => {
     expect(calendar()).toBeNull();
     expect(countdown()).toBeTruthy();
     fireEvent.click(countdownSwitch());
+    // Add to Calendar is still ON, so the section stays (date + button only)
+    expect(weddingDay()).toBeTruthy();
+    expect(countdown()).toBeNull();
+    fireEvent.click(addToCalendarSwitch());
     expect(weddingDay()).toBeNull();
 
     saved = await saveAndGet();
-    expect(saved).toMatchObject({ dateShowCalendar: false, dateShowCountdown: false });
+    expect(saved).toMatchObject({
+      dateShowCalendar: false, dateShowCountdown: false, dateShowAddToCalendar: false,
+    });
   });
 
   it("restores saved settings on reload", async () => {
@@ -247,7 +269,9 @@ describe("Date tab — Calendar View and Countdown", () => {
     renderBuilder();
     await openDateTab();
     expect(calendarSwitch()).toHaveAttribute("aria-checked", "false");
-    expect(weddingDay()).toBeNull();
+    expect(countdownSwitch()).toHaveAttribute("aria-checked", "false");
+    expect(calendar()).toBeNull();
+    expect(countdown()).toBeNull();
   });
 
   it("does not write date settings when the invitation failed to load", async () => {
@@ -258,6 +282,7 @@ describe("Date tab — Calendar View and Countdown", () => {
     const saved = await saveAndGet();
     expect(saved).not.toHaveProperty("dateShowCalendar");
     expect(saved).not.toHaveProperty("dateShowCountdown");
+    expect(saved).not.toHaveProperty("dateShowAddToCalendar");
     console.error.mockRestore();
   });
 
@@ -276,7 +301,9 @@ describe("Date tab — Calendar View and Countdown", () => {
       .toBe("The wedding date hasn't been set yet.");
     expect(calendar()).toBeNull();
     expect(countdown()).toBeNull();
-    expect(within(weddingDay()).getByText("Add to calendar")).toBeTruthy();
+    // Preview placeholder still shows (in the header) — the builder preview
+    // uses placeholders until the couple fills in Wedding Details.
+    expect(previewAddToCalendar()).toBeTruthy();
   });
 
   it("shows a missing-date message with no invitation at all (new host)", async () => {
@@ -348,7 +375,7 @@ describe("Date tab — Calendar View and Countdown", () => {
     expect(heading.style.color).toBe(heroHeading.style.color);
 
     // Highlighted day and countdown numbers follow the theme (button + heading colors)
-    const addBtn = within(weddingDay()).getByText("Add to calendar");
+    const addBtn = previewAddToCalendar();
     const dayCell = calendar().querySelector('[data-wedding-day="true"]');
     expect(dayCell.style.backgroundColor).toBe(addBtn.style.backgroundColor);
     expect(within(countdown()).getByTestId("countdown-days").style.fontFamily).toBe(heroHeading.style.fontFamily);
@@ -364,5 +391,145 @@ describe("Date tab — Calendar View and Countdown", () => {
     for (const id of ["header", "greetings", "date", "venue", "rsvp", "closure"]) {
       expect(preview().querySelector(`[data-section="${id}"]`)).toBeTruthy();
     }
+  });
+});
+
+describe("Date tab — Add to Calendar", () => {
+  beforeEach(() => {
+    cleanup();
+    fs.getInvitationByUser.mockReset();
+    fs.saveInvitation.mockClear();
+    vi.stubGlobal("alert", vi.fn());
+  });
+
+  it("sits directly below Countdown with the same switch design", async () => {
+    fs.getInvitationByUser.mockResolvedValue({ ...BASE });
+    renderBuilder();
+    await openDateTab();
+    const switches = screen.getAllByRole("switch");
+    expect(switches.indexOf(addToCalendarSwitch())).toBe(switches.indexOf(countdownSwitch()) + 1);
+    expect(addToCalendarSwitch().className).toBe(countdownSwitch().className);
+    expect(addToCalendarSwitch().style.backgroundColor).toBe(rgb(BUILDER_UI.primary)); // ON
+    expect(within(addToCalendarSwitch().parentElement).getByText("Add to Calendar")).toBeTruthy();
+  });
+
+  it("with Calendar View and Countdown OFF, toggles the Wedding Day section and its placeholder live", async () => {
+    fs.getInvitationByUser.mockResolvedValue({ ...BASE });
+    renderBuilder();
+    await openDateTab();
+
+    expect(weddingDay()).toBeTruthy();
+    expect(weddingDay().contains(previewAddToCalendar())).toBe(true);
+    expect(previewHeader().contains(previewAddToCalendar())).toBe(false);
+
+    fireEvent.click(addToCalendarSwitch());
+    expect(addToCalendarSwitch()).toHaveAttribute("aria-checked", "false");
+    expect(previewAddToCalendar()).toBeNull();
+    expect(weddingDay()).toBeNull();               // all three OFF → no section
+    expect(within(preview()).queryByText("Add to calendar")).toBeNull();
+
+    fireEvent.click(addToCalendarSwitch());
+    expect(addToCalendarSwitch()).toHaveAttribute("aria-checked", "true");
+    expect(weddingDay()).toBeTruthy();
+    expect(previewAddToCalendar()).toBeTruthy();
+  });
+
+  it("orders the section like the Date tab: calendar, countdown, date line, then Add to Calendar", async () => {
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "Date"] });
+    vi.setSystemTime(new Date(2026, 0, 1, 9, 0, 0));
+    fs.getInvitationByUser.mockResolvedValue({ ...BASE, dateShowCalendar: true, dateShowCountdown: true });
+    renderBuilder();
+    await openDateTab();
+    const order = [calendar(), countdown(),
+      within(weddingDay()).getByText("June 20, 2026 · 2:30 PM"), previewAddToCalendar()];
+    for (let i = 1; i < order.length; i++) {
+      expect(order[i - 1].compareDocumentPosition(order[i]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    }
+    expect(previewAddToCalendar()).toBe(weddingDay().querySelector("button:last-of-type"));
+    vi.useRealTimers();
+  });
+
+  it.each([
+    [false, false, false, false],
+    [true,  false, false, true],
+    [false, true,  false, true],
+    [false, false, true,  true],
+    [true,  true,  true,  true],
+  ])("calendar=%s countdown=%s addToCalendar=%s → section shown: %s (each part independent)",
+    async (cal, cd, atc, shown) => {
+      fs.getInvitationByUser.mockResolvedValue({
+        ...BASE, dateShowCalendar: cal, dateShowCountdown: cd, dateShowAddToCalendar: atc,
+      });
+      renderBuilder();
+      await openDateTab();
+      expect(Boolean(weddingDay())).toBe(shown);
+      expect(Boolean(calendar())).toBe(cal);
+      expect(Boolean(countdown())).toBe(cd);
+      expect(Boolean(previewAddToCalendar())).toBe(atc);
+    });
+
+  it("keeps the preview placeholder non-functional", async () => {
+    fs.getInvitationByUser.mockResolvedValue({ ...BASE });
+    renderBuilder();
+    await openDateTab();
+    const btn = previewAddToCalendar();
+    expect(btn.tagName).toBe("BUTTON");
+    expect(btn).toHaveAttribute("aria-disabled", "true");
+    fireEvent.click(btn);
+    expect(within(preview()).queryByTestId("save-the-date-options")).toBeNull();
+    expect(within(preview()).queryByText("Google Calendar")).toBeNull();
+    expect(preview().querySelector('a[href*="calendar.google.com"]')).toBeNull();
+  });
+
+  it("is independent of Calendar View / Countdown", async () => {
+    fs.getInvitationByUser.mockResolvedValue({ ...BASE, dateShowCalendar: true, dateShowCountdown: true });
+    renderBuilder();
+    await openDateTab();
+    fireEvent.click(addToCalendarSwitch());
+    expect(previewAddToCalendar()).toBeNull();
+    expect(calendar()).toBeTruthy();
+    expect(countdown()).toBeTruthy();
+    expect(calendarSwitch()).toHaveAttribute("aria-checked", "true");
+    expect(countdownSwitch()).toHaveAttribute("aria-checked", "true");
+  });
+
+  it("saves OFF as false, and loads it back OFF after reload", async () => {
+    fs.getInvitationByUser.mockResolvedValue({ ...BASE });
+    renderBuilder();
+    await openDateTab();
+    fireEvent.click(addToCalendarSwitch());
+    const saved = await saveAndGet();
+    expect(saved).toMatchObject({
+      dateShowCalendar: false, dateShowCountdown: false, dateShowAddToCalendar: false,
+    });
+    expect(saved).not.toHaveProperty("isPublished");
+
+    cleanup();
+    fs.getInvitationByUser.mockResolvedValue({ ...BASE, ...saved, weddingId: "w1", isPublished: true });
+    renderBuilder();
+    await openDateTab();
+    expect(addToCalendarSwitch()).toHaveAttribute("aria-checked", "false");
+    expect(previewAddToCalendar()).toBeNull();
+
+    // Turning it back ON on a published invitation saves true
+    fireEvent.click(addToCalendarSwitch());
+    expect(previewAddToCalendar()).toBeTruthy();
+    const resaved = await saveAndGet();
+    expect(resaved.dateShowAddToCalendar).toBe(true);
+    expect(resaved).not.toHaveProperty("isPublished");
+  });
+
+  it("loads a saved true as ON and treats non-boolean stored values as ON", async () => {
+    fs.getInvitationByUser.mockResolvedValue({ ...BASE, dateShowAddToCalendar: true });
+    renderBuilder();
+    await openDateTab();
+    expect(addToCalendarSwitch()).toHaveAttribute("aria-checked", "true");
+
+    cleanup();
+    fs.getInvitationByUser.mockResolvedValue({ ...BASE, dateShowAddToCalendar: "false" });
+    renderBuilder();
+    await openDateTab();
+    expect(addToCalendarSwitch()).toHaveAttribute("aria-checked", "true");
+    expect(previewAddToCalendar()).toBeTruthy();
   });
 });

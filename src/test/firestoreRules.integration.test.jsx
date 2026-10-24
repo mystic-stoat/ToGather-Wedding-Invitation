@@ -1346,6 +1346,332 @@ describe('children policy and meal options', () => {
  * ============================================================
  */
 
+describe('wedding assistant proposals', () => {
+  const path = 'betrothed/alice-uid/proposals/p1';
+  const pending = {
+    field: 'venueName',
+    oldValue: null,
+    newValue: 'The Barn',
+    reason: 'they said so',
+    status: 'pending',
+    messageId: 'm1',
+    weddingId: 'wedding-alice',
+    decidedAt: null,
+  };
+
+  const seedProposal = (data = pending) =>
+    seed((context) => setDoc(doc(context.firestore(), path), data));
+
+  it('lets the owner read their own proposal, not someone else\'s', async () => {
+    await seedProposal();
+    await assertSucceeds(
+      getDoc(doc(testEnv.authenticatedContext('alice-uid').firestore(), path))
+    );
+    await assertFails(
+      getDoc(doc(testEnv.authenticatedContext('bob-uid').firestore(), path))
+    );
+  });
+
+  it('never lets the client create or delete a proposal', async () => {
+    const alice = testEnv.authenticatedContext('alice-uid').firestore();
+    await assertFails(setDoc(doc(alice, 'betrothed/alice-uid/proposals/p2'), pending));
+    await seedProposal();
+    await assertFails(deleteDoc(doc(alice, path)));
+  });
+
+  it('lets the owner accept or reject a pending proposal', async () => {
+    await seedProposal();
+    const alice = testEnv.authenticatedContext('alice-uid').firestore();
+    await assertSucceeds(
+      updateDoc(doc(alice, path), { status: 'accepted', decidedAt: serverTimestamp() })
+    );
+  });
+
+  it('rejects changing anything except status and decidedAt', async () => {
+    await seedProposal();
+    const alice = testEnv.authenticatedContext('alice-uid').firestore();
+    await assertFails(
+      updateDoc(doc(alice, path), {
+        status: 'accepted', decidedAt: serverTimestamp(), newValue: 'Somewhere Else',
+      })
+    );
+  });
+
+  it('rejects a made-up status', async () => {
+    await seedProposal();
+    const alice = testEnv.authenticatedContext('alice-uid').firestore();
+    await assertFails(
+      updateDoc(doc(alice, path), { status: 'pending', decidedAt: serverTimestamp() })
+    );
+    await assertFails(
+      updateDoc(doc(alice, path), { status: 'superseded', decidedAt: serverTimestamp() })
+    );
+  });
+
+  it('rejects deciding a proposal that is already decided', async () => {
+    await seedProposal({ ...pending, status: 'rejected' });
+    const alice = testEnv.authenticatedContext('alice-uid').firestore();
+    await assertFails(
+      updateDoc(doc(alice, path), { status: 'accepted', decidedAt: serverTimestamp() })
+    );
+  });
+
+  it('rejects another user deciding it', async () => {
+    await seedProposal();
+    const bob = testEnv.authenticatedContext('bob-uid').firestore();
+    await assertFails(
+      updateDoc(doc(bob, path), { status: 'accepted', decidedAt: serverTimestamp() })
+    );
+  });
+});
+
+describe('wedding assistant proposals: access and edge cases', () => {
+  const pending = {
+    field: 'venueName',
+    oldValue: null,
+    newValue: 'The Barn',
+    reason: 'they said so',
+    status: 'pending',
+    messageId: 'm1',
+    weddingId: 'wedding-alice',
+    decidedAt: null,
+  };
+  const aliceProposal = 'betrothed/alice-uid/proposals/p1';
+  const bobProposal = 'betrothed/bob-uid/proposals/p1';
+
+  beforeEach(async () => {
+    await seed(async (context) => {
+      const db = context.firestore();
+      await setDoc(doc(db, 'invitations/wedding-alice'), invitationAlice);
+      await setDoc(doc(db, 'invitee/invitee-alice'), inviteeAlice);
+      await setDoc(doc(db, aliceProposal), pending);
+      await setDoc(doc(db, bobProposal), {
+        ...pending, newValue: 'Bob Hall', weddingId: 'wedding-bob',
+      });
+    });
+  });
+
+  it('lets each couple accept their own proposal but not the other couple\'s', async () => {
+    const alice = testEnv.authenticatedContext('alice-uid').firestore();
+    await assertSucceeds(
+      updateDoc(doc(alice, aliceProposal), { status: 'accepted', decidedAt: serverTimestamp() })
+    );
+    await assertFails(
+      updateDoc(doc(alice, bobProposal), { status: 'accepted', decidedAt: serverTimestamp() })
+    );
+    // Bob's proposal is untouched
+    await seed(async (context) => {
+      const snap = await getDoc(doc(context.firestore(), bobProposal));
+      expect(snap.data().status).toBe('pending');
+    });
+  });
+
+  it('lets the owner mark a proposal stale', async () => {
+    const alice = testEnv.authenticatedContext('alice-uid').firestore();
+    await assertSucceeds(
+      updateDoc(doc(alice, aliceProposal), { status: 'stale', decidedAt: serverTimestamp() })
+    );
+  });
+
+  it('rejects a decision whose decidedAt is not the server time', async () => {
+    const alice = testEnv.authenticatedContext('alice-uid').firestore();
+    await assertFails(
+      updateDoc(doc(alice, aliceProposal), { status: 'accepted', decidedAt: new Date(0) })
+    );
+    await assertFails(updateDoc(doc(alice, aliceProposal), { status: 'accepted' }));
+  });
+
+  it('rejects the owner editing the field, reason or ownership of a proposal', async () => {
+    const alice = testEnv.authenticatedContext('alice-uid').firestore();
+    for (const change of [
+      { field: 'venueAddress' },
+      { reason: 'rewritten' },
+      { weddingId: 'wedding-bob' },
+      { messageId: 'other' },
+    ]) {
+      await assertFails(
+        updateDoc(doc(alice, aliceProposal), {
+          status: 'accepted', decidedAt: serverTimestamp(), ...change,
+        })
+      );
+    }
+  });
+
+  it('lets the owner list their proposals but not another couple\'s', async () => {
+    const alice = testEnv.authenticatedContext('alice-uid').firestore();
+    await assertSucceeds(getDocs(collection(alice, 'betrothed/alice-uid/proposals')));
+    await assertFails(getDocs(collection(alice, 'betrothed/bob-uid/proposals')));
+  });
+
+  it('hides proposals from signed-out visitors', async () => {
+    const anon = testEnv.unauthenticatedContext().firestore();
+    await assertFails(getDoc(doc(anon, aliceProposal)));
+    await assertFails(getDocs(collection(anon, 'betrothed/alice-uid/proposals')));
+    await assertFails(
+      updateDoc(doc(anon, aliceProposal), { status: 'accepted', decidedAt: serverTimestamp() })
+    );
+  });
+
+  it('hides proposals from invitees, who have no couple account', async () => {
+    // A guest is either signed out or signed in under their own uid; neither
+    // matches the couple's uid.
+    for (const ctx of [
+      testEnv.unauthenticatedContext(),
+      testEnv.authenticatedContext('guest-uid'),
+    ]) {
+      const db = ctx.firestore();
+      await assertFails(getDoc(doc(db, aliceProposal)));
+      await assertFails(getDocs(collection(db, 'betrothed/alice-uid/proposals')));
+      await assertFails(
+        updateDoc(doc(db, aliceProposal), { status: 'accepted', decidedAt: serverTimestamp() })
+      );
+      await assertFails(deleteDoc(doc(db, aliceProposal)));
+    }
+  });
+
+  it('never lets anyone create a proposal, even in their own folder', async () => {
+    const alice = testEnv.authenticatedContext('alice-uid').firestore();
+    const anon = testEnv.unauthenticatedContext().firestore();
+    await assertFails(setDoc(doc(alice, 'betrothed/alice-uid/proposals/new'), pending));
+    await assertFails(setDoc(doc(alice, 'betrothed/bob-uid/proposals/new'), pending));
+    await assertFails(setDoc(doc(anon, 'betrothed/alice-uid/proposals/new'), pending));
+  });
+});
+
+
+/*
+ * ============================================================
+ * WEDDING ASSISTANT CONVERSATION HISTORY
+ * ============================================================
+ *   betrothed/{uid}/messages/{msgId}
+ *   The client may only create "user" messages in its own folder; replies
+ *   come from the Cloud Function (admin SDK). Nobody edits a message, and
+ *   only the owner reads or deletes (clears the chat).
+ */
+describe('wedding assistant conversation history', () => {
+  const msgPath = 'betrothed/alice-uid/messages/m1';
+  const replyPath = 'betrothed/alice-uid/messages/reply-m1';
+  const userMessage = (overrides = {}) => ({
+    role: 'user',
+    content: [{ type: 'text', text: 'Can we move the ceremony to 5pm?' }],
+    createdAt: serverTimestamp(),
+    status: 'pending',
+    ...overrides,
+  });
+
+  beforeEach(async () => {
+    await seed(async (context) => {
+      const db = context.firestore();
+      await setDoc(doc(db, 'invitations/wedding-alice'), invitationAlice);
+      await setDoc(doc(db, 'invitee/invitee-alice'), inviteeAlice);
+      await setDoc(doc(db, msgPath), { ...userMessage(), createdAt: new Date(), status: 'replied' });
+      await setDoc(doc(db, replyPath), {
+        role: 'assistant',
+        content: [{ type: 'text', text: 'Sure, I suggested it below.' }],
+        createdAt: new Date(),
+        status: 'complete',
+      });
+    });
+  });
+
+  it('lets the owner read and list their own conversation', async () => {
+    const alice = testEnv.authenticatedContext('alice-uid').firestore();
+    await assertSucceeds(getDoc(doc(alice, msgPath)));
+    await assertSucceeds(getDoc(doc(alice, replyPath)));
+    await assertSucceeds(getDocs(collection(alice, 'betrothed/alice-uid/messages')));
+  });
+
+  it('hides the conversation from other couples, invitees and signed-out visitors', async () => {
+    for (const ctx of [
+      testEnv.authenticatedContext('bob-uid'),
+      testEnv.authenticatedContext('guest-uid'),
+      testEnv.unauthenticatedContext(),
+    ]) {
+      const db = ctx.firestore();
+      await assertFails(getDoc(doc(db, msgPath)));
+      await assertFails(getDoc(doc(db, replyPath)));
+      await assertFails(getDocs(collection(db, 'betrothed/alice-uid/messages')));
+    }
+  });
+
+  it('lets the owner send a well-formed user message', async () => {
+    const alice = testEnv.authenticatedContext('alice-uid').firestore();
+    await assertSucceeds(setDoc(doc(alice, 'betrothed/alice-uid/messages/m2'), userMessage()));
+  });
+
+  it('rejects the owner forging an assistant message', async () => {
+    const alice = testEnv.authenticatedContext('alice-uid').firestore();
+    await assertFails(
+      setDoc(doc(alice, 'betrothed/alice-uid/messages/m2'), userMessage({ role: 'assistant' }))
+    );
+    await assertFails(
+      setDoc(doc(alice, 'betrothed/alice-uid/messages/m3'), userMessage({ status: 'complete' }))
+    );
+  });
+
+  it('rejects malformed user messages', async () => {
+    const alice = testEnv.authenticatedContext('alice-uid').firestore();
+    const path = 'betrothed/alice-uid/messages/bad';
+    await assertFails(setDoc(doc(alice, path), userMessage({ extra: 'field' })));
+    await assertFails(setDoc(doc(alice, path), userMessage({ createdAt: new Date(0) })));
+    await assertFails(
+      setDoc(doc(alice, path), userMessage({ content: [{ type: 'text', text: 'x'.repeat(4001) }] }))
+    );
+    await assertFails(
+      setDoc(doc(alice, path), userMessage({
+        content: [{ type: 'text', text: 'a' }, { type: 'text', text: 'b' }],
+      }))
+    );
+  });
+
+  it('rejects creating a message in someone else\'s conversation', async () => {
+    const bob = testEnv.authenticatedContext('bob-uid').firestore();
+    const guest = testEnv.authenticatedContext('guest-uid').firestore();
+    const anon = testEnv.unauthenticatedContext().firestore();
+    const path = 'betrothed/alice-uid/messages/m9';
+    await assertFails(setDoc(doc(bob, path), userMessage()));
+    await assertFails(setDoc(doc(guest, path), userMessage()));
+    await assertFails(setDoc(doc(anon, path), userMessage()));
+  });
+
+  it('rejects every update to a message, including by the owner', async () => {
+    const alice = testEnv.authenticatedContext('alice-uid').firestore();
+    const bob = testEnv.authenticatedContext('bob-uid').firestore();
+    const guest = testEnv.authenticatedContext('guest-uid').firestore();
+    const anon = testEnv.unauthenticatedContext().firestore();
+    await assertFails(updateDoc(doc(alice, msgPath), { status: 'pending' }));
+    await assertFails(
+      updateDoc(doc(alice, replyPath), { content: [{ type: 'text', text: 'edited' }] })
+    );
+    await assertFails(updateDoc(doc(bob, msgPath), { status: 'error' }));
+    await assertFails(updateDoc(doc(guest, replyPath), { status: 'error' }));
+    await assertFails(updateDoc(doc(anon, msgPath), { status: 'error' }));
+  });
+
+  it('lets only the owner delete (clear) their conversation', async () => {
+    const bob = testEnv.authenticatedContext('bob-uid').firestore();
+    const guest = testEnv.authenticatedContext('guest-uid').firestore();
+    const anon = testEnv.unauthenticatedContext().firestore();
+    await assertFails(deleteDoc(doc(bob, msgPath)));
+    await assertFails(deleteDoc(doc(guest, replyPath)));
+    await assertFails(deleteDoc(doc(anon, msgPath)));
+
+    const alice = testEnv.authenticatedContext('alice-uid').firestore();
+    await assertSucceeds(deleteDoc(doc(alice, msgPath)));
+  });
+
+  it('leaves the conversation intact after all the rejected attempts', async () => {
+    const guest = testEnv.authenticatedContext('guest-uid').firestore();
+    await assertFails(deleteDoc(doc(guest, msgPath)));
+    await assertFails(updateDoc(doc(guest, msgPath), { status: 'error' }));
+    await seed(async (context) => {
+      const snap = await getDoc(doc(context.firestore(), msgPath));
+      expect(snap.exists()).toBe(true);
+      expect(snap.data().status).toBe('replied');
+    });
+  });
+});
+
 describe('default deny behavior', () => {
 
   it('rejects writes to an unknown collection', async () => {

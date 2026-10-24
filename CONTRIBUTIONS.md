@@ -22,19 +22,28 @@ Colten Mikulastik:
 * AI API connection to chat feature
 * Cloud function development, for handling AI API calls and requests
 * Database adjustments to persistant chat storage
-
+* Current wedding details context added when messages sent to claude
+* tests functions created for the utilities, end to end tests with different users.
+* addition of anthropic web search tool and database represenatation
+* creation of custom tool for assistant to propose change to database
+* creation of proposed changes, requiring new database table
+* initialized normalization of data and enforcement and validation of input data to tool from assistant 
+* connectd tool use into ui for approve reject from user
+* lots of tests created verifing connectivity along the way for development of the Assistant and tool use
+* Created evaluation environment for the Wedding Assistant,
+* created rule based evaluations for the wedding assistant, dialouge and tool use evaluations
+* created LLM based evaluations for hte wedding assistant, dialouge and tool use evaluations
+* fixed bug relating to issues with invitation documents being lazily created.
 
 
 Keiran Indraanei:
 
-- Created the Forgot Password page and password reset
-  interface
-- Integrated the existing Firebase password reset functionality into the Forgot Password workflow
-- Created the initial AI Wedding Assistant chat interface
-- Added the Wedding Assistant as a protected application route
-- Implemented section selection and a guided Wedding Details conversation flow
-- Added message input, conversation history, and completion response functionality
-
+- Developed the Forgot Password page and integrated Firebase Authentication password reset functionality.
+- Created the initial AI Wedding Assistant chat interface, including the protected route and guided Wedding Details conversation flow.
+- Updated the Wedding Details form to improve validation, saving behavior, and error handling (PR #61).
+- Integrated saved Wedding Details data from Firestore into the AI Wedding Assistant sidebar.
+- Replaced placeholder information with dynamically displayed wedding details, including couple names, wedding date, ceremony time, venue information, and RSVP deadline.
+- Added loading and empty-state handling for the Wedding Assistant's Wedding Details display.
 
 
 Christopher Nguyen:
@@ -78,6 +87,16 @@ Christopher Nguyen:
 * Added RSVP functionality that allows guests to submit their responses and revisit their invitation afterward.
 * Added unit tests for invitation rendering, guest RSVP functionality, and saved invitation handling.
 * Tested the invitation page and RSVP functionality using Firebase emulators and verified that all 678 automated tests passed.
+* Added the Add to Calendar toggle to the Invitation Builder's Date section.
+* Integrating Jesus's existing calendar feature into the Wedding Day section.
+* Added tests for toggle settings, invitation previews, and guest invitations.
+- Added the Publish Invitation feature to the Guest List page.
+- Added a confirmation dialog with an Invitation Builder reminder and warnings before publishing.
+- Added an eligible guest email counter using Firebase Firestore.
+- Added a Published status indicator and error handling to prevent duplicate publishing.
+- Created 32 unit tests for the publishing feature.
+* Removed unfinished Paper Invitations navigation and the nonfunctional Export CSV button from Guest List.
+* Updated navigation and Guest List tests to verify the cleanup while preserving existing functionality.
 
 
 

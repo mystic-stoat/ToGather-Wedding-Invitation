@@ -96,6 +96,7 @@ describe("InvitationContent — visibility rules", () => {
         travelItems: [{ id: "t1", category: "hotel", name: "Hyatt", mapUrl: "", description: "" }],
         storyShowOnInvitation: false,
         partyShowOnInvitation: false,
+        dateShowAddToCalendar: false,
       },
       storyBlocks: STORY, partyMembers: PARTY,
       registries: REGISTRIES, registryMessage: "Thank you!", registryShown: false,

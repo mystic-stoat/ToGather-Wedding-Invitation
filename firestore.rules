@@ -45,6 +45,29 @@ service cloud.firestore {
       allow update: if false;
     }
 
+    /*
+     * Wedding assistant proposals: betrothed/{uid}/proposals/{id}
+     *
+     * Only the Cloud Function (admin SDK, bypasses these rules) creates
+     * them. The couple can read their own and DECIDE a pending one: change
+     * only status and decidedAt, never the field or the value. Nobody
+     * creates or deletes from the client.
+     *
+     * A user can only harm their own data this way. The safety property is
+     * that CLAUDE cannot write wedding details: the chat function only ever
+     * creates proposals.
+     */
+    match /betrothed/{uid}/proposals/{proposalId} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow create, delete: if false;
+      allow update: if request.auth != null && request.auth.uid == uid
+        && resource.data.status == "pending"
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(["status", "decidedAt"])
+        && request.resource.data.status in ["accepted", "rejected", "stale"]
+        && request.resource.data.decidedAt == request.time;
+    }
+
 
 
     /*
