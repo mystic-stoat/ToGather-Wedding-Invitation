@@ -44,9 +44,8 @@ Keiran Indraanei:
 * Integrated saved Wedding Details data from Firestore into the AI Wedding Assistant sidebar.
 * Replaced placeholder information with dynamically displayed wedding details, including couple names, wedding date, ceremony time, venue information, and RSVP deadline.
 * Added loading and empty-state handling for the Wedding Assistant's Wedding Details display.
-* Created five custom images for the homepage feature sections.
-* Added the images to their respective sections in Features.jsx, keeping them consistent with the site's overall theme and design.
-
+* Created and integrated six custom homepage feature images in `Features.jsx`, maintaining consistency with the site's design.
+* Updated homepage feature descriptions to better highlight ToGather's functionality, including the Invitation Builder, and added a dedicated AI Wedding Assistant section.
 Christopher Nguyen:
 
 * Added Spotify music integration to the invitation builder
