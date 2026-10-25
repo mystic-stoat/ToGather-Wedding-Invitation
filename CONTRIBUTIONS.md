@@ -38,14 +38,14 @@ Colten Mikulastik:
 
 Keiran Indraanei:
 
-- Developed the Forgot Password page and integrated Firebase Authentication password reset functionality.
-- Created the initial AI Wedding Assistant chat interface, including the protected route and guided Wedding Details conversation flow.
-- Updated the Wedding Details form to improve validation, saving behavior, and error handling (PR #61).
-- Integrated saved Wedding Details data from Firestore into the AI Wedding Assistant sidebar.
-- Replaced placeholder information with dynamically displayed wedding details, including couple names, wedding date, ceremony time, venue information, and RSVP deadline.
-- Added loading and empty-state handling for the Wedding Assistant's Wedding Details display.
-
-
+* Developed the Forgot Password page and integrated Firebase Authentication password reset functionality.
+* Created the initial AI Wedding Assistant chat interface, including the protected route and guided Wedding Details conversation flow.
+* Updated the Wedding Details form to improve validation, saving behavior, and error handling (PR #61).
+* Integrated saved Wedding Details data from Firestore into the AI Wedding Assistant sidebar.
+* Replaced placeholder information with dynamically displayed wedding details, including couple names, wedding date, ceremony time, venue information, and RSVP deadline.
+* Added loading and empty-state handling for the Wedding Assistant's Wedding Details display.
+* Created and integrated six custom homepage feature images in `Features.jsx`, maintaining consistency with the site's design.
+* Updated homepage feature descriptions to better highlight ToGather's functionality, including the Invitation Builder, and added a dedicated AI Wedding Assistant section.
 Christopher Nguyen:
 
 * Added Spotify music integration to the invitation builder
