@@ -1,6 +1,8 @@
 # ToGather Invitation WebApp
 This is code for the UNT Computer Science Capstone Spring-Fall 2026 Semester 
 
+ToGather Live Link: https://togather-64b0b.web.app
+
 ## Documentation Structure: check out these markdown files!!!
 - TEST.MD: define testing procedures and tools
 - LLM.MD: define a broad structure of the project
